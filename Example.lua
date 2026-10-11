@@ -1,5 +1,3 @@
--- Demo points at the feature branch so it includes the latest overlay behavior.
--- Switch /arena/0c851cbf-test/ to /main/ after the PR is merged.
 local Library = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/dragonstrukov/MacrOS-Library/main/Library.lua"
 ))()
