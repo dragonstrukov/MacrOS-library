@@ -1,5 +1,5 @@
 local Library = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/dragonstrukov/test/main/Library.lua"
+    "https://raw.githubusercontent.com/dragonstrukov/MacrOS-library/main/Library.lua"
 ))()
 
 local Window = Library:CreateWindow({
@@ -205,7 +205,7 @@ local Browse = Window:CreateBrowseTab({
     Name = "Browse",
     Icon = "store",
     -- JSON API with the list of scripts (see browse.json). Remove it to use only Items.
-    Source = "https://raw.githubusercontent.com/dragonstrukov/test/main/browse.json",
+    Source = "https://raw.githubusercontent.com/dragonstrukov/MacrOS-library/main/browse.json",
 
     -- Optional: shown right away and kept if the API is unreachable (offline / 404).
     Items = {
