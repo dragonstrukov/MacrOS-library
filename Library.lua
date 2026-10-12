@@ -1,6 +1,57 @@
 local Library = {}
-Library.Version = "1.1.0"
+Library.Version = "1.2.0"
 Library.Flags = {}
+
+--[[ Module/stage runner (MacrOS-style): Library.Stage("Catalog", function() ... end)
+    Runs the function in a protected call, keeps the result in Library.Stages[name]
+    and reports errors through the window notification when one exists. ]]
+Library.Stages = {}
+function Library.Stage(name, fn, ...)
+    if type(name) == "function" then fn, name = name, "stage" end
+    if type(fn) ~= "function" then return false, "Stage " .. tostring(name) .. ": no function" end
+    local ok, result = pcall(fn, ...)
+    Library.Stages[name] = ok and (result == nil and true or result) or nil
+    if not ok then
+        warn(("[UI Library] stage '%s' failed: %s"):format(tostring(name), tostring(result)))
+        if type(Library.Notify) == "function" then
+            pcall(Library.Notify, {Title = "Stage failed: " .. tostring(name), Content = tostring(result), Icon = "alert-triangle", Duration = 6})
+        end
+    end
+    return ok, result
+end
+Library.stage = Library.Stage
+
+-- Executor file helpers (nil-safe: return nil / false when the executor lacks them)
+function Library.ReadFile(path)
+    if type(readfile) ~= "function" then return nil end
+    if type(isfile) == "function" then
+        local okExists, exists = pcall(isfile, path)
+        if okExists and not exists then return nil end
+    end
+    local ok, data = pcall(readfile, path)
+    return ok and data or nil
+end
+function Library.WriteFile(path, data)
+    if type(writefile) ~= "function" then return false end
+    local folder = string.match(path, "^(.*)/[^/]+$")
+    if folder and type(makefolder) == "function" then
+        local acc = ""
+        for part in string.gmatch(folder, "[^/]+") do
+            acc = (acc == "") and part or (acc .. "/" .. part)
+            if type(isfolder) ~= "function" or not isfolder(acc) then pcall(makefolder, acc) end
+        end
+    end
+    return (pcall(writefile, path, data))
+end
+function Library.JSONDecode(text)
+    local ok, res = pcall(function() return game:GetService("HttpService"):JSONDecode(text) end)
+    return ok and res or nil, (not ok) and res or nil
+end
+function Library.JSONEncode(value)
+    local ok, res = pcall(function() return game:GetService("HttpService"):JSONEncode(value) end)
+    return ok and res or nil
+end
+Library.readFile, Library.writeFile = Library.ReadFile, Library.WriteFile
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -396,10 +447,36 @@ TopBar.BackgroundTransparency = 1
 TopBar.Active = true
 TopBar.Parent = Main
 
+-- Frames that float above the main window (Browse windows, dialogs). Input that
+-- lands on them must never start a drag of the main window underneath.
+local FLOATING_FRAMES = setmetatable({}, { __mode = "k" })
+local function pointOnFloatingFrame(x, y)
+    for frame in pairs(FLOATING_FRAMES) do
+        if frame.Parent and frame.Visible then
+            local p0 = frame.AbsolutePosition
+            local p1 = p0 + frame.AbsoluteSize
+            if x >= p0.X and x <= p1.X and y >= p0.Y and y <= p1.Y then
+                return true
+            end
+        end
+    end
+    return false
+end
+local function inputOnFloatingFrame(input)
+    local x, y = input.Position.X, input.Position.Y
+    if pointOnFloatingFrame(x, y) then return true end
+    local ok, inset = pcall(function() return game:GetService("GuiService"):GetGuiInset() end)
+    if ok and inset then
+        return pointOnFloatingFrame(x, y - inset.Y) or pointOnFloatingFrame(x, y + inset.Y)
+    end
+    return false
+end
+
 do
     local dragging, dragStart, startPos
     TopBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if inputOnFloatingFrame(input) then return end
             dragging = true
             dragStart = input.Position
             startPos = Main.Position
@@ -841,6 +918,7 @@ end
 
 local CARD_INFO = {}
 local CARD_LIST = {}
+local PANEL_LIST = {} -- full-area panels (Browse tab etc.) shown instead of the two columns
 
 local emptyLabel = Instance.new("TextLabel")
 emptyLabel.Name = "EmptyTab"
@@ -862,7 +940,18 @@ showTabContent = function(tabName)
         entry.Card.Visible = show
         if show then shown = shown + 1 end
     end
-    emptyLabel.Visible = shown == 0
+    local panelShown = false
+    for _, entry in ipairs(PANEL_LIST) do
+        local show = entry.Tab == tabName
+        entry.Frame.Visible = show
+        if show then
+            panelShown = true
+            if entry.OnShow then task.spawn(entry.OnShow) end
+        end
+    end
+    Col1.Visible = not panelShown
+    Col2.Visible = not panelShown
+    emptyLabel.Visible = shown == 0 and not panelShown
     for _, entry in ipairs(colLayouts) do
         entry.Col.CanvasPosition = Vector2.new(0, 0)
     end
@@ -1543,11 +1632,10 @@ local KEY_ALIASES = {
     local kbAutoShow = options.KeybindList == nil
     local kbToggleHandle = nil
     local kbApplyingVisible = false
-    local activeKeybindCaptures = 0
 
     local function entryVisible(entry)
         if entry.hidden then return false end
-        if kbHideUnbound and entry.showKey and (entry.key == "None" or entry.key == "") then
+        if kbHideUnbound and (entry.key == "None" or entry.key == "") then
             return false
         end
         return true
@@ -1573,40 +1661,13 @@ local KEY_ALIASES = {
     local function renderKeybindEntry(entry)
         if not entry or not entry.row then return end
         entry.nameLabel.Text = entry.name
-        entry.badge.Visible = entry.showKey
-        entry.indicator.Visible = entry.showIndicator
-
-        if entry.showKey then
-            local shown = formatKeyName(entry.key)
-            entry.badge.Text = shown
-            local width = keyBadgeWidth(shown)
-            entry.badge.Size = UDim2.new(0, width, 0, 16)
-            entry.badge.BackgroundColor3 = THEME.BadgeBg
-            local textToken = (entry.key == "None" or entry.key == "") and "TextDim" or "Accent"
-            entry.badge.TextColor3 = THEME[textToken]
-            if entry.keyStroke then
-                entry.keyStroke.Color = THEME.Border
-            end
-            if entry.showIndicator then
-                entry.badge.Position = UDim2.new(1, -15, 0.5, 0)
-                entry.indicator.Position = UDim2.new(1, 0, 0.5, 0)
-                entry.nameLabel.Size = UDim2.new(1, -(width + 23), 1, 0)
-            else
-                entry.badge.Position = UDim2.new(1, 0, 0.5, 0)
-                entry.nameLabel.Size = UDim2.new(1, -(width + 8), 1, 0)
-            end
-        elseif entry.showIndicator then
-            entry.indicator.Position = UDim2.new(1, 0, 0.5, 0)
-            entry.nameLabel.Size = UDim2.new(1, -20, 1, 0)
-        else
-            entry.nameLabel.Size = UDim2.new(1, 0, 1, 0)
-        end
-
-        if entry.showIndicator then
-            local lit = entry.showStatus and entry.active
-            entry.indicator.BackgroundColor3 = THEME[lit and "Accent" or "TextMuted"]
-        end
-
+        local shown = formatKeyName(entry.key)
+        entry.badge.Text = shown
+        local width = keyBadgeWidth(shown)
+        entry.badge.Size = UDim2.new(0, width, 0, 16)
+        entry.nameLabel.Size = UDim2.new(1, -(width + 8), 1, 0)
+        local token = (entry.key == "None" or entry.key == "") and "TextDim" or "Accent"
+        bindColor(entry.badge, "TextColor3", token)
         refreshKeybindEmpty()
     end
 
@@ -1645,30 +1706,13 @@ local KEY_ALIASES = {
         badge.ZIndex = 63
         badge.Parent = row
         bindColor(badge, "BackgroundColor3", "BadgeBg")
-        bindColor(badge, "TextColor3", function()
-            return (entry.key == "None" or entry.key == "") and "TextDim" or "Accent"
-        end)
+        bindColor(badge, "TextColor3", "TextMuted")
         kbCorner(badge, 3)
-        local keyStroke = kbStroke(badge)
-
-        local indicator = Instance.new("Frame")
-        indicator.Name = "Indicator"
-        indicator.AnchorPoint = Vector2.new(1, 0.5)
-        indicator.Position = UDim2.new(1, 0, 0.5, 0)
-        indicator.Size = UDim2.new(0, 10, 0, 10)
-        indicator.BorderSizePixel = 0
-        indicator.ZIndex = 63
-        indicator.Parent = row
-        bindColor(indicator, "BackgroundColor3", function()
-            return entry.showStatus and entry.active and "Accent" or "TextMuted"
-        end)
-        kbCorner(indicator, 5)
+        kbStroke(badge)
 
         entry.row = row
         entry.nameLabel = nameLabel
         entry.badge = badge
-        entry.keyStroke = keyStroke
-        entry.indicator = indicator
         renderKeybindEntry(entry)
     end
 
@@ -1687,12 +1731,6 @@ local KEY_ALIASES = {
             if info.Name ~= nil then existing.name = tostring(info.Name) end
             if info.Key ~= nil then existing.key = tostring(info.Key) end
             if info.Hidden ~= nil then existing.hidden = info.Hidden and true or false end
-            if info.Kind ~= nil then existing.kind = tostring(info.Kind) end
-            if info.ShowKey ~= nil then existing.showKey = info.ShowKey and true or false end
-            if info.ShowStatus ~= nil then existing.showStatus = info.ShowStatus and true or false end
-            if info.ShowIndicator ~= nil then existing.showIndicator = info.ShowIndicator and true or false end
-            if info.Active ~= nil then existing.active = info.Active and true or false end
-            if info.Mode ~= nil then existing.mode = tostring(info.Mode) end
             renderKeybindEntry(existing)
             return id
         end
@@ -1706,12 +1744,6 @@ local KEY_ALIASES = {
             key = tostring(info.Key or info.Default or "None"),
             order = info.Order or kbOrder,
             hidden = info.Hidden and true or false,
-            kind = tostring(info.Kind or "keybind"),
-            showKey = info.ShowKey ~= false,
-            showStatus = info.ShowStatus and true or false,
-            showIndicator = info.ShowIndicator and true or false,
-            active = info.Active and true or false,
-            mode = info.Mode,
         }
         kbById[id] = entry
         table.insert(kbEntries, entry)
@@ -1725,30 +1757,6 @@ local KEY_ALIASES = {
         if key ~= nil then entry.key = tostring(key) end
         if name ~= nil then entry.name = tostring(name) end
         renderKeybindEntry(entry)
-    end
-
-    local function updateOverlayStatus(id, active, name)
-        local entry = kbById[tostring(id)]
-        if not entry then return end
-        if active ~= nil then entry.active = active == true end
-        if name ~= nil then entry.name = tostring(name) end
-        renderKeybindEntry(entry)
-    end
-
-    local function registerOverlayStatus(info)
-        info = info or {}
-        return registerOverlayKeybind({
-            Id = info.Id or info.Flag,
-            Name = info.Name or info.Title or "Feature",
-            Key = "None",
-            Kind = "status",
-            ShowKey = false,
-            ShowStatus = true,
-            ShowIndicator = true,
-            Active = info.Active == true,
-            Hidden = info.Hidden,
-            Order = info.Order,
-        })
     end
 
     local function removeOverlayKeybind(id)
@@ -1894,6 +1902,28 @@ local KEY_ALIASES = {
         end))
     end
 
+    local function flashKeybind(entry)
+        if not entry.badge or not entry.row or not entry.row.Visible then return end
+        tweenColors(entry.badge, TWEEN_FAST, {BackgroundColor3 = "Accent", TextColor3 = "KnobOn"}):Play()
+        task.delay(0.16, function()
+            if not entry.badge or not entry.badge.Parent then return end
+            local token = (entry.key == "None" or entry.key == "") and "TextDim" or "Accent"
+            tweenColors(entry.badge, TWEEN_FAST, {BackgroundColor3 = "BadgeBg", TextColor3 = token}):Play()
+        end)
+    end
+
+    trackConn(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if isClosed or gameProcessed then return end
+        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+        if not KeybindHolder.Visible or kbCollapsed then return end
+        local pressed = input.KeyCode.Name
+        for _, entry in ipairs(kbEntries) do
+            if entry.key == pressed and entry.row and entry.row.Visible then
+                flashKeybind(entry)
+            end
+        end
+    end))
+
     local function overlayKeybindHandle(id)
         return {
             Id = id,
@@ -1911,25 +1941,6 @@ local KEY_ALIASES = {
                 return entry and entry.key or "None"
             end,
         }
-    end
-
-    local function overlayStatusHandle(id)
-        local handle = {Id = id}
-        handle.Set = function(active, maybeActive)
-            if maybeActive ~= nil then active = maybeActive end
-            updateOverlayStatus(id, active)
-        end
-        handle.SetActive = handle.Set
-        handle.SetName = function(name, maybeName)
-            if maybeName ~= nil then name = maybeName end
-            updateOverlayStatus(id, nil, name)
-        end
-        handle.Remove = function() removeOverlayKeybind(id) end
-        handle.Get = function()
-            local entry = kbById[id]
-            return entry and entry.active or false
-        end
-        return handle
     end
 
     local KeybindListApi = {}
@@ -1982,10 +1993,6 @@ local KEY_ALIASES = {
         updateOverlayKeybind(id, key)
     end
 
-    function KeybindListApi:SetActive(id, active)
-        updateOverlayStatus(id, active)
-    end
-
     function KeybindListApi:Configure(opts)
         kbAutoShow = false
         applyKeybindListOptions(opts)
@@ -1995,18 +2002,6 @@ local KEY_ALIASES = {
         if kbAutoShow then
             setKeybindListVisible(true)
         end
-    end
-
-    function KeybindListApi:AddStatus(entryOptions)
-        entryOptions = entryOptions or {}
-        local id = registerOverlayStatus({
-            Id = entryOptions.Id or entryOptions.Flag,
-            Name = entryOptions.Name or entryOptions.Title or "Feature",
-            Active = entryOptions.Active == true,
-            Hidden = entryOptions.Hidden,
-        })
-        noteKeybindForOverlay()
-        return overlayStatusHandle(id)
     end
 
     local STARTUP_THEME = nil
@@ -2095,8 +2090,7 @@ local KEY_ALIASES = {
     end
 
     local POPUP_ANCHOR = setmetatable({}, { __mode = "k" })
-    local POPUP_ORIGIN = setmetatable({}, { __mode = "k" })
-    local POPUP_SCROLL_LIMIT = 10
+    local POPUP_META = setmetatable({}, { __mode = "k" }) -- {dx, gap}: popup offset from its anchor
 
     local function isPointInside(obj, point)
         local pos = obj.AbsolutePosition
@@ -2130,19 +2124,79 @@ local KEY_ALIASES = {
         closeAllPopups()
     end))
 
+    -- The window the anchor belongs to (main window, a Browse window, ...) = popup bounds
+    local function popupBounds(anchor)
+        local root = anchor
+        while root and root.Parent and root.Parent ~= ScreenGui do
+            root = root.Parent
+        end
+        if root and root ~= ScreenGui and root:IsA("GuiObject") then
+            return root.AbsolutePosition, root.AbsolutePosition + root.AbsoluteSize
+        end
+        return Vector2.new(0, 0), ScreenGui.AbsoluteSize
+    end
+
+    -- false when the anchor was scrolled out of its clipping container or hidden
+    local function anchorVisible(anchor)
+        if not anchor.Visible then return false end
+        local a0 = anchor.AbsolutePosition
+        local center = a0 + anchor.AbsoluteSize / 2
+        local p = anchor.Parent
+        while p and p ~= ScreenGui do
+            if p:IsA("GuiObject") then
+                if not p.Visible then return false end
+                if p.ClipsDescendants or p:IsA("ScrollingFrame") then
+                    local c0 = p.AbsolutePosition
+                    local c1 = c0 + p.AbsoluteSize
+                    if center.Y < c0.Y or center.Y > c1.Y or center.X < c0.X or center.X > c1.X then
+                        return false
+                    end
+                end
+            end
+            p = p.Parent
+        end
+        return true
+    end
+
+    local function placePopup(popup, anchor)
+        local meta = POPUP_META[popup]
+        if not meta then return end
+        local aPos, aSize = anchor.AbsolutePosition, anchor.AbsoluteSize
+        local pSize = popup.AbsoluteSize
+        local b0, b1 = popupBounds(anchor)
+        local screen = ScreenGui.AbsoluteSize
+
+        local x = aPos.X + meta.dx
+        x = math.clamp(x, math.min(b0.X, aPos.X), math.max(b0.X, b1.X - pSize.X))
+        x = math.clamp(x, 0, math.max(0, screen.X - pSize.X))
+
+        local below = aPos.Y + aSize.Y + meta.gap
+        local above = aPos.Y - meta.gap - pSize.Y
+        local y
+        if below + pSize.Y <= b1.Y then
+            y = below                     -- fits under the control inside the window
+        elseif above >= b0.Y then
+            y = above                     -- no room below -> open upwards
+        elseif below + pSize.Y <= screen.Y then
+            y = below                     -- window too small: at least stay on screen
+        else
+            y = math.max(0, above)
+        end
+        popup.Position = UDim2.fromOffset(x, y)
+    end
+
     trackConn(RunService.RenderStepped:Connect(function()
         if #activePopups == 0 then return end
         for _, p in ipairs(activePopups) do
             local anchor = POPUP_ANCHOR[p]
-            local origin = POPUP_ORIGIN[p]
-            if not anchor or not anchor.Parent or not origin then
+            if not anchor or not anchor.Parent then
                 closeAllPopups()
                 return
             end
-            local pos = anchor.AbsolutePosition
-            if math.abs(pos.X - origin.X) > POPUP_SCROLL_LIMIT or math.abs(pos.Y - origin.Y) > POPUP_SCROLL_LIMIT then
-                closeAllPopups()
-                return
+            if p.Parent then
+                local visible = anchorVisible(anchor)
+                p.Visible = visible
+                if visible then placePopup(p, anchor) end
             end
         end
     end))
@@ -2150,7 +2204,15 @@ local KEY_ALIASES = {
     local function trackPopup(popup, anchor)
         table.insert(activePopups, popup)
         POPUP_ANCHOR[popup] = anchor
-        POPUP_ORIGIN[popup] = anchor and anchor.AbsolutePosition or nil
+        if anchor then
+            POPUP_META[popup] = {
+                dx = popup.Position.X.Offset - anchor.AbsolutePosition.X,
+                gap = popup.Position.Y.Offset - (anchor.AbsolutePosition.Y + anchor.AbsoluteSize.Y),
+            }
+            task.defer(function()
+                if popup.Parent and anchor.Parent then placePopup(popup, anchor) end
+            end)
+        end
         popup.Destroying:Connect(function()
             for i, p in ipairs(activePopups) do
                 if p == popup then
@@ -2451,8 +2513,7 @@ local KEY_ALIASES = {
         return handle
     end
 
-    local function addToggle(card, name, description, defaultState, callback, extra)
-        extra = extra or {}
+    local function addToggle(card, name, description, defaultState, callback)
         local row = createRow(card, name, description, {sideWidth = 32})
 
         local switch = Instance.new("TextButton")
@@ -2474,15 +2535,6 @@ local KEY_ALIASES = {
         addCorner(knob, 6)
 
         local isToggled = defaultState
-        local overlayId = nil
-        if extra.Show then
-            overlayId = registerOverlayStatus({
-                Id = extra.Id,
-                Name = extra.DisplayName or name,
-                Active = isToggled,
-            })
-            noteKeybindForOverlay()
-        end
 
         local function applyToggle(value, fire)
             isToggled = value and true or false
@@ -2493,9 +2545,6 @@ local KEY_ALIASES = {
             tweenColors(switch, TWEEN_FAST, {BackgroundColor3 = targetColor}):Play()
             tweenColors(knob, TWEEN_FAST, {BackgroundColor3 = targetKnobColor, Position = targetPos}):Play()
 
-            if overlayId then
-                updateOverlayStatus(overlayId, isToggled)
-            end
             if fire and callback then
                 callback(isToggled)
             end
@@ -2548,7 +2597,8 @@ local KEY_ALIASES = {
     local CHEVRON_SIZE = 14
     local POPUP_VISIBLE_ROWS = 5
 
-    local function addPopupSearch(popup, rows, list)
+    local function addPopupSearch(popup, rows, list, rowH)
+        rowH = rowH or SELECT_OPTION_H
         local holder = Instance.new("Frame")
         holder.Name = "Search"
         holder.Size = UDim2.new(1, 0, 0, SELECT_OPTION_H)
@@ -2605,7 +2655,7 @@ local KEY_ALIASES = {
             end
             empty.Visible = shown == 0
             local rowsShown = math.max(1, math.min(shown, POPUP_VISIBLE_ROWS))
-            list.Size = UDim2.new(1, 0, 0, rowsShown * SELECT_OPTION_H + (rowsShown - 1) * 2)
+            list.Size = UDim2.new(1, 0, 0, rowsShown * rowH + (rowsShown - 1) * 2)
         end
 
         box:GetPropertyChangedSignal("Text"):Connect(function()
@@ -2621,17 +2671,257 @@ local KEY_ALIASES = {
 
     local function normalizeOption(opt)
         if type(opt) == "table" then
-            return opt.Text or "", opt.Icon
+            local icon, model = opt.Icon, opt.Model or opt.Icon3D or opt.Model3D or opt.Instance
+            if typeof(icon) == "Instance" then model, icon = icon, nil end
+            return opt.Text or "", icon, model
         end
-        return tostring(opt), nil
+        return tostring(opt), nil, nil
     end
 
-    local function addDropdown(card, name, description, options, defaultIndex, callback)
-        local row, top = createRow(card, name, description, {controlHeight = CONTROL_H})
+    ------------------------------------------------------------------
+    -- 3D icons (ViewportFrame) for dropdown options
+    ------------------------------------------------------------------
+    local ICON3D_DEFAULTS = {
+        Size = 32,             -- px (pre-scale) side of the viewport
+        Padding = 1.15,        -- >1 = more air around the model
+        Zoom = 1,              -- >1 = closer
+        FOV = 40,
+        Angle = Vector3.new(20, -35, 0), -- pitch, yaw, roll (deg) the camera looks from
+        Spin = false,          -- slowly rotate the model
+        SpinSpeed = 45,        -- deg / s
+        Ambient = Color3.fromRGB(190, 190, 190),
+        LightColor = Color3.fromRGB(255, 255, 255),
+        LightDirection = Vector3.new(-1, -1.5, -1),
+        Background = nil,      -- Color3 or theme key; nil = transparent
+        Models = nil,          -- Folder / table / function(text) used to look models up by option text
+    }
+
+    local function normalize3DConfig(cfg, extra)
+        local out = {}
+        for k, v in pairs(ICON3D_DEFAULTS) do out[k] = v end
+        if type(cfg) == "number" then
+            out.Size = cfg
+        elseif type(cfg) == "table" then
+            for k, v in pairs(cfg) do out[k] = v end
+        end
+        if extra then
+            if extra.IconSize then out.Size = extra.IconSize end
+            if extra.Models ~= nil then out.Models = extra.Models end
+        end
+        if type(out.Angle) == "number" then out.Angle = Vector3.new(20, out.Angle, 0) end
+        if typeof(out.Angle) ~= "Vector3" then out.Angle = ICON3D_DEFAULTS.Angle end
+        return out
+    end
+
+    -- turns the option's `Model` (or the shared `Models` source) into an Instance
+    local function resolveModel(value, text, cfg)
+        if type(value) == "function" then
+            local ok, res = pcall(value, text)
+            value = ok and res or nil
+        end
+        if typeof(value) == "Instance" then return value end
+        local src = cfg and cfg.Models
+        if src == nil then return nil end
+        local key = (type(value) == "string" and value) or text
+        if type(src) == "function" then
+            local ok, res = pcall(src, key, text)
+            if ok and typeof(res) == "Instance" then return res end
+        elseif typeof(src) == "Instance" then
+            local found = src:FindFirstChild(key, true)
+            if found then return found end
+        elseif type(src) == "table" then
+            local found = src[key]
+            if type(found) == "function" then
+                local ok, res = pcall(found, key)
+                found = ok and res or nil
+            end
+            if typeof(found) == "Instance" then return found end
+        end
+        return nil
+    end
+
+    local function createViewportIcon(parent, cfg, zIndex)
+        cfg = normalize3DConfig(cfg)
+        local vp = Instance.new("ViewportFrame")
+        vp.Name = "Icon3D"
+        vp.Size = UDim2.new(1, 0, 1, 0)
+        vp.BackgroundTransparency = cfg.Background and 0 or 1
+        if typeof(cfg.Background) == "Color3" then
+            vp.BackgroundColor3 = cfg.Background
+        elseif type(cfg.Background) == "string" then
+            bindColor(vp, "BackgroundColor3", cfg.Background)
+        end
+        vp.BorderSizePixel = 0
+        vp.Ambient = cfg.Ambient
+        vp.LightColor = cfg.LightColor
+        vp.LightDirection = cfg.LightDirection
+        vp.ImageTransparency = 0
+        if zIndex then vp.ZIndex = zIndex end
+        vp.Parent = parent
+        if cfg.Background then addCorner(vp, 4) end
+
+        local camera = Instance.new("Camera")
+        camera.FieldOfView = cfg.FOV
+        camera.Parent = vp
+        vp.CurrentCamera = camera
+
+        local world = Instance.new("WorldModel")
+        world.Parent = vp
+
+        local handle = {Frame = vp, Camera = camera, World = world}
+        local current, center, dist, yaw, spinConn = nil, Vector3.zero, 10, 0, nil
+
+        local function aim()
+            local pitch = math.rad(cfg.Angle.X)
+            local rot = CFrame.Angles(0, math.rad(cfg.Angle.Y) + yaw, 0) * CFrame.Angles(pitch, 0, 0)
+            local offset = rot:VectorToWorldSpace(Vector3.new(0, 0, dist))
+            camera.CFrame = CFrame.lookAt(center + offset, center)
+        end
+
+        local function stopSpin()
+            if spinConn then spinConn:Disconnect(); spinConn = nil end
+        end
+
+        function handle:SetModel(model)
+            if current then current:Destroy(); current = nil end
+            stopSpin()
+            if typeof(model) ~= "Instance" then return false end
+            local ok, clone = pcall(function() return model:Clone() end)
+            if not ok or not clone then return false end
+            local holder = Instance.new("Model")
+            holder.Name = "Holder"
+            clone.Parent = holder
+            for _, d in ipairs(holder:GetDescendants()) do
+                if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then
+                    d:Destroy()
+                elseif d:IsA("BasePart") then
+                    d.Anchored = true
+                    d.CanCollide = false
+                end
+            end
+            holder.Parent = world
+            current = holder
+
+            local okBox, cf, size = pcall(function() return holder:GetBoundingBox() end)
+            if not okBox or not size or size.Magnitude == 0 then
+                center, dist = Vector3.zero, 10
+            else
+                center = cf.Position
+                local radius = math.max(size.Magnitude / 2, 0.05)
+                dist = (radius / math.sin(math.rad(cfg.FOV) / 2)) * cfg.Padding / math.max(cfg.Zoom, 0.05)
+            end
+            yaw = 0
+            aim()
+
+            if cfg.Spin then
+                spinConn = trackConn(RunService.RenderStepped:Connect(function(dt)
+                    if not vp.Parent then stopSpin() return end
+                    if not vp.Visible then return end
+                    yaw = yaw + math.rad(cfg.SpinSpeed) * dt
+                    aim()
+                end))
+            end
+            return true
+        end
+
+        function handle:SetAngle(v)
+            cfg.Angle = v
+            aim()
+        end
+
+        function handle:SetZoom(z)
+            local radius = dist * math.max(cfg.Zoom, 0.05) / cfg.Padding * math.sin(math.rad(cfg.FOV) / 2)
+            cfg.Zoom = z
+            dist = (radius / math.sin(math.rad(cfg.FOV) / 2)) * cfg.Padding / math.max(cfg.Zoom, 0.05)
+            aim()
+        end
+
+        function handle:Destroy()
+            stopSpin()
+            vp:Destroy()
+        end
+
+        vp.AncestryChanged:Connect(function()
+            if not vp.Parent then stopSpin() end
+        end)
+        return handle
+    end
+
+    -- A fixed-size "icon slot": shows either a lucide icon or (when 3D is on) a viewport
+    local function createIconSlot(parent, slotPx, cfg3, zIndex)
+        local slot = Instance.new("Frame")
+        slot.Name = "IconSlot"
+        slot.Size = UDim2.new(0, slotPx, 0, slotPx)
+        slot.Position = UDim2.new(0, 6, 0.5, -slotPx / 2)
+        slot.BackgroundTransparency = 1
+        if zIndex then slot.ZIndex = zIndex end
+        slot.Visible = false
+        slot.Parent = parent
+
+        local img = Instance.new("ImageLabel")
+        img.AnchorPoint = Vector2.new(0.5, 0.5)
+        img.Size = UDim2.new(0, ICON_SIZE, 0, ICON_SIZE)
+        img.Position = UDim2.new(0.5, 0, 0.5, 0)
+        img.BackgroundTransparency = 1
+        if zIndex then img.ZIndex = zIndex + 1 end
+        img.Visible = false
+        img.Parent = slot
+
+        local handle = {Frame = slot, Image = img, Has = false, IconName = nil, Viewport = nil}
+
+        function handle:Set(iconName, model, text)
+            local inst = cfg3 and resolveModel(model, text, cfg3) or nil
+            if inst then
+                if not self.Viewport then
+                    self.Viewport = createViewportIcon(slot, cfg3, zIndex and (zIndex + 1) or nil)
+                end
+                self.Viewport:SetModel(inst)
+                self.Viewport.Frame.Visible = true
+                img.Visible = false
+                self.Has = true
+            elseif iconName then
+                if self.Viewport then self.Viewport.Frame.Visible = false end
+                img.Image = resolveIcon(iconName)
+                img.Visible = true
+                self.IconName = iconName
+                self.Has = true
+            else
+                if self.Viewport then self.Viewport.Frame.Visible = false end
+                img.Visible = false
+                self.Has = false
+            end
+            slot.Visible = self.Has
+            return self.Has
+        end
+
+        function handle:Tint(spec)
+            if img.Visible then tintIcon(img, self.IconName, spec) end
+        end
+
+        return handle
+    end
+
+    -- shared per-dropdown geometry derived from the 3D-icon settings
+    local function dropdownIconLayout(extra)
+        local use3D = extra and extra.Icons3D
+        local cfg3 = use3D and normalize3DConfig(extra.Icon3D, extra) or nil
+        local slotPx = cfg3 and math.max(cfg3.Size, ICON_SIZE) or ICON_SIZE
+        return {
+            Cfg = cfg3,
+            Slot = slotPx,
+            ControlH = math.max(CONTROL_H, slotPx + 6),
+            OptionH = math.max(SELECT_OPTION_H, slotPx + 6),
+            TextX = slotPx + 12,
+        }
+    end
+
+    local function addDropdown(card, name, description, options, defaultIndex, callback, extra)
+        local L = dropdownIconLayout(extra)
+        local row, top = createRow(card, name, description, {controlHeight = L.ControlH})
 
         local select = Instance.new("TextButton")
         select.Name = "Select"
-        select.Size = UDim2.new(1, 0, 0, CONTROL_H)
+        select.Size = UDim2.new(1, 0, 0, L.ControlH)
         select.Position = UDim2.new(0, 0, 0, top)
         bindColor(select, "BackgroundColor3", "BadgeBg")
         select.Text = ""
@@ -2641,20 +2931,15 @@ local KEY_ALIASES = {
         addStroke(select)
 
         local currentIdx = defaultIndex or 1
-        local curText, curIconName = normalizeOption(options[currentIdx])
+        local curText, curIconName, curModel = normalizeOption(options[currentIdx])
 
-        local selectIcon = Instance.new("ImageLabel")
-        selectIcon.Size = UDim2.new(0, ICON_SIZE, 0, ICON_SIZE)
-        selectIcon.Position = UDim2.new(0, 6, 0.5, -8)
-        selectIcon.BackgroundTransparency = 1
-        selectIcon.Image = resolveIcon(curIconName)
-        tintIcon(selectIcon, curIconName, "TextMuted")
-        selectIcon.Visible = curIconName ~= nil
-        selectIcon.Parent = select
+        local selectIcon = createIconSlot(select, L.Slot, L.Cfg, nil)
+        selectIcon:Set(curIconName, curModel, curText)
+        selectIcon:Tint("TextMuted")
 
         local valueLbl = Instance.new("TextLabel")
         valueLbl.Size = UDim2.new(1, -52, 1, 0)
-        valueLbl.Position = UDim2.new(0, curIconName and 28 or 8, 0, 0)
+        valueLbl.Position = UDim2.new(0, selectIcon.Has and L.TextX or 8, 0, 0)
         valueLbl.BackgroundTransparency = 1
         valueLbl.Text = curText
         valueLbl.Font = Enum.Font.Gotham
@@ -2726,10 +3011,10 @@ local KEY_ALIASES = {
 
             local rows = {}
             for i, optData in ipairs(options) do
-                local optText, optIconName = normalizeOption(optData)
+                local optText, optIconName, optModel = normalizeOption(optData)
 
                 local ob = Instance.new("TextButton")
-                ob.Size = UDim2.new(1, 0, 0, SELECT_OPTION_H)
+                ob.Size = UDim2.new(1, 0, 0, L.OptionH)
                 bindColor(ob, "BackgroundColor3", "SidebarActive")
                 ob.BackgroundTransparency = 1
                 ob.Text = ""
@@ -2740,21 +3025,16 @@ local KEY_ALIASES = {
                 addCorner(ob, 4)
                 table.insert(rows, {Frame = ob, Text = optText})
 
-                local obIcon = nil
-                if optIconName then
-                    obIcon = Instance.new("ImageLabel")
-                    obIcon.Size = UDim2.new(0, ICON_SIZE, 0, ICON_SIZE)
-                    obIcon.Position = UDim2.new(0, 6, 0.5, -8)
-                    obIcon.BackgroundTransparency = 1
-                    obIcon.Image = resolveIcon(optIconName)
-                    tintIcon(obIcon, optIconName, function() return ((i == currentIdx)) and "Accent" or "TextMuted" end)
-                    obIcon.ZIndex = 102
-                    obIcon.Parent = ob
+                local obIcon = createIconSlot(ob, L.Slot, L.Cfg, 102)
+                if obIcon:Set(optIconName, optModel, optText) then
+                    obIcon:Tint(function() return ((i == currentIdx)) and "Accent" or "TextMuted" end)
+                else
+                    obIcon = nil
                 end
 
                 local obText = Instance.new("TextLabel")
                 obText.Size = UDim2.new(1, -36, 1, 0)
-                obText.Position = UDim2.new(0, optIconName and 28 or 8, 0, 0)
+                obText.Position = UDim2.new(0, obIcon and L.TextX or 8, 0, 0)
                 obText.BackgroundTransparency = 1
                 obText.Text = optText
                 obText.Font = Enum.Font.Gotham
@@ -2767,26 +3047,23 @@ local KEY_ALIASES = {
                 ob.MouseEnter:Connect(function()
                     ob.BackgroundTransparency = 0
                     bindColor(obText, "TextColor3", "Accent")
-                    if obIcon then tintIcon(obIcon, optIconName, "Accent") end
+                    if obIcon then obIcon:Tint("Accent") end
                 end)
                 ob.MouseLeave:Connect(function()
                     ob.BackgroundTransparency = 1
                     local c = (i == currentIdx) and THEME.Accent or THEME.TextPrimary
                     obText.TextColor3 = c
                     if obIcon then
-                        tintIcon(obIcon, optIconName, function() return ((i == currentIdx)) and "Accent" or "TextMuted" end)
+                        obIcon:Tint(function() return ((i == currentIdx)) and "Accent" or "TextMuted" end)
                     end
                 end)
                 ob.MouseButton1Click:Connect(function()
                     currentIdx = i
                     valueLbl.Text = optText
-                    if optIconName then
-                        selectIcon.Image = resolveIcon(optIconName)
-                        tintIcon(selectIcon, optIconName, "TextMuted")
-                        selectIcon.Visible = true
-                        valueLbl.Position = UDim2.new(0, 28, 0, 0)
+                    if selectIcon:Set(optIconName, optModel, optText) then
+                        selectIcon:Tint("TextMuted")
+                        valueLbl.Position = UDim2.new(0, L.TextX, 0, 0)
                     else
-                        selectIcon.Visible = false
                         valueLbl.Position = UDim2.new(0, 8, 0, 0)
                     end
                     popup:Destroy()
@@ -2795,7 +3072,7 @@ local KEY_ALIASES = {
                 end)
             end
 
-            addPopupSearch(popup, rows, list)
+            addPopupSearch(popup, rows, list, L.OptionH)
             trackPopup(popup, select)
             currentPopup = popup
         end)
@@ -2803,15 +3080,12 @@ local KEY_ALIASES = {
         local function applySelection(idx, fire)
             if not idx or not options[idx] then return end
             currentIdx = idx
-            local optText, optIconName = normalizeOption(options[idx])
+            local optText, optIconName, optModel = normalizeOption(options[idx])
             valueLbl.Text = optText
-            if optIconName then
-                selectIcon.Image = resolveIcon(optIconName)
-                tintIcon(selectIcon, optIconName, "TextMuted")
-                selectIcon.Visible = true
-                valueLbl.Position = UDim2.new(0, 28, 0, 0)
+            if selectIcon:Set(optIconName, optModel, optText) then
+                selectIcon:Tint("TextMuted")
+                valueLbl.Position = UDim2.new(0, L.TextX, 0, 0)
             else
-                selectIcon.Visible = false
                 valueLbl.Position = UDim2.new(0, 8, 0, 0)
             end
             if currentPopup and currentPopup.Parent then
@@ -2845,6 +3119,9 @@ local KEY_ALIASES = {
             local text = normalizeOption(options[currentIdx])
             return text, currentIdx
         end
+
+        dropdownApi.Icon = selectIcon          -- icon slot of the closed control (.Viewport when 3D)
+        dropdownApi.Icon3D = L.Cfg             -- effective 3D settings (nil when disabled)
 
         setmetatable(dropdownApi, {__call = function(_, text, idx)
             if idx then
@@ -3016,24 +3293,12 @@ local KEY_ALIASES = {
         local listening = false
         local listener
         local currentKey = defaultKey or "None"
-        local requestedMode = string.lower(tostring(extra.Mode or ""))
-        local activationMode = (requestedMode == "hold" or requestedMode == "toggle")
-            and (requestedMode == "hold" and "Hold" or "Toggle") or nil
-        local isActive = activationMode == "Toggle" and extra.DefaultActive == true or false
-        local onStateChanged = extra.OnStateChanged or extra.StateCallback or extra.ActiveCallback
-        if type(onStateChanged) ~= "function" then onStateChanged = nil end
         local overlayId = nil
         if extra.Show ~= false then
             overlayId = registerOverlayKeybind({
                 Id = extra.Id,
                 Name = extra.DisplayName or name,
                 Key = currentKey,
-                Kind = "keybind",
-                ShowKey = true,
-                ShowStatus = activationMode ~= nil,
-                ShowIndicator = activationMode ~= nil,
-                Active = isActive,
-                Mode = activationMode,
             })
             noteKeybindForOverlay()
         end
@@ -3041,61 +3306,15 @@ local KEY_ALIASES = {
         local function syncOverlay()
             if overlayId then
                 updateOverlayKeybind(overlayId, currentKey)
-                if activationMode then
-                    updateOverlayStatus(overlayId, isActive)
-                end
-            end
-        end
-
-        local function applyActive(value, fire)
-            local nextActive = value == true
-            if nextActive == isActive then return end
-            isActive = nextActive
-            if overlayId and activationMode then
-                updateOverlayStatus(overlayId, isActive)
-            end
-            if fire and onStateChanged then
-                onStateChanged(isActive)
-            end
-        end
-
-        local function stopListening()
-            if listening then
-                listening = false
-                activeKeybindCaptures = math.max(0, activeKeybindCaptures - 1)
-            end
-            if listener then
-                listener:Disconnect()
-                listener = nil
-            end
-        end
-
-        if activationMode then
-            trackConn(UserInputService.InputBegan:Connect(function(input, processed)
-                if isClosed or processed or listening or activeKeybindCaptures > 0 then return end
-                if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-                if currentKey == "None" or input.KeyCode.Name ~= currentKey then return end
-                if activationMode == "Hold" then
-                    applyActive(true, true)
-                else
-                    applyActive(not isActive, true)
-                end
-            end))
-            if activationMode == "Hold" then
-                trackConn(UserInputService.InputEnded:Connect(function(input)
-                    if isClosed or input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-                    if currentKey == "None" or input.KeyCode.Name ~= currentKey then return end
-                    applyActive(false, true)
-                end))
-                trackConn(UserInputService.WindowFocusReleased:Connect(function()
-                    applyActive(false, true)
-                end))
             end
         end
 
         resetBtn.MouseButton1Click:Connect(function()
-            stopListening()
-            applyActive(false, true)
+            if listener then
+                listener:Disconnect()
+                listener = nil
+            end
+            listening = false
             currentKey = "None"
             badge.Text = "None"
             bindColor(badge, "TextColor3", "TextMuted")
@@ -3105,27 +3324,27 @@ local KEY_ALIASES = {
 
         badge.MouseButton1Click:Connect(function()
             if listening then
-                stopListening()
+                if listener then
+                    listener:Disconnect()
+                    listener = nil
+                end
                 badge.Text = currentKey
                 bindColor(badge, "TextColor3", "TextMuted")
+                listening = false
                 return
             end
             listening = true
-            activeKeybindCaptures = activeKeybindCaptures + 1
             badge.Text = "..."
             bindColor(badge, "TextColor3", "Accent")
             listener = trackConn(UserInputService.InputBegan:Connect(function(input, processed)
-                if processed or isClosed then return end
+                if processed then return end
                 if input.UserInputType == Enum.UserInputType.Keyboard then
                     local key = input.KeyCode.Name
-                    local newKey = (key == "Escape") and "None" or key
-                    stopListening()
-                    if currentKey ~= newKey then
-                        applyActive(false, true)
-                    end
-                    currentKey = newKey
+                    currentKey = (key == "Escape") and "None" or key
                     badge.Text = currentKey
                     bindColor(badge, "TextColor3", "TextMuted")
+                    listening = false
+                    listener:Disconnect()
                     syncOverlay()
                     if callback then callback(badge.Text) end
                 end
@@ -3134,21 +3353,13 @@ local KEY_ALIASES = {
 
         return wrapHandle({
             Set = function(value)
-                stopListening()
-                local newKey = tostring(value or "None")
-                if currentKey ~= newKey then
-                    applyActive(false, true)
-                end
-                currentKey = newKey
+                currentKey = tostring(value)
                 badge.Text = currentKey
                 bindColor(badge, "TextColor3", "TextMuted")
                 syncOverlay()
                 if callback then callback(currentKey) end
             end,
             Get = function() return currentKey end,
-            SetActive = function(value) applyActive(value, true) end,
-            GetActive = function() return isActive end,
-            GetMode = function() return activationMode or "None" end,
         })
     end
 
@@ -3222,8 +3433,9 @@ local KEY_ALIASES = {
         })
     end
 
-    local function addMultiDropdown(card, name, description, options, defaults, callback)
-        local row, top = createRow(card, name, description, {controlHeight = CONTROL_H})
+    local function addMultiDropdown(card, name, description, options, defaults, callback, extra)
+        local L = dropdownIconLayout(extra)
+        local row, top = createRow(card, name, description, {controlHeight = L.ControlH})
 
         local states = {}
         for i, opt in ipairs(options) do
@@ -3243,7 +3455,7 @@ local KEY_ALIASES = {
 
         local select = Instance.new("TextButton")
         select.Name = "Select"
-        select.Size = UDim2.new(1, 0, 0, CONTROL_H)
+        select.Size = UDim2.new(1, 0, 0, L.ControlH)
         select.Position = UDim2.new(0, 0, 0, top)
         bindColor(select, "BackgroundColor3", "BadgeBg")
         select.Text = ""
@@ -3326,10 +3538,10 @@ local KEY_ALIASES = {
 
             local rows = {}
             for i, optData in ipairs(options) do
-                local optText, optIconName = normalizeOption(optData)
+                local optText, optIconName, optModel = normalizeOption(optData)
 
                 local ob = Instance.new("TextButton")
-                ob.Size = UDim2.new(1, 0, 0, SELECT_OPTION_H)
+                ob.Size = UDim2.new(1, 0, 0, L.OptionH)
                 bindColor(ob, "BackgroundColor3", "SidebarActive")
                 ob.BackgroundTransparency = 1
                 ob.Text = ""
@@ -3340,21 +3552,16 @@ local KEY_ALIASES = {
                 addCorner(ob, 4)
                 table.insert(rows, {Frame = ob, Text = optText})
 
-                local obIcon = nil
-                if optIconName then
-                    obIcon = Instance.new("ImageLabel")
-                    obIcon.Size = UDim2.new(0, ICON_SIZE, 0, ICON_SIZE)
-                    obIcon.Position = UDim2.new(0, 6, 0.5, -8)
-                    obIcon.BackgroundTransparency = 1
-                    obIcon.Image = resolveIcon(optIconName)
-                    tintIcon(obIcon, optIconName, function() return (states[i]) and "Accent" or "TextMuted" end)
-                    obIcon.ZIndex = 102
-                    obIcon.Parent = ob
+                local obIcon = createIconSlot(ob, L.Slot, L.Cfg, 102)
+                if obIcon:Set(optIconName, optModel, optText) then
+                    obIcon:Tint(function() return (states[i]) and "Accent" or "TextMuted" end)
+                else
+                    obIcon = nil
                 end
 
                 local obText = Instance.new("TextLabel")
                 obText.Size = UDim2.new(1, -36, 1, 0)
-                obText.Position = UDim2.new(0, optIconName and 28 or 8, 0, 0)
+                obText.Position = UDim2.new(0, obIcon and L.TextX or 8, 0, 0)
                 obText.BackgroundTransparency = 1
                 obText.Text = optText
                 obText.Font = Enum.Font.Gotham
@@ -3374,14 +3581,14 @@ local KEY_ALIASES = {
                     states[i] = not states[i]
                     bindColor(obText, "TextColor3", function() return (states[i]) and "Accent" or "TextPrimary" end)
                     if obIcon then
-                        tintIcon(obIcon, optIconName, function() return (states[i]) and "Accent" or "TextMuted" end)
+                        obIcon:Tint(function() return (states[i]) and "Accent" or "TextMuted" end)
                     end
                     valueLbl.Text = buildSummary()
                     if callback then callback(options, states) end
                 end)
             end
 
-            addPopupSearch(popup, rows, list)
+            addPopupSearch(popup, rows, list, L.OptionH)
             trackPopup(popup, select)
             currentPopup = popup
         end)
@@ -3772,6 +3979,8 @@ local KEY_ALIASES = {
     resizeHandle.ZIndex = 10
     resizeHandle.Parent = Main
 
+    local BROWSE_WINDOWS = {} -- standalone Browse windows: {Frame, Scale, HiddenWithUI}
+
     local function makeGripLine(xOffset, yOffset, length)
         local line = Instance.new("Frame")
         line.Size = UDim2.new(0, length, 0, 1)
@@ -3809,7 +4018,8 @@ local KEY_ALIASES = {
         local resizeStart
         local startSize
 
-        resizeHandle.MouseButton1Down:Connect(function()
+        resizeHandle.MouseButton1Down:Connect(function(x, y)
+            if pointOnFloatingFrame(x, y) then return end
             resizing = true
             resizeStart = UserInputService:GetMouseLocation()
 
@@ -3965,6 +4175,2139 @@ local KEY_ALIASES = {
             end
         end
         return 1
+    end
+
+    --[[ Browse / gallery panel ------------------------------------------------
+        A full-area tab that shows items as a grid of cards (thumbnail, rating
+        badge, name) with a search box, category chips, a sort switch, a refresh
+        button and pagination. Items come from a plain table, a function, or an
+        HTTP JSON API (`Source = "https://.../items.json"`), so the same script
+        works for every user: the list lives on the server, not in the script. ]]
+    local HttpService = game:GetService("HttpService")
+    local BROWSE_IMAGE_CACHE = {}
+    local BROWSE_CACHE_DIR = "UILibrary/cache"
+
+    local function looksLikeHttpError(body)
+        return string.match(body, "^%s*404") ~= nil or string.match(body, "^%s*<!DOCTYPE") ~= nil
+    end
+
+    local function httpGet(url)
+        local ok, body = pcall(function() return game:HttpGet(url, true) end)
+        if ok and type(body) == "string" and #body > 0 and not looksLikeHttpError(body) then return body end
+        local req = (type(request) == "function" and request)
+            or (type(http_request) == "function" and http_request)
+            or (type(syn) == "table" and type(syn.request) == "function" and syn.request)
+            or nil
+        if req then
+            local ok2, res = pcall(req, {Url = url, Method = "GET"})
+            if ok2 and type(res) == "table" and type(res.Body) == "string" and #res.Body > 0 then
+                local code = tonumber(res.StatusCode) or 200
+                if code >= 200 and code < 300 then return res.Body end
+                return nil, "HTTP " .. tostring(code)
+            end
+        end
+        local ok3, body3 = pcall(HttpService.GetAsync, HttpService, url)
+        if ok3 and type(body3) == "string" and #body3 > 0 then return body3 end
+        return nil, (not ok and tostring(body)) or (not ok3 and tostring(body3)) or "request failed"
+    end
+
+    local function stringHash(s)
+        local h = 5381
+        for i = 1, #s do
+            h = (h * 33 + string.byte(s, i)) % 4294967296
+        end
+        return string.format("%08x", h)
+    end
+
+    local function ensureFolder(path)
+        if type(isfolder) ~= "function" or type(makefolder) ~= "function" then return end
+        local ok, exists = pcall(isfolder, path)
+        if ok and not exists then pcall(makefolder, path) end
+    end
+
+    -- Turns anything the API can give us into something ImageLabel.Image accepts.
+    -- http(s) links are downloaded once and served through getcustomasset (executor only).
+    local function resolveBrowseImage(src)
+        if type(src) == "number" then return "rbxassetid://" .. tostring(src) end
+        src = tostring(src or "")
+        if src == "" then return "" end
+        if string.match(src, "^%d+$") then return "rbxassetid://" .. src end
+        if string.match(src, "^rbx") then return src end
+        if string.match(src, "^https?://") then
+            local cached = BROWSE_IMAGE_CACHE[src]
+            if cached ~= nil then return cached end
+            BROWSE_IMAGE_CACHE[src] = ""
+            if type(writefile) ~= "function" or type(getcustomasset) ~= "function" then
+                return ""
+            end
+            local ok, asset = pcall(function()
+                local body = httpGet(src)
+                if not body then return nil end
+                ensureFolder("UILibrary")
+                ensureFolder(BROWSE_CACHE_DIR)
+                local ext = string.find(string.lower(src), "%.jpe?g") and ".jpg" or ".png"
+                local file = BROWSE_CACHE_DIR .. "/" .. stringHash(src) .. ext
+                if not (type(isfile) == "function" and isfile(file)) then
+                    writefile(file, body)
+                end
+                return getcustomasset(file)
+            end)
+            if ok and type(asset) == "string" then
+                BROWSE_IMAGE_CACHE[src] = asset
+                return asset
+            end
+            return ""
+        end
+        return src
+    end
+
+    local function pickField(raw, ...)
+        for _, key in ipairs({...}) do
+            local v = raw[key]
+            if v ~= nil then return v end
+        end
+        return nil
+    end
+
+    local function normalizeBrowseItem(raw, index)
+        if type(raw) ~= "table" then return nil end
+        if raw.__browseItem then return raw end
+        local item = {__browseItem = true, Raw = raw}
+        item.Id = pickField(raw, "Id", "id", "ID", "Key", "key", "uid", "Uid", "path", "Path") or index
+        item.Name = tostring(pickField(raw, "Name", "name", "Title", "title", "rawTitle", "fileName", "filename") or ("Item " .. tostring(index)))
+        item.Category = tostring(pickField(raw, "Category", "category", "Type", "type", "Class", "class", "Kind", "kind") or "Other")
+        local rating = tonumber(pickField(raw, "Rating", "rating", "Likes", "likes", "Score", "score", "Percent", "percent", "Quality", "quality"))
+        if rating and rating > 0 and rating <= 1 then rating = rating * 100 end
+        item.Rating = rating
+        item.Images = {}
+        local many = pickField(raw, "Images", "images", "Thumbnails", "thumbnails", "Previews", "previews")
+        if type(many) == "table" then
+            for _, img in ipairs(many) do
+                if img ~= nil and img ~= "" then table.insert(item.Images, img) end
+            end
+        end
+        local single = pickField(raw, "Image", "image", "Thumbnail", "thumbnail", "Icon", "icon", "Preview", "preview",
+            "thumbUrl", "thumb_url", "thumbnail_url", "image_url", "coverUrl", "cover_url", "ImageUrl", "imageUrl")
+        if single ~= nil and single ~= "" and #item.Images == 0 then
+            table.insert(item.Images, single)
+        end
+        item.Image = item.Images[1]
+        item.Fit = pickField(raw, "Fit", "fit", "Contain", "contain") and true or false
+        item.Author = pickField(raw, "Author", "author", "Creator", "creator", "Owner", "owner", "By", "by")
+        item.Date = tonumber(pickField(raw, "Date", "date", "Time", "time", "Created", "created", "Timestamp", "timestamp", "Updated", "updated")) or index
+        item.Tags = pickField(raw, "Tags", "tags")
+        item.Description = pickField(raw, "Description", "description", "Desc", "desc")
+        item.Data = pickField(raw, "Data", "data", "Payload", "payload", "Script", "script", "Url", "url", "Link", "link", "Code", "code")
+        return item
+    end
+
+    local function extractBrowseList(data)
+        if type(data) ~= "table" then return {} end
+        if #data > 0 or next(data) == nil then return data end
+        for _, key in ipairs({"items", "Items", "data", "Data", "results", "Results", "list", "List", "builds", "Builds", "scripts", "Scripts", "entries", "Entries"}) do
+            if type(data[key]) == "table" then return extractBrowseList(data[key]) end
+        end
+        -- dictionary keyed by id -> array
+        local list = {}
+        for key, value in pairs(data) do
+            if type(value) == "table" then
+                if value.Id == nil and value.id == nil then value.Id = key end
+                table.insert(list, value)
+            end
+        end
+        table.sort(list, function(a, b) return tostring(a.Id) < tostring(b.Id) end)
+        return list
+    end
+
+    local BROWSE_SORTS = {
+        Hot = {Icon = "zap", Sort = function(a, b)
+            local ra, rb = a.Rating or -1, b.Rating or -1
+            if ra ~= rb then return ra > rb end
+            if a.Date ~= b.Date then return a.Date > b.Date end
+            return a.Name < b.Name
+        end},
+        New = {Icon = "clock", Sort = function(a, b)
+            if a.Date ~= b.Date then return a.Date > b.Date end
+            return a.Name < b.Name
+        end},
+        Top = {Icon = "crown", Sort = function(a, b)
+            local ra, rb = a.Rating or -1, b.Rating or -1
+            if ra ~= rb then return ra > rb end
+            return a.Name < b.Name
+        end},
+        ["A-Z"] = {Icon = "type", Sort = function(a, b)
+            return string.lower(a.Name) < string.lower(b.Name)
+        end},
+    }
+
+    --[[ Dialog --------------------------------------------------------------
+        A centered modal card: title + header buttons + close, an image block
+        (1-4 pictures with a tag and a badge over it), info lines and stacked
+        action buttons (single or two per row). Used by the Browse tab for item
+        details and available directly as Window:CreateDialog(opts). ]]
+    local DIALOG_W = 320
+    local DIALOG_BTN_H = 34
+    local activeDialog = nil
+
+    -- Dialogs live in their own ScreenGui with IgnoreGuiInset = true, so the
+    -- backdrop really covers the whole screen (including the Roblox top bar).
+    local DialogGui = nil
+    local function getDialogGui()
+        if DialogGui and DialogGui.Parent then return DialogGui end
+        DialogGui = Instance.new("ScreenGui")
+        DialogGui.Name = "UILibraryDialogs"
+        DialogGui.ResetOnSpawn = false
+        DialogGui.IgnoreGuiInset = true
+        DialogGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        DialogGui.DisplayOrder = ScreenGui.DisplayOrder + 1
+        DialogGui.Parent = ScreenGui.Parent or ScreenGui
+        return DialogGui
+    end
+
+    local function guiInset()
+        local ok, topLeft = pcall(function() return game:GetService("GuiService"):GetGuiInset() end)
+        return (ok and topLeft) or Vector2.new(0, 0)
+    end
+
+    local function closeActiveDialog()
+        local d = activeDialog
+        activeDialog = nil
+        if d then d.Close() end
+    end
+
+    local function dialogTextOf(def)
+        if type(def) == "table" then return tostring(def.Text or def.Title or def.Name or "") end
+        return tostring(def or "")
+    end
+
+    local function createDialog(dOpts)
+        dOpts = dOpts or {}
+        closeActiveDialog()
+        closeAllPopups()
+        local width = tonumber(dOpts.Width) or DIALOG_W
+        local connections = {}
+        local closed = false
+        local handle = {}
+
+        local layer = getDialogGui()
+        local overlay = Instance.new("TextButton")
+        overlay.Name = "DialogOverlay"
+        overlay.Position = UDim2.new(0, -8, 0, -8)
+        overlay.Size = UDim2.new(1, 16, 1, 16)
+        overlay.BackgroundColor3 = Color3.new(0, 0, 0)
+        overlay.BackgroundTransparency = 1
+        overlay.BorderSizePixel = 0
+        overlay.Text = ""
+        overlay.AutoButtonColor = false
+        overlay.ZIndex = 149
+        overlay.Parent = layer
+        TweenService:Create(overlay, TWEEN_FAST, {BackgroundTransparency = dOpts.Dim == false and 1 or 0.45}):Play()
+
+        local box = Instance.new("Frame")
+        box.Name = "Dialog"
+        box.Size = UDim2.new(0, width, 0, 0)
+        box.AutomaticSize = Enum.AutomaticSize.Y
+        box.AnchorPoint = Vector2.new(0.5, 0.5)
+        bindColor(box, "BackgroundColor3", "Background")
+        box.BorderSizePixel = 0
+        box.Active = true -- sinks input: clicks/drags inside never reach the backdrop
+        box.ZIndex = 150
+        box.Parent = layer
+        FLOATING_FRAMES[box] = true
+        FLOATING_FRAMES[overlay] = true
+        scalePopup(box)
+        addCorner(box, 12)
+        local boxStroke = addStroke(box, 1)
+        boxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        boxStroke.LineJoinMode = Enum.LineJoinMode.Round
+
+        do -- center over the anchor window (main window by default)
+            local anchor = dOpts.Anchor
+            if typeof(anchor) ~= "Instance" or not anchor:IsA("GuiObject") or not anchor.Visible then
+                anchor = Main.Visible and Main or nil
+            end
+            local center
+            if anchor then
+                -- anchor position relative to the main ScreenGui + that gui's offset on screen (the inset)
+                center = anchor.AbsolutePosition - ScreenGui.AbsolutePosition + guiInset() + anchor.AbsoluteSize / 2
+                -- match the scale of the window the dialog belongs to (Browse windows scale on their own)
+                local anchorScale = anchor:FindFirstChildOfClass("UIScale")
+                local boxScale = box:FindFirstChildOfClass("UIScale")
+                if anchorScale and boxScale then boxScale.Scale = anchorScale.Scale end
+            else
+                center = layer.AbsoluteSize / 2
+            end
+            box.Position = UDim2.fromOffset(center.X, center.Y + 16)
+            TweenService:Create(box, TWEEN_SLOW, {Position = UDim2.fromOffset(center.X, center.Y)}):Play()
+        end
+
+        local pad = Instance.new("UIPadding")
+        pad.PaddingTop = UDim.new(0, 10)
+        pad.PaddingBottom = UDim.new(0, 12)
+        pad.PaddingLeft = UDim.new(0, 12)
+        pad.PaddingRight = UDim.new(0, 12)
+        pad.Parent = box
+
+        local list = Instance.new("UIListLayout")
+        list.SortOrder = Enum.SortOrder.LayoutOrder
+        list.Padding = UDim.new(0, 8)
+        list.Parent = box
+
+        local order = 0
+        local function nextOrder() order = order + 1 return order end
+
+        -- Header ------------------------------------------------------------------
+        local header = Instance.new("Frame")
+        header.Size = UDim2.new(1, 0, 0, 24)
+        header.BackgroundTransparency = 1
+        header.LayoutOrder = nextOrder()
+        header.ZIndex = 151
+        header.Parent = box
+
+        local headerRight = Instance.new("Frame")
+        headerRight.Size = UDim2.new(0, 0, 1, 0)
+        headerRight.AutomaticSize = Enum.AutomaticSize.X
+        headerRight.AnchorPoint = Vector2.new(1, 0)
+        headerRight.Position = UDim2.new(1, 0, 0, 0)
+        headerRight.BackgroundTransparency = 1
+        headerRight.ZIndex = 151
+        headerRight.Parent = header
+        local hrLayout = Instance.new("UIListLayout")
+        hrLayout.FillDirection = Enum.FillDirection.Horizontal
+        hrLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        hrLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+        hrLayout.Padding = UDim.new(0, 6)
+        hrLayout.Parent = headerRight
+
+        local title = Instance.new("TextLabel")
+        title.Size = UDim2.new(1, -40, 1, 0)
+        title.BackgroundTransparency = 1
+        title.Text = dialogTextOf(dOpts.Title ~= nil and dOpts.Title or "Details")
+        title.Font = Enum.Font.GothamBold
+        title.TextSize = 12
+        bindColor(title, "TextColor3", "TextPrimary")
+        title.TextXAlignment = Enum.TextXAlignment.Left
+        title.TextTruncate = Enum.TextTruncate.AtEnd
+        title.ZIndex = 151
+        title.Parent = header
+        headerRight:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+            title.Size = UDim2.new(1, -(headerRight.AbsoluteSize.X / math.max(UI_SCALE, 0.01) + 8), 1, 0)
+        end)
+
+        local function smallPill(parent, text, orderIdx)
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(0, 0, 0, 22)
+            btn.AutomaticSize = Enum.AutomaticSize.X
+            btn.LayoutOrder = orderIdx
+            bindColor(btn, "BackgroundColor3", "BadgeBg")
+            btn.BorderSizePixel = 0
+            btn.Text = ""
+            btn.AutoButtonColor = false
+            btn.ZIndex = 152
+            btn.Parent = parent
+            addCorner(btn, 6)
+            local stroke = addStroke(btn, 1)
+            local p = Instance.new("UIPadding")
+            p.PaddingLeft = UDim.new(0, 9)
+            p.PaddingRight = UDim.new(0, 9)
+            p.Parent = btn
+            local lbl = Instance.new("TextLabel")
+            lbl.Size = UDim2.new(0, 0, 1, 0)
+            lbl.AutomaticSize = Enum.AutomaticSize.X
+            lbl.BackgroundTransparency = 1
+            lbl.Text = text
+            lbl.Font = Enum.Font.GothamMedium
+            lbl.TextSize = 10.5
+            bindColor(lbl, "TextColor3", "TextPrimary")
+            lbl.ZIndex = 153
+            lbl.Parent = btn
+            btn.MouseEnter:Connect(function() tweenColors(stroke, TWEEN_FAST, {Color = "BorderActive"}):Play() end)
+            btn.MouseLeave:Connect(function() tweenColors(stroke, TWEEN_FAST, {Color = "Border"}):Play() end)
+            return btn
+        end
+
+        local headerIdx = 0
+        for _, def in ipairs(dOpts.HeaderButtons or {}) do
+            headerIdx = headerIdx + 1
+            local btn = smallPill(headerRight, dialogTextOf(def), headerIdx)
+            btn.MouseButton1Click:Connect(function()
+                if type(def) == "table" and def.Callback then task.spawn(def.Callback, handle) end
+                if type(def) == "table" and def.Close then handle.Close() end
+            end)
+        end
+
+        local closeBtn = Instance.new("ImageButton")
+        closeBtn.Size = UDim2.new(0, 22, 0, 22)
+        closeBtn.LayoutOrder = headerIdx + 1
+        bindColor(closeBtn, "BackgroundColor3", "BadgeBg")
+        closeBtn.BorderSizePixel = 0
+        closeBtn.AutoButtonColor = false
+        closeBtn.Image = ""
+        closeBtn.ZIndex = 152
+        closeBtn.Parent = headerRight
+        addCorner(closeBtn, 6)
+        addStroke(closeBtn, 1)
+        local closeIcon = Instance.new("ImageLabel")
+        closeIcon.Size = UDim2.new(0, 11, 0, 11)
+        closeIcon.Position = UDim2.new(0.5, -5.5, 0.5, -5.5)
+        closeIcon.BackgroundTransparency = 1
+        closeIcon.Image = resolveIcon("x")
+        tintIcon(closeIcon, "x", "TextMuted")
+        closeIcon.ZIndex = 153
+        closeIcon.Parent = closeBtn
+        closeBtn.MouseEnter:Connect(function() tweenColors(closeIcon, TWEEN_FAST, {ImageColor3 = "Accent"}):Play() end)
+        closeBtn.MouseLeave:Connect(function() tweenColors(closeIcon, TWEEN_FAST, {ImageColor3 = "TextMuted"}):Play() end)
+
+        -- Images ------------------------------------------------------------------
+        local images = {}
+        if type(dOpts.Images) == "table" then
+            for _, src in ipairs(dOpts.Images) do
+                if src ~= nil and src ~= "" then table.insert(images, src) end
+            end
+        elseif dOpts.Image ~= nil and dOpts.Image ~= "" then
+            images[1] = dOpts.Image
+        end
+
+        local tagLabel, badgeLabel
+        if #images > 0 or dOpts.Tag or dOpts.Badge then
+            local area = Instance.new("Frame")
+            area.Size = UDim2.new(1, 0, 0, tonumber(dOpts.ImageHeight) or 170)
+            bindColor(area, "BackgroundColor3", "PillBg")
+            area.BorderSizePixel = 0
+            area.ClipsDescendants = true
+            area.LayoutOrder = nextOrder()
+            area.ZIndex = 151
+            area.Parent = box
+            addCorner(area, 8)
+            addStroke(area, 1)
+
+            local count = math.min(#images, 4)
+            local cols = (count <= 1) and 1 or 2
+            local rows = (count <= 2) and 1 or 2
+            for i = 1, count do
+                local c = (i - 1) % cols
+                local r = math.floor((i - 1) / cols)
+                local img = Instance.new("ImageLabel")
+                img.BackgroundTransparency = 1
+                img.ScaleType = dOpts.Fit and Enum.ScaleType.Fit or Enum.ScaleType.Crop
+                if dOpts.Fit then
+                    img.Size = UDim2.new(1 / cols, -24, 1 / rows, -24)
+                    img.Position = UDim2.new(c / cols, 12, r / rows, 12)
+                else
+                    img.Size = UDim2.new(1 / cols, (cols > 1) and -1 or 0, 1 / rows, (rows > 1) and -1 or 0)
+                    img.Position = UDim2.new(c / cols, (c > 0) and 1 or 0, r / rows, (r > 0) and 1 or 0)
+                end
+                img.ZIndex = 152
+                img.Parent = area
+                local src = images[i]
+                if dOpts.ImageLoader or (type(src) == "string" and string.match(src, "^https?://")) then
+                    task.spawn(function()
+                        local asset
+                        if dOpts.ImageLoader then
+                            local ok, res = pcall(dOpts.ImageLoader, src)
+                            asset = (ok and type(res) == "string") and res or nil
+                        end
+                        if not asset then asset = resolveBrowseImage(src) end
+                        if img.Parent and asset then img.Image = asset end
+                    end)
+                else
+                    img.Image = resolveBrowseImage(src)
+                end
+            end
+
+            local function overlayPill(anchorX, text, colorKey)
+                local pill = Instance.new("Frame")
+                pill.Size = UDim2.new(0, 0, 0, 18)
+                pill.AutomaticSize = Enum.AutomaticSize.X
+                pill.AnchorPoint = Vector2.new(anchorX, 0)
+                pill.Position = UDim2.new(anchorX, anchorX > 0 and -8 or 8, 0, 8)
+                bindColor(pill, "BackgroundColor3", "Background")
+                pill.BackgroundTransparency = 0.2
+                pill.BorderSizePixel = 0
+                pill.ZIndex = 153
+                pill.Visible = text ~= nil and text ~= ""
+                pill.Parent = area
+                addCorner(pill, 5)
+                local p = Instance.new("UIPadding")
+                p.PaddingLeft = UDim.new(0, 7)
+                p.PaddingRight = UDim.new(0, 7)
+                p.Parent = pill
+                local lbl = Instance.new("TextLabel")
+                lbl.Size = UDim2.new(0, 0, 1, 0)
+                lbl.AutomaticSize = Enum.AutomaticSize.X
+                lbl.BackgroundTransparency = 1
+                lbl.Text = text or ""
+                lbl.RichText = true
+                lbl.Font = Enum.Font.GothamBold
+                lbl.TextSize = 10
+                bindColor(lbl, "TextColor3", colorKey)
+                lbl.ZIndex = 154
+                lbl.Parent = pill
+                return lbl, pill
+            end
+            tagLabel = overlayPill(0, dOpts.Tag and tostring(dOpts.Tag) or nil, "Accent")
+            badgeLabel = overlayPill(1, dOpts.Badge and tostring(dOpts.Badge) or nil, "TextPrimary")
+        end
+
+        -- Lines -------------------------------------------------------------------
+        local linesHolder = Instance.new("Frame")
+        linesHolder.Size = UDim2.new(1, 0, 0, 0)
+        linesHolder.AutomaticSize = Enum.AutomaticSize.Y
+        linesHolder.BackgroundTransparency = 1
+        linesHolder.LayoutOrder = nextOrder()
+        linesHolder.ZIndex = 151
+        linesHolder.Parent = box
+        local linesLayout = Instance.new("UIListLayout")
+        linesLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        linesLayout.Padding = UDim.new(0, 3)
+        linesLayout.Parent = linesHolder
+
+        local function setLines(lines)
+            for _, child in ipairs(linesHolder:GetChildren()) do
+                if child:IsA("Frame") then child:Destroy() end
+            end
+            if type(lines) == "string" then lines = {lines} end
+            for i, def in ipairs(lines or {}) do
+                local text = dialogTextOf(def)
+                local iconName = type(def) == "table" and def.Icon or nil
+                local colorKey = type(def) == "table" and def.Color or "TextMuted"
+                local row = Instance.new("Frame")
+                row.Size = UDim2.new(1, 0, 0, 16)
+                row.BackgroundTransparency = 1
+                row.LayoutOrder = i
+                row.ZIndex = 151
+                row.Parent = linesHolder
+                local inset = 0
+                if iconName then
+                    local ic = Instance.new("ImageLabel")
+                    ic.Size = UDim2.new(0, 12, 0, 12)
+                    ic.Position = UDim2.new(0, 0, 0.5, -6)
+                    ic.BackgroundTransparency = 1
+                    ic.Image = resolveIcon(iconName)
+                    tintIcon(ic, iconName, colorKey)
+                    ic.ZIndex = 152
+                    ic.Parent = row
+                    inset = 17
+                end
+                local lbl = Instance.new("TextLabel")
+                lbl.Size = UDim2.new(1, -inset, 1, 0)
+                lbl.Position = UDim2.new(0, inset, 0, 0)
+                lbl.BackgroundTransparency = 1
+                lbl.Text = text
+                lbl.RichText = true
+                lbl.Font = Enum.Font.Gotham
+                lbl.TextSize = 10.5
+                bindColor(lbl, "TextColor3", colorKey)
+                lbl.TextXAlignment = Enum.TextXAlignment.Left
+                lbl.TextTruncate = Enum.TextTruncate.AtEnd
+                lbl.ZIndex = 152
+                lbl.Parent = row
+            end
+            linesHolder.Visible = #(lines or {}) > 0
+        end
+        setLines(dOpts.Lines or dOpts.Info or dOpts.Content)
+
+        -- Buttons -----------------------------------------------------------------
+        local buttonHandles = {}
+
+        local function makeButton(parent, def, widthScale, widthOffset, orderIdx)
+            local style = (def.Primary and "primary") or (def.Accent and "accent") or (def.Style and string.lower(tostring(def.Style))) or "default"
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(widthScale, widthOffset, 0, DIALOG_BTN_H)
+            btn.LayoutOrder = orderIdx
+            btn.BorderSizePixel = 0
+            btn.Text = ""
+            btn.AutoButtonColor = false
+            btn.ZIndex = 152
+            btn.Parent = parent
+            addCorner(btn, 8)
+            local stroke = addStroke(btn, 1)
+            local textKey, bgKey, hoverBg
+            if style == "primary" then
+                bgKey, textKey, hoverBg = "Accent", "KnobOn", "AccentSoft"
+                stroke.Transparency = 1
+            elseif style == "accent" then
+                bgKey, textKey, hoverBg = "BadgeBg", "Accent", "SidebarActive"
+            else
+                bgKey, textKey, hoverBg = "BadgeBg", "TextPrimary", "SidebarActive"
+            end
+            bindColor(btn, "BackgroundColor3", bgKey)
+
+            local inner = Instance.new("Frame")
+            inner.Size = UDim2.new(0, 0, 1, 0)
+            inner.AutomaticSize = Enum.AutomaticSize.X
+            inner.AnchorPoint = Vector2.new(0.5, 0)
+            inner.Position = UDim2.new(0.5, 0, 0, 0)
+            inner.BackgroundTransparency = 1
+            inner.ZIndex = 153
+            inner.Parent = btn
+            local il = Instance.new("UIListLayout")
+            il.FillDirection = Enum.FillDirection.Horizontal
+            il.SortOrder = Enum.SortOrder.LayoutOrder
+            il.VerticalAlignment = Enum.VerticalAlignment.Center
+            il.Padding = UDim.new(0, 7)
+            il.Parent = inner
+
+            local icon
+            if def.Icon then
+                icon = Instance.new("ImageLabel")
+                icon.Size = UDim2.new(0, 13, 0, 13)
+                icon.LayoutOrder = 1
+                icon.BackgroundTransparency = 1
+                icon.Image = resolveIcon(def.Icon)
+                tintIcon(icon, def.Icon, textKey)
+                icon.ZIndex = 154
+                icon.Parent = inner
+            end
+            local lbl = Instance.new("TextLabel")
+            lbl.Size = UDim2.new(0, 0, 1, 0)
+            lbl.AutomaticSize = Enum.AutomaticSize.X
+            lbl.LayoutOrder = 2
+            lbl.BackgroundTransparency = 1
+            lbl.Text = dialogTextOf(def)
+            lbl.Font = Enum.Font.GothamBold
+            lbl.TextSize = 11.5
+            bindColor(lbl, "TextColor3", textKey)
+            lbl.ZIndex = 154
+            lbl.Parent = inner
+
+            btn.MouseEnter:Connect(function()
+                tweenColors(btn, TWEEN_FAST, {BackgroundColor3 = hoverBg}):Play()
+                if style ~= "primary" then tweenColors(stroke, TWEEN_FAST, {Color = "BorderActive"}):Play() end
+            end)
+            btn.MouseLeave:Connect(function()
+                tweenColors(btn, TWEEN_FAST, {BackgroundColor3 = bgKey}):Play()
+                if style ~= "primary" then tweenColors(stroke, TWEEN_FAST, {Color = "Border"}):Play() end
+            end)
+            local function fire()
+                if def.Callback then task.spawn(def.Callback, handle) end
+                if def.Close then handle.Close() end
+            end
+            btn.MouseButton1Click:Connect(fire)
+            local h = {
+                Button = btn,
+                Fire = fire,
+                SetText = function(t) lbl.Text = tostring(t) end,
+                SetEnabled = function(on)
+                    btn.Active = on ~= false
+                    btn.BackgroundTransparency = (on == false) and 0.5 or 0
+                    lbl.TextTransparency = (on == false) and 0.5 or 0
+                end,
+            }
+            wrapHandle(h)
+            if def.Id or def.Flag then buttonHandles[def.Id or def.Flag] = h end
+            table.insert(buttonHandles, h)
+            return btn
+        end
+
+        for _, def in ipairs(dOpts.Buttons or {}) do
+            if type(def) == "table" and def[1] ~= nil then -- a row of buttons
+                local row = Instance.new("Frame")
+                row.Size = UDim2.new(1, 0, 0, DIALOG_BTN_H)
+                row.BackgroundTransparency = 1
+                row.LayoutOrder = nextOrder()
+                row.ZIndex = 151
+                row.Parent = box
+                local rl = Instance.new("UIListLayout")
+                rl.FillDirection = Enum.FillDirection.Horizontal
+                rl.SortOrder = Enum.SortOrder.LayoutOrder
+                rl.Padding = UDim.new(0, 8)
+                rl.Parent = row
+                local n = #def
+                for i, sub in ipairs(def) do
+                    if type(sub) == "string" then sub = {Text = sub} end
+                    makeButton(row, sub, 1 / n, -(8 * (n - 1)) / n, i)
+                end
+            elseif def ~= nil then
+                if type(def) == "string" then def = {Text = def} end
+                local btn = makeButton(box, def, 1, 0, nextOrder())
+                btn.LayoutOrder = order
+            end
+        end
+
+        -- Behaviour ---------------------------------------------------------------
+        do -- drag by the header
+            local dragging, dragStart, startPos = false, nil, nil
+            header.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true
+                    dragStart = input.Position
+                    startPos = box.Position
+                end
+            end)
+            table.insert(connections, UserInputService.InputChanged:Connect(function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    local delta = input.Position - dragStart
+                    box.Position = UDim2.fromOffset(startPos.X.Offset + delta.X, startPos.Y.Offset + delta.Y)
+                end
+            end))
+            table.insert(connections, UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = false
+                end
+            end))
+        end
+
+        function handle.Close()
+            if closed then return end
+            closed = true
+            if activeDialog == handle then activeDialog = nil end
+            for _, c in ipairs(connections) do c:Disconnect() end
+            connections = {}
+            TweenService:Create(overlay, TWEEN_FAST, {BackgroundTransparency = 1}):Play()
+            local t = TweenService:Create(box, TWEEN_FAST, {Position = box.Position + UDim2.fromOffset(0, 12)})
+            t:Play()
+            task.delay(0.2, function()
+                overlay:Destroy()
+                box:Destroy()
+            end)
+            if dOpts.OnClose then task.spawn(dOpts.OnClose) end
+        end
+        function handle.IsOpen() return not closed end
+        function handle.SetTitle(text) title.Text = tostring(text) end
+        function handle.SetLines(lines) setLines(lines) end
+        function handle.SetTag(text) if tagLabel then tagLabel.Text = tostring(text or "") tagLabel.Parent.Visible = text ~= nil and text ~= "" end end
+        function handle.SetBadge(text) if badgeLabel then badgeLabel.Text = tostring(text or "") badgeLabel.Parent.Visible = text ~= nil and text ~= "" end end
+        function handle.GetButton(idOrIndex) return buttonHandles[idOrIndex] end
+        handle.Buttons = buttonHandles
+        handle.Frame = box
+        handle.Data = dOpts.Data
+
+        if dOpts.CloseOnBackdrop ~= false then
+            local function insideBox(pos)
+                local p0 = box.AbsolutePosition
+                local p1 = p0 + box.AbsoluteSize
+                return pos.X >= p0.X and pos.X <= p1.X and pos.Y >= p0.Y and pos.Y <= p1.Y
+            end
+            local pressedOutside = false
+            overlay.InputBegan:Connect(function(input)
+                if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+                pressedOutside = not insideBox(Vector2.new(input.Position.X, input.Position.Y))
+            end)
+            overlay.InputEnded:Connect(function(input)
+                if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+                local wasOutside = pressedOutside
+                pressedOutside = false
+                if wasOutside and not insideBox(Vector2.new(input.Position.X, input.Position.Y)) then
+                    handle.Close()
+                end
+            end)
+        end
+        closeBtn.MouseButton1Click:Connect(function() handle.Close() end)
+        table.insert(connections, UserInputService.InputBegan:Connect(function(input, gp)
+            if gp then return end
+            if input.KeyCode == Enum.KeyCode.Escape then handle.Close() end
+        end))
+        trackConn(connections[#connections])
+
+        activeDialog = handle
+        return wrapHandle(handle)
+    end
+
+    --[[ host = nil  -> panel lives in the main window's content area (tab mode)
+         host = {Parent = frame, Window = frame, OnOpen = fn} -> standalone window ]]
+    local function buildBrowsePanel(tabName, opts, host)
+        opts = opts or {}
+        local columns = math.max(1, math.floor(tonumber(opts.Columns) or 3))
+        local pageSize = math.max(1, math.floor(tonumber(opts.PageSize) or 9))
+        local gap = 8
+        local callback = opts.Callback or opts.OnSelect or opts.OnClick
+        local parse = opts.Parse or opts.Transform
+        local source = opts.Source or opts.Url or opts.Api or opts.API
+        local fetcher = opts.Fetch or opts.Loader
+        local detailsOpt = opts.Details or opts.Dialog
+        local imageLoader = opts.ImageLoader or opts.LoadImage -- function(src, item) -> asset string
+        local remote = (opts.Remote == true) or (opts.ServerSide == true) -- server does paging/search/sort
+        local sourceTabs = {}
+        for _, t in ipairs(opts.Tabs or {}) do
+            if type(t) == "table" then
+                table.insert(sourceTabs, {Name = tostring(t.Name or t.Text or t.Title or "Tab"), Id = t.Id or t.Value or t.Name or t.Text})
+            else
+                table.insert(sourceTabs, {Name = tostring(t), Id = t})
+            end
+        end
+        local placeholderIcon = opts.PlaceholderIcon or "image"
+        local imageScale = (tostring(opts.ImageScaleType or opts.ImageScale or "Crop"):lower() == "fit")
+            and Enum.ScaleType.Fit or Enum.ScaleType.Crop
+        local autoCategories = (opts.Categories == nil)
+
+        -- sort modes: {"Hot", "New"} or {{Name = "Hot", Sort = fn, Icon = "zap"}, ...}
+        local sortModes = {}
+        for _, mode in ipairs(opts.SortModes or opts.Sorts or {"Hot", "New", "A-Z"}) do
+            if type(mode) == "string" and BROWSE_SORTS[mode] then
+                table.insert(sortModes, {Name = mode, Icon = BROWSE_SORTS[mode].Icon, Sort = BROWSE_SORTS[mode].Sort})
+            elseif type(mode) == "table" and type(mode.Sort) == "function" then
+                table.insert(sortModes, {Name = mode.Name or mode.Title or "Sort", Icon = mode.Icon or "zap", Sort = mode.Sort})
+            end
+        end
+        if #sortModes == 0 then
+            table.insert(sortModes, {Name = "Hot", Icon = "zap", Sort = BROWSE_SORTS.Hot.Sort})
+        end
+
+        local showDetails -- defined after the card helpers
+        local state = {
+            Items = {},
+            Filtered = {},
+            Query = "",
+            Category = "All",
+            Categories = {"All"},
+            SortIndex = 1,
+            Page = 1,
+            Pages = 1,
+            Selected = nil,
+            Loading = false,
+            Generation = 0,
+            Tab = sourceTabs[1] and sourceTabs[1].Id or nil,
+            Total = nil,
+        }
+
+        -- scale of the window this panel lives in (main window or its own Browse window)
+        local function panelScale()
+            local sc = host and host.Scale
+            return math.max((sc and sc.Scale) or UI_SCALE, 0.01)
+        end
+
+        local Panel = Instance.new("Frame")
+        Panel.Name = "BrowsePanel"
+        Panel.Size = UDim2.new(1, 0, 1, 0)
+        Panel.BackgroundTransparency = 1
+        Panel.Visible = host ~= nil
+        Panel.ZIndex = 3
+        Panel.Parent = host and host.Parent or ContentArea
+
+        local panelPad = Instance.new("UIPadding")
+        panelPad.PaddingLeft = UDim.new(0, 4)
+        panelPad.PaddingRight = UDim.new(0, 4)
+        panelPad.PaddingTop = UDim.new(0, 4)
+        panelPad.PaddingBottom = UDim.new(0, 6)
+        panelPad.Parent = Panel
+
+        -- Toolbar --------------------------------------------------------------
+        local TOOL_H = 30
+        local Toolbar = Instance.new("Frame")
+        Toolbar.Size = UDim2.new(1, 0, 0, TOOL_H)
+        Toolbar.BackgroundTransparency = 1
+        Toolbar.ZIndex = 4
+        Toolbar.Parent = Panel
+
+        local sortW = 68
+        local rightW = sortW + 6 + 28 + 10 + 24 + 46 + 24 -- sort, refresh, prev, page, next
+
+        local SearchFrame = Instance.new("Frame")
+        SearchFrame.Size = UDim2.new(1, -(rightW + 8), 1, 0)
+        bindColor(SearchFrame, "BackgroundColor3", "BadgeBg")
+        SearchFrame.BorderSizePixel = 0
+        SearchFrame.ZIndex = 4
+        SearchFrame.Parent = Toolbar
+        addCorner(SearchFrame, 8)
+        local searchStroke = addStroke(SearchFrame, 1)
+
+        local searchIcon = Instance.new("ImageLabel")
+        searchIcon.Size = UDim2.new(0, 13, 0, 13)
+        searchIcon.Position = UDim2.new(0, 10, 0.5, -6.5)
+        searchIcon.BackgroundTransparency = 1
+        searchIcon.Image = resolveIcon("search")
+        tintIcon(searchIcon, "search", "TextMuted")
+        searchIcon.ZIndex = 5
+        searchIcon.Parent = SearchFrame
+
+        local searchInput = Instance.new("TextBox")
+        searchInput.Size = UDim2.new(1, -36, 1, 0)
+        searchInput.Position = UDim2.new(0, 29, 0, 0)
+        searchInput.BackgroundTransparency = 1
+        searchInput.Text = ""
+        searchInput.PlaceholderText = opts.SearchPlaceholder or "Search..."
+        bindColor(searchInput, "PlaceholderColor3", "TextDim")
+        bindColor(searchInput, "TextColor3", "TextPrimary")
+        searchInput.Font = Enum.Font.Gotham
+        searchInput.TextSize = 11
+        searchInput.TextXAlignment = Enum.TextXAlignment.Left
+        searchInput.ClearTextOnFocus = false
+        searchInput.ZIndex = 5
+        searchInput.Parent = SearchFrame
+
+        searchInput.Focused:Connect(function()
+            tweenColors(searchStroke, TWEEN_FAST, {Color = "BorderActive"}):Play()
+        end)
+        searchInput.FocusLost:Connect(function()
+            tweenColors(searchStroke, TWEEN_FAST, {Color = "Border"}):Play()
+        end)
+
+        local function toolButton(width, xOffset, iconName)
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(0, width, 1, 0)
+            btn.Position = UDim2.new(1, -xOffset, 0, 0)
+            bindColor(btn, "BackgroundColor3", "BadgeBg")
+            btn.BorderSizePixel = 0
+            btn.Text = ""
+            btn.AutoButtonColor = false
+            btn.ZIndex = 4
+            btn.Parent = Toolbar
+            addCorner(btn, 8)
+            local stroke = addStroke(btn, 1)
+            local icon
+            if iconName then
+                icon = Instance.new("ImageLabel")
+                icon.Size = UDim2.new(0, 13, 0, 13)
+                icon.Position = UDim2.new(0.5, -6.5, 0.5, -6.5)
+                icon.BackgroundTransparency = 1
+                icon.Image = resolveIcon(iconName)
+                tintIcon(icon, iconName, "TextMuted")
+                icon.ZIndex = 5
+                icon.Parent = btn
+            end
+            btn.MouseEnter:Connect(function()
+                tweenColors(stroke, TWEEN_FAST, {Color = "BorderActive"}):Play()
+                if icon then tweenColors(icon, TWEEN_FAST, {ImageColor3 = "TextPrimary"}):Play() end
+            end)
+            btn.MouseLeave:Connect(function()
+                tweenColors(stroke, TWEEN_FAST, {Color = "Border"}):Play()
+                if icon then tweenColors(icon, TWEEN_FAST, {ImageColor3 = "TextMuted"}):Play() end
+            end)
+            return btn, icon, stroke
+        end
+
+        -- sort switch ("Hot")
+        local SortBtn = toolButton(sortW, rightW, nil)
+        local sortIcon = Instance.new("ImageLabel")
+        sortIcon.Size = UDim2.new(0, 13, 0, 13)
+        sortIcon.Position = UDim2.new(0, 10, 0.5, -6.5)
+        sortIcon.BackgroundTransparency = 1
+        sortIcon.Image = resolveIcon(sortModes[1].Icon)
+        tintIcon(sortIcon, sortModes[1].Icon, "Accent")
+        sortIcon.ZIndex = 5
+        sortIcon.Parent = SortBtn
+        local sortLabel = Instance.new("TextLabel")
+        sortLabel.Size = UDim2.new(1, -30, 1, 0)
+        sortLabel.Position = UDim2.new(0, 28, 0, 0)
+        sortLabel.BackgroundTransparency = 1
+        sortLabel.Text = sortModes[1].Name
+        sortLabel.Font = Enum.Font.GothamBold
+        sortLabel.TextSize = 11
+        bindColor(sortLabel, "TextColor3", "TextPrimary")
+        sortLabel.TextXAlignment = Enum.TextXAlignment.Left
+        sortLabel.ZIndex = 5
+        sortLabel.Parent = SortBtn
+
+        local RefreshBtn, refreshIcon = toolButton(28, rightW - sortW - 6, "refresh-cw")
+        local PrevBtn, prevIcon = toolButton(24, 24 + 46 + 24, "chevron-right")
+        prevIcon.Rotation = 180
+        local NextBtn = toolButton(24, 24, "chevron-right")
+
+        local PageLabel = Instance.new("TextLabel")
+        PageLabel.Size = UDim2.new(0, 46, 1, 0)
+        PageLabel.Position = UDim2.new(1, -(24 + 46), 0, 0)
+        PageLabel.BackgroundTransparency = 1
+        PageLabel.Text = "1/1"
+        PageLabel.Font = Enum.Font.GothamMedium
+        PageLabel.TextSize = 11
+        bindColor(PageLabel, "TextColor3", "TextMuted")
+        PageLabel.ZIndex = 5
+        PageLabel.Parent = Toolbar
+
+        -- Category chips -------------------------------------------------------
+        local CHIP_H = 24
+        local Chips = Instance.new("ScrollingFrame")
+        Chips.Size = UDim2.new(1, 0, 0, CHIP_H)
+        Chips.Position = UDim2.new(0, 0, 0, TOOL_H + 8)
+        Chips.BackgroundTransparency = 1
+        Chips.BorderSizePixel = 0
+        Chips.ScrollBarThickness = 0
+        Chips.ScrollingDirection = Enum.ScrollingDirection.X
+        Chips.CanvasSize = UDim2.new(0, 0, 0, 0)
+        Chips.AutomaticCanvasSize = Enum.AutomaticSize.X
+        Chips.ZIndex = 4
+        Chips.Parent = Panel
+
+        local chipLayout = Instance.new("UIListLayout")
+        chipLayout.FillDirection = Enum.FillDirection.Horizontal
+        chipLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        chipLayout.Padding = UDim.new(0, 6)
+        chipLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+        chipLayout.Parent = Chips
+
+        local chipButtons = {}
+
+        -- Grid -----------------------------------------------------------------
+        local GRID_TOP = TOOL_H + 8 + CHIP_H + 8
+        local Grid = Instance.new("ScrollingFrame")
+        Grid.Size = UDim2.new(1, 0, 1, -GRID_TOP)
+        Grid.Position = UDim2.new(0, 0, 0, GRID_TOP)
+        Grid.BackgroundTransparency = 1
+        Grid.BorderSizePixel = 0
+        Grid.ScrollBarThickness = 2
+        bindColor(Grid, "ScrollBarImageColor3", "Accent")
+        Grid.ScrollingDirection = Enum.ScrollingDirection.Y
+        Grid.CanvasSize = UDim2.new(0, 0, 0, 0)
+        Grid.ZIndex = 4
+        Grid.Parent = Panel
+
+        local gridLayout = Instance.new("UIGridLayout")
+        gridLayout.CellPadding = UDim2.new(0, gap, 0, gap)
+        gridLayout.CellSize = UDim2.new(0, 180, 0, 124)
+        gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        gridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+        gridLayout.Parent = Grid
+
+        local gridPad = Instance.new("UIPadding")
+        gridPad.PaddingRight = UDim.new(0, 6)
+        gridPad.PaddingBottom = UDim.new(0, 4)
+        gridPad.Parent = Grid
+
+        local Status = Instance.new("TextLabel")
+        Status.Size = UDim2.new(1, 0, 0, 40)
+        Status.Position = UDim2.new(0, 0, 0, GRID_TOP + 60)
+        Status.BackgroundTransparency = 1
+        Status.Text = ""
+        Status.Font = Enum.Font.GothamMedium
+        Status.TextSize = 12
+        bindColor(Status, "TextColor3", "TextDim")
+        Status.Visible = false
+        Status.ZIndex = 5
+        Status.Parent = Panel
+
+        local NAME_H = 26
+        local function updateCellSize()
+            local width = Grid.AbsoluteSize.X / panelScale() - 6
+            if width <= 0 then return end
+            local cellW = math.floor((width - gap * (columns - 1)) / columns)
+            local cellH = math.floor(cellW * 0.55) + NAME_H
+            gridLayout.CellSize = UDim2.new(0, cellW, 0, cellH)
+        end
+        Grid:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateCellSize)
+        gridLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            Grid.CanvasSize = UDim2.new(0, 0, 0, gridLayout.AbsoluteContentSize.Y / panelScale() + 8)
+        end)
+        task.defer(updateCellSize)
+
+        local function setStatus(text)
+            Status.Text = text or ""
+            Status.Visible = text ~= nil and text ~= ""
+        end
+
+        -- Cards ------------------------------------------------------------------
+        local cardPool = {}
+
+        local function formatRating(r)
+            if not r then return nil end
+            return string.format("%d%%", math.floor(r + 0.5))
+        end
+
+        --[[ Item details dialog. `Details` can be:
+              true                     -> default dialog (title, pictures, rating badge, info, Select button)
+              table                    -> overrides for the default; function fields are called with (item)
+              function(item, Browse)   -> returns such a table (or nil for the default)
+            Button callbacks receive (item, dialog). ]]
+        local function defaultDetails(item)
+            local lines = {}
+            if item.Author then table.insert(lines, {Text = "by " .. tostring(item.Author), Icon = "user"}) end
+            if item.Category and item.Category ~= "" then table.insert(lines, {Text = tostring(item.Category), Icon = "tag"}) end
+            if item.Description then table.insert(lines, {Text = tostring(item.Description), Icon = "info"}) end
+            local ratingText = formatRating(item.Rating)
+            return {
+                Title = item.Name,
+                Images = item.Images,
+                Fit = item.Fit,
+                Tag = item.Category,
+                Badge = ratingText and ("★ " .. ratingText) or nil,
+                Lines = lines,
+                Buttons = {
+                    {Text = opts.SelectText or "Select", Icon = "check", Primary = true, Close = true, UseCallback = true},
+                },
+            }
+        end
+
+        local Browse = {} -- filled below; needed by the Details callback
+
+        showDetails = function(item, overrides)
+            if not item then return nil end
+            item = normalizeBrowseItem(item, 0)
+            local spec = defaultDetails(item)
+            local user = overrides
+            if user == nil then
+                if type(detailsOpt) == "function" then
+                    local ok, res = pcall(detailsOpt, item, Browse)
+                    if ok and type(res) == "table" then user = res end
+                elseif type(detailsOpt) == "table" then
+                    user = detailsOpt
+                end
+            end
+            if type(user) == "table" then
+                for key, value in pairs(user) do
+                    if type(value) == "function" and key ~= "OnClose" then
+                        local ok, res = pcall(value, item, Browse)
+                        if ok then spec[key] = res end
+                    else
+                        spec[key] = value
+                    end
+                end
+            end
+            -- wire callbacks: button Callback(item, dialog); default Select -> Browse Callback
+            local function wire(def)
+                if type(def) ~= "table" then return def end
+                local cb = def.Callback
+                local copy = {}
+                for k, v in pairs(def) do copy[k] = v end
+                copy.Callback = function(dialog)
+                    if cb then
+                        cb(item, dialog)
+                    elseif def.UseCallback and callback then
+                        callback(item, item.Raw)
+                    end
+                end
+                return copy
+            end
+            local wiredButtons = {}
+            for i, def in ipairs(spec.Buttons or {}) do
+                if type(def) == "table" and def[1] ~= nil then
+                    local row = {}
+                    for j, sub in ipairs(def) do row[j] = wire(type(sub) == "string" and {Text = sub} or sub) end
+                    wiredButtons[i] = row
+                else
+                    wiredButtons[i] = wire(type(def) == "string" and {Text = def} or def)
+                end
+            end
+            spec.Buttons = wiredButtons
+            local wiredHeader = {}
+            for i, def in ipairs(spec.HeaderButtons or {}) do
+                wiredHeader[i] = wire(type(def) == "string" and {Text = def} or def)
+            end
+            spec.HeaderButtons = wiredHeader
+            spec.Data = item
+            if spec.ImageLoader == nil and imageLoader then
+                spec.ImageLoader = function(src) return imageLoader(src, item) end
+            end
+            if spec.Anchor == nil and host and host.Window then spec.Anchor = host.Window end
+            state.Selected = item
+            local dialog = createDialog(spec)
+            if opts.OnDetails then task.spawn(opts.OnDetails, item, dialog) end
+            return dialog
+        end
+
+        local function fillThumb(thumb, item, generation)
+            for _, child in ipairs(thumb:GetChildren()) do
+                if child:IsA("ImageLabel") then child:Destroy() end
+            end
+            local sources = {}
+            for i = 1, math.min(2, #item.Images) do sources[i] = item.Images[i] end
+            if #sources == 0 then
+                local ph = Instance.new("ImageLabel")
+                ph.Size = UDim2.new(0, 22, 0, 22)
+                ph.Position = UDim2.new(0.5, -11, 0.5, -11)
+                ph.BackgroundTransparency = 1
+                ph.Image = resolveIcon(placeholderIcon)
+                tintIcon(ph, placeholderIcon, "TextDim")
+                ph.ZIndex = 6
+                ph.Parent = thumb
+                return
+            end
+            local count = #sources
+            for i, src in ipairs(sources) do
+                local img = Instance.new("ImageLabel")
+                if item.Fit then -- icon-like pictures: keep some air around them
+                    img.Size = UDim2.new(1 / count, -24, 1, -28)
+                    img.Position = UDim2.new((i - 1) / count, 12, 0, 14)
+                else
+                    img.Size = UDim2.new(1 / count, count > 1 and -1 or 0, 1, 0)
+                    img.Position = UDim2.new((i - 1) / count, (i > 1) and 1 or 0, 0, 0)
+                end
+                img.BackgroundTransparency = 1
+                img.ScaleType = item.Fit and Enum.ScaleType.Fit or imageScale
+                img.ZIndex = 6
+                img.Parent = thumb
+                local immediate = (imageLoader == nil and not (type(src) == "string" and string.match(src, "^https?://")))
+                    and resolveBrowseImage(src) or nil
+                if immediate then
+                    img.Image = immediate
+                else
+                    task.spawn(function()
+                        local asset
+                        if imageLoader then
+                            local ok, res = pcall(imageLoader, src, item)
+                            asset = (ok and type(res) == "string") and res or nil
+                        end
+                        if not asset then asset = resolveBrowseImage(src) end
+                        if state.Generation == generation and img.Parent and asset then
+                            img.Image = asset
+                        end
+                    end)
+                end
+            end
+        end
+
+        local function createBrowseCard(index)
+            local card = Instance.new("TextButton")
+            card.Name = "Card"
+            card.LayoutOrder = index
+            bindColor(card, "BackgroundColor3", "CardBg")
+            card.BorderSizePixel = 0
+            card.Text = ""
+            card.AutoButtonColor = false
+            card.ClipsDescendants = true
+            card.ZIndex = 5
+            card.Parent = Grid
+            addCorner(card, 8)
+            local stroke = addStroke(card, 1)
+
+            local thumb = Instance.new("Frame")
+            thumb.Name = "Thumb"
+            thumb.Size = UDim2.new(1, 0, 1, -NAME_H)
+            bindColor(thumb, "BackgroundColor3", "PillBg")
+            thumb.BorderSizePixel = 0
+            thumb.ClipsDescendants = true
+            thumb.ZIndex = 5
+            thumb.Parent = card
+            addCorner(thumb, 8)
+
+            local thumbFill = Instance.new("Frame") -- squares off the bottom corners of the thumbnail
+            thumbFill.Size = UDim2.new(1, 0, 0, 10)
+            thumbFill.Position = UDim2.new(0, 0, 1, -10)
+            bindColor(thumbFill, "BackgroundColor3", "PillBg")
+            thumbFill.BorderSizePixel = 0
+            thumbFill.ZIndex = 5
+            thumbFill.Parent = thumb
+
+            local badge = Instance.new("Frame")
+            badge.Name = "Badge"
+            badge.Size = UDim2.new(0, 44, 0, 16)
+            badge.AutomaticSize = Enum.AutomaticSize.X
+            badge.Position = UDim2.new(1, -6, 0, 6)
+            badge.AnchorPoint = Vector2.new(1, 0)
+            bindColor(badge, "BackgroundColor3", "Background")
+            badge.BackgroundTransparency = 0.25
+            badge.BorderSizePixel = 0
+            badge.ZIndex = 7
+            badge.Parent = thumb
+            addCorner(badge, 5)
+            local badgePad = Instance.new("UIPadding")
+            badgePad.PaddingLeft = UDim.new(0, 6)
+            badgePad.PaddingRight = UDim.new(0, 6)
+            badgePad.Parent = badge
+
+            local badgeText = Instance.new("TextLabel")
+            badgeText.Size = UDim2.new(0, 0, 1, 0)
+            badgeText.AutomaticSize = Enum.AutomaticSize.X
+            badgeText.BackgroundTransparency = 1
+            badgeText.Text = ""
+            badgeText.RichText = true
+            badgeText.Font = Enum.Font.GothamBold
+            badgeText.TextSize = 10
+            bindColor(badgeText, "TextColor3", "TextPrimary")
+            badgeText.ZIndex = 8
+            badgeText.Parent = badge
+
+            local name = Instance.new("TextLabel")
+            name.Name = "Title"
+            name.Size = UDim2.new(1, -16, 0, NAME_H)
+            name.Position = UDim2.new(0, 8, 1, -NAME_H)
+            name.BackgroundTransparency = 1
+            name.Text = ""
+            name.Font = Enum.Font.GothamMedium
+            name.TextSize = 11
+            bindColor(name, "TextColor3", "TextPrimary")
+            name.TextXAlignment = Enum.TextXAlignment.Left
+            name.TextTruncate = Enum.TextTruncate.AtEnd
+            name.ZIndex = 6
+            name.Parent = card
+
+            local entry = {Button = card, Stroke = stroke, Thumb = thumb, Badge = badge, BadgeText = badgeText, Name = name, Item = nil}
+
+            card.MouseEnter:Connect(function()
+                if state.Selected ~= entry.Item then
+                    tweenColors(stroke, TWEEN_FAST, {Color = "BorderActive"}):Play()
+                end
+                tweenColors(card, TWEEN_FAST, {BackgroundColor3 = "SidebarActive"}):Play()
+            end)
+            card.MouseLeave:Connect(function()
+                if state.Selected ~= entry.Item then
+                    tweenColors(stroke, TWEEN_FAST, {Color = "Border"}):Play()
+                end
+                tweenColors(card, TWEEN_FAST, {BackgroundColor3 = "CardBg"}):Play()
+            end)
+            card.MouseButton1Click:Connect(function()
+                if not entry.Item then return end
+                state.Selected = entry.Item
+                for _, other in ipairs(cardPool) do
+                    tweenColors(other.Stroke, TWEEN_FAST, {Color = (other.Item == entry.Item) and "Accent" or "Border"}):Play()
+                end
+                if detailsOpt then
+                    showDetails(entry.Item)
+                elseif callback then
+                    task.spawn(callback, entry.Item, entry.Item.Raw)
+                end
+            end)
+            return entry
+        end
+
+        local accentHex = function()
+            local c = THEME.Accent
+            return string.format("#%02X%02X%02X", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
+        end
+
+        local function renderPage()
+            state.Generation = state.Generation + 1
+            local generation = state.Generation
+            local total = #state.Filtered
+            local first
+            if remote then
+                -- the server already returned exactly one page
+                state.Pages = math.max(1, math.floor(tonumber(state.RemotePages) or 1))
+                state.Page = math.clamp(state.Page, 1, state.Pages)
+                first = 1
+            else
+                state.Pages = math.max(1, math.ceil(total / pageSize))
+                state.Page = math.clamp(state.Page, 1, state.Pages)
+                first = (state.Page - 1) * pageSize + 1
+            end
+            PageLabel.Text = string.format("%d/%d", state.Page, state.Pages)
+            if host and host.SetCount then host.SetCount(state.Total or (not remote and #state.Items or nil)) end
+
+            local shown = 0
+            for i = first, (remote and total or math.min(total, first + pageSize - 1)) do
+                shown = shown + 1
+                local entry = cardPool[shown]
+                if not entry then
+                    entry = createBrowseCard(shown)
+                    cardPool[shown] = entry
+                end
+                local item = state.Filtered[i]
+                entry.Item = item
+                entry.Button.Visible = true
+                entry.Button.LayoutOrder = shown
+                entry.Name.Text = item.Name
+                local ratingText = formatRating(item.Rating)
+                entry.Badge.Visible = ratingText ~= nil
+                entry.BadgeText.Text = ratingText and (string.format('<font color="%s">★</font> ', accentHex()) .. ratingText) or ""
+                bindColor(entry.Stroke, "Color", (state.Selected == item) and "Accent" or "Border")
+                fillThumb(entry.Thumb, item, generation)
+            end
+            for i = shown + 1, #cardPool do
+                cardPool[i].Item = nil
+                cardPool[i].Button.Visible = false
+            end
+            Grid.CanvasPosition = Vector2.new(0, 0)
+
+            if state.Loading then
+                setStatus("Loading...")
+            elseif total == 0 then
+                setStatus(#state.Items == 0 and (opts.EmptyText or "Nothing here yet") or "Nothing found")
+            else
+                setStatus(nil)
+            end
+        end
+
+        local function itemMatchesCategory(item, category)
+            if category == nil or category == "All" then return true end
+            local wanted = string.lower(tostring(category))
+            if string.lower(tostring(item.Category or "")) == wanted then return true end
+            if type(item.Tags) == "table" then
+                for _, tag in ipairs(item.Tags) do
+                    if string.lower(tostring(tag)) == wanted then return true end
+                end
+            end
+            return false
+        end
+
+        local function itemMatchesQuery(item, query)
+            if query == "" then return true end
+            local hay = string.lower(table.concat({
+                item.Name or "", tostring(item.Author or ""), tostring(item.Category or ""),
+                tostring(item.Id or ""), tostring(item.Description or ""),
+                type(item.Tags) == "table" and table.concat(item.Tags, " ") or "",
+            }, " "))
+            return string.find(hay, query, 1, true) ~= nil
+        end
+
+        local requestLoad -- forward: (re)fetch in remote mode
+
+        local function applyFilters(keepPage)
+            if remote then
+                state.Filtered = state.Items
+                if not keepPage then state.Page = 1 end
+                renderPage()
+                return
+            end
+            local query = string.lower(trimText(state.Query))
+            local list = {}
+            for _, item in ipairs(state.Items) do
+                if itemMatchesCategory(item, state.Category) and itemMatchesQuery(item, query) then
+                    table.insert(list, item)
+                end
+            end
+            local mode = sortModes[state.SortIndex]
+            if mode and mode.Sort then
+                table.sort(list, function(a, b)
+                    local ok, res = pcall(mode.Sort, a, b)
+                    return ok and res == true
+                end)
+            end
+            state.Filtered = list
+            if not keepPage then state.Page = 1 end
+            renderPage()
+        end
+
+        -- chips
+        local function setChipActive(chip, active)
+            chip.Active = active
+            tweenColors(chip.Button, TWEEN_FAST, {BackgroundColor3 = active and "Accent" or "BadgeBg"}):Play()
+            tweenColors(chip.Stroke, TWEEN_FAST, {Color = active and "Accent" or "Border"}):Play()
+            tweenColors(chip.Label, TWEEN_FAST, {TextColor3 = active and "KnobOn" or "TextMuted"}):Play()
+        end
+
+        local setCategory -- forward
+
+        local function rebuildChips()
+            for _, chip in ipairs(chipButtons) do chip.Button:Destroy() end
+            chipButtons = {}
+            for i, name in ipairs(state.Categories) do
+                local btn = Instance.new("TextButton")
+                btn.Size = UDim2.new(0, 0, 1, 0)
+                btn.AutomaticSize = Enum.AutomaticSize.X
+                btn.LayoutOrder = i
+                btn.BorderSizePixel = 0
+                btn.Text = ""
+                btn.AutoButtonColor = false
+                btn.ZIndex = 5
+                btn.Parent = Chips
+                addCorner(btn, 12)
+                local stroke = addStroke(btn, 1)
+                local pad = Instance.new("UIPadding")
+                pad.PaddingLeft = UDim.new(0, 12)
+                pad.PaddingRight = UDim.new(0, 12)
+                pad.Parent = btn
+                local label = Instance.new("TextLabel")
+                label.Size = UDim2.new(0, 0, 1, 0)
+                label.AutomaticSize = Enum.AutomaticSize.X
+                label.BackgroundTransparency = 1
+                label.Text = name
+                label.Font = Enum.Font.GothamMedium
+                label.TextSize = 10.5
+                label.ZIndex = 6
+                label.Parent = btn
+                local chip = {Button = btn, Stroke = stroke, Label = label, Name = name, Active = (name == state.Category)}
+                bindColor(btn, "BackgroundColor3", chip.Active and "Accent" or "BadgeBg")
+                bindColor(stroke, "Color", chip.Active and "Accent" or "Border")
+                bindColor(label, "TextColor3", chip.Active and "KnobOn" or "TextMuted")
+                btn.MouseEnter:Connect(function()
+                    if not chip.Active then tweenColors(label, TWEEN_FAST, {TextColor3 = "TextPrimary"}):Play() end
+                end)
+                btn.MouseLeave:Connect(function()
+                    if not chip.Active then tweenColors(label, TWEEN_FAST, {TextColor3 = "TextMuted"}):Play() end
+                end)
+                btn.MouseButton1Click:Connect(function() setCategory(name) end)
+                table.insert(chipButtons, chip)
+            end
+        end
+
+        setCategory = function(name)
+            name = tostring(name or "All")
+            state.Category = name
+            for _, chip in ipairs(chipButtons) do
+                setChipActive(chip, chip.Name == name)
+            end
+            if remote then state.Page = 1 requestLoad() else applyFilters(false) end
+        end
+
+        local function setCategories(list)
+            local cats = {"All"}
+            local seen = {All = true}
+            for _, c in ipairs(list or {}) do
+                local key = tostring(c)
+                if not seen[key] then
+                    seen[key] = true
+                    table.insert(cats, key)
+                end
+            end
+            state.Categories = cats
+            if not seen[state.Category] then state.Category = "All" end
+            rebuildChips()
+        end
+
+        local function collectCategories(items)
+            local list, seen = {}, {}
+            for _, item in ipairs(items) do
+                local c = tostring(item.Category or "")
+                if c ~= "" and not seen[c] then
+                    seen[c] = true
+                    table.insert(list, c)
+                end
+            end
+            table.sort(list)
+            return list
+        end
+
+        local function setItems(list)
+            local items = {}
+            for i, raw in ipairs(extractBrowseList(list)) do
+                local item = normalizeBrowseItem(raw, i)
+                if item then table.insert(items, item) end
+            end
+            state.Items = items
+            state.Selected = nil
+            if autoCategories then
+                setCategories(collectCategories(items))
+            end
+            applyFilters(false)
+        end
+
+        local function setSort(indexOrName)
+            local idx = tonumber(indexOrName)
+            if not idx then
+                for i, mode in ipairs(sortModes) do
+                    if string.lower(mode.Name) == string.lower(tostring(indexOrName)) then idx = i break end
+                end
+            end
+            if not idx or not sortModes[idx] then return end
+            state.SortIndex = idx
+            local mode = sortModes[idx]
+            sortLabel.Text = mode.Name
+            sortIcon.Image = resolveIcon(mode.Icon)
+            tintIcon(sortIcon, mode.Icon, "Accent")
+            if remote then state.Page = 1 requestLoad() else applyFilters(false) end
+        end
+
+        local function fetchContext()
+            return {
+                Page = state.Page,
+                PageSize = pageSize,
+                Query = trimText(state.Query),
+                Sort = sortModes[state.SortIndex] and sortModes[state.SortIndex].Name or nil,
+                SortIndex = state.SortIndex,
+                Category = state.Category,
+                Tab = state.Tab,
+                Source = source,
+                Browse = Browse,
+                State = state,
+            }
+        end
+
+        --[[ Fetch(ctx) may return:
+              items                      -> client-side list (filtered/sorted/paged here)
+              items, pages, total, err   -> one server page (remote mode is switched on automatically)
+            A string result is JSON-decoded. ctx = {Page, PageSize, Query, Sort, Category, Tab, Source, Browse} ]]
+        local loadToken = 0
+        local function load(newSource)
+            if newSource ~= nil then source = newSource end
+            if not source and not fetcher then
+                return false
+            end
+            loadToken = loadToken + 1
+            local token = loadToken
+            state.Loading = true
+            setStatus("Loading...")
+            local ctx = fetchContext()
+            task.spawn(function()
+                local ok, result, pages, total, fetchErr = pcall(function()
+                    if fetcher then
+                        local out, outPages, outTotal, outErr = fetcher(ctx)
+                        if type(out) == "string" then
+                            out = HttpService:JSONDecode(out)
+                        end
+                        if out == nil and outErr ~= nil then error(tostring(outErr)) end
+                        return out, outPages, outTotal, outErr
+                    end
+                    local body, err = httpGet(tostring(source))
+                    if not body then error(err or "request failed") end
+                    local ok2, decoded = pcall(HttpService.JSONDecode, HttpService, body)
+                    if not ok2 then error("invalid JSON from " .. tostring(source)) end
+                    return decoded
+                end)
+                if token ~= loadToken or isClosed then return end
+                state.Loading = false
+                if ok then
+                    if parse then
+                        local okParse, parsed = pcall(parse, result, ctx)
+                        if okParse and parsed ~= nil then
+                            result = parsed
+                        end
+                    end
+                    if pages ~= nil and tonumber(pages) then
+                        remote = true
+                        state.RemotePages = tonumber(pages)
+                        state.Total = tonumber(total)
+                    end
+                    if remote then
+                        state.Items = {}
+                        for i, raw in ipairs(extractBrowseList(result)) do
+                            local item = normalizeBrowseItem(raw, (ctx.Page - 1) * pageSize + i)
+                            if item then table.insert(state.Items, item) end
+                        end
+                        if autoCategories then setCategories(collectCategories(state.Items)) end
+                        applyFilters(true)
+                    else
+                        setItems(result)
+                    end
+                    if opts.OnLoad then task.spawn(opts.OnLoad, state.Items, ctx) end
+                else
+                    -- keep whatever is already shown (e.g. `Items` passed as a fallback)
+                    if #state.Items == 0 then
+                        setStatus("Failed to load")
+                    else
+                        applyFilters(true)
+                    end
+                    Notify({
+                        Title = opts.Name or "Browse",
+                        Content = "Failed to load: " .. tostring(result),
+                        Icon = "alert-triangle",
+                        Duration = 4,
+                    })
+                    if opts.OnError then task.spawn(opts.OnError, result) end
+                end
+            end)
+            return true
+        end
+        requestLoad = function() load() end
+
+        -- wiring -------------------------------------------------------------------
+        local searchDebounce = 0
+        searchInput:GetPropertyChangedSignal("Text"):Connect(function()
+            searchDebounce = searchDebounce + 1
+            local id = searchDebounce
+            state.Query = searchInput.Text
+            task.delay(remote and 0.4 or 0.15, function()
+                if id ~= searchDebounce or isClosed then return end
+                if remote then state.Page = 1 requestLoad() else applyFilters(false) end
+            end)
+        end)
+
+        SortBtn.MouseButton1Click:Connect(function()
+            local nextIdx = state.SortIndex % #sortModes + 1
+            setSort(nextIdx)
+        end)
+
+        RefreshBtn.MouseButton1Click:Connect(function()
+            TweenService:Create(refreshIcon, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {Rotation = refreshIcon.Rotation + 360}):Play()
+            if not load() then
+                applyFilters(true)
+            end
+            if opts.OnRefresh then task.spawn(opts.OnRefresh) end
+        end)
+
+        local function setPage(n)
+            n = math.floor(tonumber(n) or 1)
+            n = math.clamp(n, 1, state.Pages)
+            if remote then
+                if n == state.Page and not state.Loading then return end
+                state.Page = n
+                requestLoad()
+            else
+                state.Page = n
+                renderPage()
+            end
+        end
+
+        local setTab -- source tabs ("All / Tab 1 / Tab 2")
+        local tabButtons = {}
+        if #sourceTabs > 0 then
+            local segHost = (host and host.TabsParent) or Toolbar
+            local seg = Instance.new("Frame")
+            seg.Name = "SourceTabs"
+            seg.Size = UDim2.new(0, 0, 1, 0)
+            seg.AutomaticSize = Enum.AutomaticSize.X
+            bindColor(seg, "BackgroundColor3", "BadgeBg")
+            seg.BorderSizePixel = 0
+            seg.ZIndex = 4
+            seg.Parent = segHost
+            addCorner(seg, 8)
+            addStroke(seg, 1)
+            local segPad = Instance.new("UIPadding")
+            segPad.PaddingLeft = UDim.new(0, 3)
+            segPad.PaddingRight = UDim.new(0, 3)
+            segPad.PaddingTop = UDim.new(0, 3)
+            segPad.PaddingBottom = UDim.new(0, 3)
+            segPad.Parent = seg
+            local segLayout = Instance.new("UIListLayout")
+            segLayout.FillDirection = Enum.FillDirection.Horizontal
+            segLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            segLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+            segLayout.Padding = UDim.new(0, 2)
+            segLayout.Parent = seg
+            if segHost == Toolbar then
+                seg.Position = UDim2.new(1, -(rightW + 6), 0, 0)
+                seg.AnchorPoint = Vector2.new(1, 0)
+                seg:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                    SearchFrame.Size = UDim2.new(1, -(rightW + 14 + seg.AbsoluteSize.X / panelScale()), 1, 0)
+                end)
+            end
+            for i, t in ipairs(sourceTabs) do
+                local b = Instance.new("TextButton")
+                b.Size = UDim2.new(0, 0, 1, 0)
+                b.AutomaticSize = Enum.AutomaticSize.X
+                b.LayoutOrder = i
+                b.BorderSizePixel = 0
+                b.Text = ""
+                b.AutoButtonColor = false
+                b.ZIndex = 5
+                b.Parent = seg
+                addCorner(b, 6)
+                local bp = Instance.new("UIPadding")
+                bp.PaddingLeft = UDim.new(0, 10)
+                bp.PaddingRight = UDim.new(0, 10)
+                bp.Parent = b
+                local l = Instance.new("TextLabel")
+                l.Size = UDim2.new(0, 0, 1, 0)
+                l.AutomaticSize = Enum.AutomaticSize.X
+                l.BackgroundTransparency = 1
+                l.Text = t.Name
+                l.Font = Enum.Font.GothamBold
+                l.TextSize = 10.5
+                l.ZIndex = 6
+                l.Parent = b
+                local entry = {Button = b, Label = l, Tab = t}
+                local active = (state.Tab == t.Id)
+                bindColor(b, "BackgroundColor3", active and "Accent" or "BadgeBg")
+                b.BackgroundTransparency = active and 0 or 1
+                bindColor(l, "TextColor3", active and "KnobOn" or "TextMuted")
+                b.MouseButton1Click:Connect(function() setTab(t.Id) end)
+                b.MouseEnter:Connect(function() if state.Tab ~= t.Id then tweenColors(l, TWEEN_FAST, {TextColor3 = "TextPrimary"}):Play() end end)
+                b.MouseLeave:Connect(function() if state.Tab ~= t.Id then tweenColors(l, TWEEN_FAST, {TextColor3 = "TextMuted"}):Play() end end)
+                table.insert(tabButtons, entry)
+            end
+        end
+        setTab = function(id)
+            for _, entry in ipairs(tabButtons) do
+                local active = (entry.Tab.Id == id)
+                tweenColors(entry.Button, TWEEN_FAST, {BackgroundColor3 = active and "Accent" or "BadgeBg", BackgroundTransparency = active and 0 or 1}):Play()
+                tweenColors(entry.Label, TWEEN_FAST, {TextColor3 = active and "KnobOn" or "TextMuted"}):Play()
+            end
+            if state.Tab == id then return end
+            state.Tab = id
+            if opts.OnTab then task.spawn(opts.OnTab, id, Browse) end
+            if fetcher then state.Page = 1 requestLoad() else applyFilters(false) end
+        end
+        PrevBtn.MouseButton1Click:Connect(function() setPage(state.Page - 1) end)
+        NextBtn.MouseButton1Click:Connect(function() setPage(state.Page + 1) end)
+
+        -- initial data
+        if not autoCategories then
+            setCategories(opts.Categories)
+        else
+            rebuildChips()
+        end
+        if opts.Sort then setSort(opts.Sort) end
+        if opts.Items then
+            setItems(opts.Items)
+        else
+            applyFilters(false)
+        end
+        local loadedOnce = false
+        local function ensureLoaded()
+            if loadedOnce then return end
+            loadedOnce = true
+            load()
+        end
+
+        local function onShown()
+            updateCellSize()
+            if opts.Lazy ~= false then ensureLoaded() end
+        end
+        if host then
+            host.OnOpen = onShown
+            if not host.Window then task.defer(onShown) end -- embedded in a custom frame: always visible
+        else
+            table.insert(PANEL_LIST, {Frame = Panel, Tab = tabName, OnShow = onShown})
+        end
+        if opts.Lazy == false then
+            task.spawn(ensureLoaded)
+        end
+
+        -- public handle ------------------------------------------------------------
+        Browse.Panel = Panel
+        Browse.Host = host
+        function Browse:SetTab(id) setTab(id) end
+        function Browse:GetTab() return state.Tab end
+        function Browse:SetTotal(n) state.Total = tonumber(n) if host and host.SetCount then host.SetCount(state.Total) end end
+        function Browse:GetTotal() return state.Total or #state.Items end
+        function Browse:SetRemote(on) remote = on and true or false end
+        function Browse:IsRemote() return remote end
+        function Browse:GetState() return state end
+        function Browse:ShowDetails(item, overrides) return showDetails(item or state.Selected, overrides) end
+        function Browse:CloseDetails() closeActiveDialog() end
+        function Browse:SetDetails(details) detailsOpt = details end
+        function Browse:SetItems(list) setItems(list or {}) end
+        function Browse:AddItem(raw)
+            local item = normalizeBrowseItem(raw, #state.Items + 1)
+            if not item then return end
+            table.insert(state.Items, item)
+            if autoCategories then setCategories(collectCategories(state.Items)) end
+            applyFilters(true)
+            return item
+        end
+        function Browse:RemoveItem(idOrItem)
+            for i, item in ipairs(state.Items) do
+                if item == idOrItem or item.Id == idOrItem then
+                    table.remove(state.Items, i)
+                    break
+                end
+            end
+            applyFilters(true)
+        end
+        function Browse:GetItems() return state.Items end
+        function Browse:GetFiltered() return state.Filtered end
+        function Browse:GetSelected() return state.Selected end
+        function Browse:Load(url) loadedOnce = true return load(url) end
+        function Browse:Refresh()
+            loadedOnce = true
+            if not load() then applyFilters(true) end
+        end
+        function Browse:SetSource(url) source = url end
+        function Browse:SetCategories(list) autoCategories = false setCategories(list) applyFilters(false) end
+        function Browse:SetCategory(name) setCategory(name) end
+        function Browse:GetCategory() return state.Category end
+        function Browse:Search(text)
+            searchInput.Text = tostring(text or "")
+        end
+        function Browse:GetQuery() return state.Query end
+        function Browse:SetSort(mode) setSort(mode) end
+        function Browse:GetSort() return sortModes[state.SortIndex].Name end
+        function Browse:SetPage(n) setPage(n) end
+        function Browse:GetPage() return state.Page, state.Pages end
+        function Browse:NextPage() setPage(state.Page + 1) end
+        function Browse:PrevPage() setPage(state.Page - 1) end
+        function Browse:SetCallback(fn) callback = fn end
+        function Browse:SetStatus(text) setStatus(text) end
+        function Browse:IsLoading() return state.Loading end
+        Browse.Reload = Browse.Refresh
+        Browse.Filter = Browse.SetCategory
+        Browse.OnSelect = Browse.SetCallback
+        return Browse
+    end
+
+    --[[ Standalone Browse window: the same gallery panel inside its own
+        draggable window (header with logo, title, counter, source tabs and a
+        close button). Opened from code: Browse:Open() / Close() / Toggle(). ]]
+    local function createBrowseWindow(opts)
+        opts = opts or {}
+        local width = tonumber(opts.Width) or 620
+        local height = tonumber(opts.Height) or 470
+        local HEADER_H = 50
+
+        local Win = Instance.new("Frame")
+        Win.Name = "BrowseWindow"
+        Win.Size = UDim2.new(0, width, 0, height)
+        Win.AnchorPoint = Vector2.new(0.5, 0.5)
+        Win.Position = opts.Position or UDim2.new(0.5, 0, 0.5, 0)
+        bindColor(Win, "BackgroundColor3", "Background")
+        Win.BorderSizePixel = 0
+        Win.Active = true
+        Win.ClipsDescendants = true
+        Win.Visible = false
+        Win.ZIndex = 120
+        Win.Parent = ScreenGui
+        FLOATING_FRAMES[Win] = true
+        local winScale = Instance.new("UIScale")
+        winScale.Scale = UI_SCALE
+        winScale.Parent = Win
+        addCorner(Win, 12)
+        local winStroke = addStroke(Win, 1.2)
+        winStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+        local header = Instance.new("Frame")
+        header.Size = UDim2.new(1, 0, 0, HEADER_H)
+        header.BackgroundTransparency = 1
+        header.ZIndex = 121
+        header.Parent = Win
+
+        local headerLine = Instance.new("Frame")
+        headerLine.Size = UDim2.new(1, -24, 0, 1)
+        headerLine.Position = UDim2.new(0, 12, 0, HEADER_H - 1)
+        bindColor(headerLine, "BackgroundColor3", "Divider")
+        headerLine.BorderSizePixel = 0
+        headerLine.ZIndex = 121
+        headerLine.Parent = Win
+
+        local logo = Instance.new("ImageLabel")
+        logo.Size = UDim2.new(0, 26, 0, 26)
+        logo.Position = UDim2.new(0, 12, 0, 12)
+        logo.BackgroundTransparency = 1
+        logo.ZIndex = 122
+        logo.Parent = header
+        local iconName = opts.Icon
+        if opts.Logo == false or (iconName and LUCIDE[iconName]) then
+            logo.Image = resolveIcon(iconName or "store")
+            tintIcon(logo, iconName or "store", "Accent")
+        elseif LOGO_ASSET and LOGO_ASSET ~= "" then
+            logo.Image = LOGO_ASSET
+        else
+            logo.Image = resolveIcon("store")
+            tintIcon(logo, "store", "Accent")
+        end
+
+        local brandRow = Instance.new("Frame")
+        brandRow.Size = UDim2.new(1, -200, 0, 18)
+        brandRow.Position = UDim2.new(0, 46, 0, 8)
+        brandRow.BackgroundTransparency = 1
+        brandRow.ZIndex = 122
+        brandRow.Parent = header
+        local brandLayout = Instance.new("UIListLayout")
+        brandLayout.FillDirection = Enum.FillDirection.Horizontal
+        brandLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        brandLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+        brandLayout.Padding = UDim.new(0, 8)
+        brandLayout.Parent = brandRow
+
+        local title = Instance.new("TextLabel")
+        title.Size = UDim2.new(0, 0, 1, 0)
+        title.AutomaticSize = Enum.AutomaticSize.X
+        title.LayoutOrder = 1
+        title.BackgroundTransparency = 1
+        title.Text = tostring(opts.Title or opts.Name or "Browse")
+        title.Font = Enum.Font.GothamBold
+        title.TextSize = 13
+        bindColor(title, "TextColor3", "TextPrimary")
+        title.TextXAlignment = Enum.TextXAlignment.Left
+        title.ZIndex = 122
+        title.Parent = brandRow
+
+        local countPill = Instance.new("Frame")
+        countPill.Size = UDim2.new(0, 0, 0, 16)
+        countPill.AutomaticSize = Enum.AutomaticSize.X
+        countPill.LayoutOrder = 2
+        bindColor(countPill, "BackgroundColor3", "VersionBg")
+        countPill.BorderSizePixel = 0
+        countPill.Visible = false
+        countPill.ZIndex = 122
+        countPill.Parent = brandRow
+        addCorner(countPill, 8)
+        local cpPad = Instance.new("UIPadding")
+        cpPad.PaddingLeft = UDim.new(0, 7)
+        cpPad.PaddingRight = UDim.new(0, 7)
+        cpPad.Parent = countPill
+        local countText = Instance.new("TextLabel")
+        countText.Size = UDim2.new(0, 0, 1, 0)
+        countText.AutomaticSize = Enum.AutomaticSize.X
+        countText.BackgroundTransparency = 1
+        countText.Text = ""
+        countText.Font = Enum.Font.GothamBold
+        countText.TextSize = 10
+        bindColor(countText, "TextColor3", "KnobOn")
+        countText.ZIndex = 123
+        countText.Parent = countPill
+
+        local subtitle = Instance.new("TextLabel")
+        subtitle.Size = UDim2.new(1, -200, 0, 12)
+        subtitle.Position = UDim2.new(0, 46, 0, 27)
+        subtitle.BackgroundTransparency = 1
+        subtitle.Text = tostring(opts.Description or opts.Subtitle or "Gallery")
+        subtitle.Font = Enum.Font.Gotham
+        subtitle.TextSize = 9
+        bindColor(subtitle, "TextColor3", "TextMuted")
+        subtitle.TextXAlignment = Enum.TextXAlignment.Left
+        subtitle.ZIndex = 122
+        subtitle.Parent = header
+
+        local headerRight = Instance.new("Frame")
+        headerRight.Size = UDim2.new(0, 0, 0, 28)
+        headerRight.AutomaticSize = Enum.AutomaticSize.X
+        headerRight.AnchorPoint = Vector2.new(1, 0.5)
+        headerRight.Position = UDim2.new(1, -12, 0, HEADER_H / 2)
+        headerRight.BackgroundTransparency = 1
+        headerRight.ZIndex = 122
+        headerRight.Parent = header
+        local hrLayout = Instance.new("UIListLayout")
+        hrLayout.FillDirection = Enum.FillDirection.Horizontal
+        hrLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        hrLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+        hrLayout.Padding = UDim.new(0, 8)
+        hrLayout.Parent = headerRight
+
+        local closeBtn = Instance.new("ImageButton")
+        closeBtn.Size = UDim2.new(0, 26, 0, 26)
+        closeBtn.LayoutOrder = 99
+        bindColor(closeBtn, "BackgroundColor3", "BadgeBg")
+        closeBtn.BorderSizePixel = 0
+        closeBtn.AutoButtonColor = false
+        closeBtn.Image = ""
+        closeBtn.ZIndex = 123
+        closeBtn.Parent = headerRight
+        addCorner(closeBtn, 7)
+        addStroke(closeBtn, 1)
+        local closeIcon = Instance.new("ImageLabel")
+        closeIcon.Size = UDim2.new(0, 12, 0, 12)
+        closeIcon.Position = UDim2.new(0.5, -6, 0.5, -6)
+        closeIcon.BackgroundTransparency = 1
+        closeIcon.Image = resolveIcon("x")
+        tintIcon(closeIcon, "x", "TextMuted")
+        closeIcon.ZIndex = 124
+        closeIcon.Parent = closeBtn
+        closeBtn.MouseEnter:Connect(function() tweenColors(closeIcon, TWEEN_FAST, {ImageColor3 = "Accent"}):Play() end)
+        closeBtn.MouseLeave:Connect(function() tweenColors(closeIcon, TWEEN_FAST, {ImageColor3 = "TextMuted"}):Play() end)
+
+        local content = Instance.new("Frame")
+        content.Name = "Content"
+        content.Size = UDim2.new(1, -20, 1, -(HEADER_H + 8))
+        content.Position = UDim2.new(0, 10, 0, HEADER_H + 2)
+        content.BackgroundTransparency = 1
+        content.ClipsDescendants = true
+        content.ZIndex = 121
+        content.Parent = Win
+
+        --[[ Resize grip (bottom-right corner). Independent from the main window:
+            ResizeMode = "Scale" (default, like the main window: the content scales
+            with the window) or "Size" (more room, content keeps its size). ]]
+        local minW = tonumber(opts.MinWidth) or 420
+        local minH = tonumber(opts.MinHeight) or 300
+        local scaleMode = string.lower(tostring(opts.ResizeMode or "scale")) ~= "size"
+        local SCALE_MIN, SCALE_MAX = 0.6, 2.0
+        if opts.Resizable ~= false then
+            local grip = Instance.new("TextButton")
+            grip.Name = "ResizeHandle"
+            grip.Size = UDim2.new(0, 24, 0, 24)
+            grip.Position = UDim2.new(1, -24, 1, -24)
+            grip.BackgroundTransparency = 1
+            grip.Text = ""
+            grip.AutoButtonColor = false
+            grip.ZIndex = 130
+            grip.Parent = Win
+
+            local lines = {}
+            for i, spec in ipairs({{-4, -4, 14}, {-4, -8, 8}}) do
+                local line = Instance.new("Frame")
+                line.Size = UDim2.new(0, spec[3], 0, 1)
+                line.Position = UDim2.new(1, spec[1], 1, spec[2])
+                line.AnchorPoint = Vector2.new(1, 1)
+                bindColor(line, "BackgroundColor3", "TextDim")
+                line.BorderSizePixel = 0
+                line.ZIndex = 131
+                line.Parent = grip
+                addCorner(line, 4)
+                lines[i] = line
+            end
+            grip.MouseEnter:Connect(function()
+                for _, l in ipairs(lines) do bindColor(l, "BackgroundColor3", "Accent") end
+            end)
+            grip.MouseLeave:Connect(function()
+                for _, l in ipairs(lines) do bindColor(l, "BackgroundColor3", "TextDim") end
+            end)
+
+            local resizing, resizeStart, startPixels, startPos = false, nil, nil, nil
+            grip.MouseButton1Down:Connect(function()
+                if activeDialog then return end
+                resizing = true
+                resizeStart = UserInputService:GetMouseLocation()
+                -- size on screen in pixels (Size * scale)
+                startPixels = Vector2.new(Win.Size.X.Offset * winScale.Scale, Win.Size.Y.Offset * winScale.Scale)
+                startPos = Win.Position
+                closeAllPopups()
+            end)
+            trackConn(UserInputService.InputChanged:Connect(function(input)
+                if not resizing then return end
+                if input.UserInputType ~= Enum.UserInputType.MouseMovement
+                   and input.UserInputType ~= Enum.UserInputType.Touch then
+                    return
+                end
+                local delta = UserInputService:GetMouseLocation() - resizeStart
+                local pxW = math.max(minW * SCALE_MIN, startPixels.X + delta.X)
+                local pxH = math.max(minH * SCALE_MIN, startPixels.Y + delta.Y)
+                local scale
+                if scaleMode then
+                    scale = math.clamp(math.sqrt((pxW / width) * (pxH / height)), SCALE_MIN, SCALE_MAX)
+                else
+                    scale = winScale.Scale
+                end
+                local newW = math.max(minW, pxW / scale)
+                local newH = math.max(minH, pxH / scale)
+                winScale.Scale = scale
+                Win.Size = UDim2.new(0, newW, 0, newH)
+                -- AnchorPoint is the center: shift by half the growth (in pixels) so the top-left stays put
+                Win.Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + (newW * scale - startPixels.X) / 2,
+                    startPos.Y.Scale, startPos.Y.Offset + (newH * scale - startPixels.Y) / 2)
+            end))
+            trackConn(UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                   or input.UserInputType == Enum.UserInputType.Touch then
+                    if resizing and opts.OnResize then
+                        task.spawn(opts.OnResize, Win.Size.X.Offset, Win.Size.Y.Offset)
+                    end
+                    resizing = false
+                end
+            end))
+        end
+
+        -- the panel uses ZIndex 3..8 internally; lift everything above the window chrome
+        local host = {Parent = content, Window = Win, TabsParent = headerRight, Scale = winScale}
+        local entry = {Frame = Win, Scale = winScale, HiddenWithUI = false}
+        table.insert(BROWSE_WINDOWS, entry)
+
+        function host.SetCount(n)
+            n = tonumber(n)
+            if not n then countPill.Visible = false return end
+            local str = tostring(math.floor(n))
+            -- 7960 -> "7 960"
+            str = string.reverse((string.gsub(string.reverse(str), "(%d%d%d)", "%1 ")))
+            str = (string.gsub(str, "^%s+", ""))
+            countText.Text = str
+            countPill.Visible = true
+        end
+
+        do -- drag (ignored while a modal dialog is open above the window)
+            local dragging, dragStart, startPos = false, nil, nil
+            header.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    if activeDialog then return end
+                    dragging = true
+                    dragStart = input.Position
+                    startPos = Win.Position
+                end
+            end)
+            trackConn(UserInputService.InputChanged:Connect(function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    local delta = input.Position - dragStart
+                    Win.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+                end
+            end))
+            trackConn(UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = false
+                end
+            end))
+        end
+
+        local api = {}
+        function api.IsOpen() return Win.Visible end
+        function api.Open()
+            if Win.Visible then return end
+            entry.HiddenWithUI = false
+            Win.Visible = true
+            local target = Win.Position
+            Win.Position = target + UDim2.fromOffset(0, 24)
+            TweenService:Create(Win, TWEEN_SLOW, {Position = target}):Play()
+            if host.OnOpen then task.spawn(host.OnOpen) end
+            if opts.OnOpen then task.spawn(opts.OnOpen) end
+        end
+        function api.Close()
+            if not Win.Visible then return end
+            Win.Visible = false
+            entry.HiddenWithUI = false
+            closeActiveDialog()
+            if opts.OnClose then task.spawn(opts.OnClose) end
+        end
+        function api.Toggle(visible)
+            if visible == nil then visible = not Win.Visible end
+            if visible then api.Open() else api.Close() end
+        end
+        function api.SetTitle(text) title.Text = tostring(text) end
+        function api.SetDescription(text) subtitle.Text = tostring(text) end
+        function api.SetCount(n) host.SetCount(n) end
+        function api.SetPosition(pos) Win.Position = pos end
+        function api.SetSize(w, h)
+            Win.Size = UDim2.new(0, math.max(minW, tonumber(w) or width), 0, math.max(minH, tonumber(h) or height))
+        end
+        function api.GetSize() return Win.Size.X.Offset, Win.Size.Y.Offset end
+        function api.SetScale(scale) winScale.Scale = math.clamp(tonumber(scale) or 1, SCALE_MIN, SCALE_MAX) end
+        function api.GetScale() return winScale.Scale end
+        api.Frame = Win
+        api.Host = host
+        closeBtn.MouseButton1Click:Connect(api.Close)
+
+        if opts.ToggleKey then
+            trackConn(UserInputService.InputBegan:Connect(function(input, gp)
+                if gp or isClosed then return end
+                if input.KeyCode == opts.ToggleKey then api.Toggle() end
+            end))
+        end
+        return api, host
     end
 
     local function buildThemeCards(themeTabName)
@@ -4154,11 +6497,24 @@ local KEY_ALIASES = {
         if open then
             OpenButton.Visible = false
             Main.Visible = true
+            for _, bw in ipairs(BROWSE_WINDOWS) do
+                if bw.HiddenWithUI then
+                    bw.HiddenWithUI = false
+                    bw.Frame.Visible = true
+                end
+            end
             Main.Position = lastMainPosition + UDim2.fromOffset(0, 30)
             TweenService:Create(Main, TWEEN_SLOW, {Position = lastMainPosition}):Play()
         else
             lastMainPosition = Main.Position
             closeAllPopups()
+            closeActiveDialog()
+            for _, bw in ipairs(BROWSE_WINDOWS) do
+                if bw.Frame.Visible then
+                    bw.HiddenWithUI = true
+                    bw.Frame.Visible = false
+                end
+            end
             Main.Visible = false
             OpenButton.Visible = true
             Notify({Title = "Menu hidden", Content = "Click 'Open " .. BRAND_NAME .. "' to show it again", Icon = "eye", Duration = 3})
@@ -4178,6 +6534,7 @@ local KEY_ALIASES = {
         CONNECTIONS = {}
         closeAllPopups()
         writeCustomConfig()
+        if DialogGui then DialogGui:Destroy() end
         ScreenGui:Destroy()
     end
 
@@ -4359,6 +6716,37 @@ local KEY_ALIASES = {
                     return o.Description or o.Desc
                 end
 
+                -- 3D icon options shared by CreateDropdown / CreateMultiDropdown
+                local function iconExtra(o, list)
+                    local flag = o.Icons3D
+                    if flag == nil then flag = o["3DIcons"] end
+                    if flag == nil then flag = o.ViewportIcons end
+                    if flag == nil then
+                        -- auto-enable when a model source or any option carries a model
+                        if o.Models ~= nil then
+                            flag = true
+                        else
+                            for _, v in ipairs(list) do
+                                if type(v) == "table" and (v.Model ~= nil or v.Icon3D ~= nil
+                                    or v.Model3D ~= nil or v.Instance ~= nil or typeof(v.Icon) == "Instance") then
+                                    flag = true
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    if not flag then return nil end
+                    local cfg = o.Icon3D or o.Viewport or o.IconConfig
+                    if type(flag) == "table" then cfg = flag end
+                    if type(flag) == "number" then cfg = {Size = flag} end
+                    return {
+                        Icons3D = true,
+                        Icon3D = cfg,
+                        IconSize = o.IconSize or o.Icon3DSize or o.ViewportSize,
+                        Models = o.Models,
+                    }
+                end
+
                 function Section:CreateToggle(tOpts)
                     tOpts = tOpts or {}
                     local default = tOpts.Default
@@ -4369,16 +6757,8 @@ local KEY_ALIASES = {
                     if tOpts.Flag ~= nil then
                         Library.Flags[tOpts.Flag] = default
                     end
-                    local showInOverlay = tOpts.Overlay == true
-                    if tOpts.Overlay == nil then
-                        showInOverlay = tOpts.ShowInOverlay == true
-                    end
                     return addToggle(body, tOpts.Name or tOpts.Title or "Toggle",
-                        descOf(tOpts), default, flagCallback(tOpts.Flag, tOpts.Callback), {
-                            Id = tOpts.Flag,
-                            Show = showInOverlay,
-                            DisplayName = tOpts.OverlayName,
-                        })
+                        descOf(tOpts), default, flagCallback(tOpts.Flag, tOpts.Callback))
                 end
 
                 function Section:CreateButtonRow(rOpts, buttonsMaybe)
@@ -4449,7 +6829,8 @@ local KEY_ALIASES = {
                         Library.Flags[dOpts.Flag] = list[defIdx] and optText(list[defIdx]) or ""
                     end
                     return addDropdown(body, dOpts.Name or dOpts.Title or "Dropdown",
-                        descOf(dOpts), list, defIdx, flagCallback(dOpts.Flag, dOpts.Callback))
+                        descOf(dOpts), list, defIdx, flagCallback(dOpts.Flag, dOpts.Callback),
+                        iconExtra(dOpts, list))
                 end
 
                 function Section:CreateMultiDropdown(mOpts)
@@ -4489,7 +6870,8 @@ local KEY_ALIASES = {
                     end
                     return addMultiDropdown(body, mOpts.Name or mOpts.Title or "Multi",
                         descOf(mOpts), list, defaultsMap,
-                        flagCallback(mOpts.Flag, mOpts.Callback, transform))
+                        flagCallback(mOpts.Flag, mOpts.Callback, transform),
+                        iconExtra(mOpts, list))
                 end
 
                 function Section:CreateInput(iOpts)
@@ -4525,15 +6907,11 @@ local KEY_ALIASES = {
                         Library.Flags[kOpts.Flag] = tostring(default)
                     end
                     local showInOverlay = kOpts.Overlay ~= false and kOpts.ShowInOverlay ~= false
-                    local stateCallback = kOpts.OnStateChanged or kOpts.StateCallback or kOpts.ActiveCallback
                     return addKeybind(body, kOpts.Name or kOpts.Title or "Keybind",
                         descOf(kOpts), tostring(default), flagCallback(kOpts.Flag, kOpts.Callback), {
                             Id = kOpts.Flag,
                             Show = showInOverlay,
                             DisplayName = kOpts.OverlayName,
-                            Mode = kOpts.Mode or (kOpts.Hold == true and "Hold"),
-                            DefaultActive = kOpts.DefaultActive,
-                            OnStateChanged = stateCallback,
                         })
                 end
                 Section.CreateBind = Section.CreateKeybind
@@ -4606,6 +6984,82 @@ local KEY_ALIASES = {
             return tab
         end
 
+        --[[ Browse tab: a full-width gallery (search, category chips, sort,
+            pagination, grid of cards). Items can be a table, a loader function
+            or a JSON API url, so one script serves every user. ]]
+        --[[ Browse in its own window (no sidebar tab). Returns the same Browse
+            handle plus Open / Close / Toggle / IsOpen / SetTitle / SetCount.
+            Opens on Browse:Open(), e.g. from a button or toggle, or on `ToggleKey`;
+            `Visible = true` opens it right away. ]]
+        function Window:CreateBrowseWindow(browseOptions)
+            local bOpts = type(browseOptions) == "table" and browseOptions or {Name = tostring(browseOptions or "Browse")}
+            local win, host = createBrowseWindow(bOpts)
+            local browse = buildBrowsePanel(nil, bOpts, host)
+            browse.Window = win
+            browse.Name = bOpts.Name or bOpts.Title or "Browse"
+            browse.Mode = "Window"
+            function browse:Open() win.Open() end
+            function browse:Close() win.Close() end
+            function browse:Toggle(visible) win.Toggle(visible) end
+            function browse:IsOpen() return win.IsOpen() end
+            function browse:Select() win.Open() end
+            function browse:SetTitle(text) win.SetTitle(text) end
+            function browse:SetDescription(text) win.SetDescription(text) end
+            function browse:SetCount(n) win.SetCount(n) end
+            function browse:SetPosition(pos) win.SetPosition(pos) end
+            function browse:SetSize(w, h) win.SetSize(w, h) end
+            function browse:GetSize() return win.GetSize() end
+            function browse:SetScale(scale) win.SetScale(scale) end
+            function browse:GetScale() return win.GetScale() end
+            browse.Show = browse.Open
+            browse.Hide = browse.Close
+            if bOpts.Visible == true or bOpts.Open == true then
+                task.defer(win.Open)
+            end
+            return browse
+        end
+        Window.CreateBrowsePopup = Window.CreateBrowseWindow
+        Window.CreateGalleryWindow = Window.CreateBrowseWindow
+
+        function Window:CreateBrowseTab(browseOptions, iconMaybe)
+            local bOpts = {}
+            if type(browseOptions) == "string" then
+                bOpts.Name = browseOptions
+                bOpts.Icon = iconMaybe
+            elseif type(browseOptions) == "table" then
+                bOpts = browseOptions
+            end
+            local mode = string.lower(tostring(bOpts.Mode or bOpts.Type or "tab"))
+            if mode == "window" or mode == "popup" or mode == "float" then
+                return Window:CreateBrowseWindow(bOpts)
+            end
+            local tab = Window:CreateTab(bOpts.Name or bOpts.Title or "Browse", bOpts.Icon or "store")
+            local browse = buildBrowsePanel(tab.Name, bOpts)
+            browse.Tab = tab
+            browse.Name = tab.Name
+            browse.Mode = "Tab"
+            function browse:Select() tab:Select() end
+            function browse:Open() tab:Select() end
+            function browse:IsOpen() return activeSidebarTab ~= nil and activeSidebarTab.Name == tab.Name end
+            if activeSidebarTab then
+                showTabContent(activeSidebarTab.Name)
+            end
+            return browse
+        end
+        Window.CreateGalleryTab = Window.CreateBrowseTab
+
+        -- Modal dialog: {Title, Images, Tag, Badge, Lines, Buttons, HeaderButtons, Width, OnClose}
+        function Window:CreateDialog(dialogOptions)
+            return createDialog(dialogOptions)
+        end
+        Window.Dialog = Window.CreateDialog
+        Window.ShowDialog = Window.CreateDialog
+        function Window:CloseDialog()
+            closeActiveDialog()
+        end
+        Window.CreateBrowser = Window.CreateBrowseTab
+        Window.AddBrowseTab = Window.CreateBrowseTab
+
         function Window:Notify(opts)
             return Notify(opts)
         end
@@ -4674,6 +7128,37 @@ local KEY_ALIASES = {
         function Window:Destroy()
             unloadScript()
         end
+
+        --[[ Shared internals for companion scripts (MacrOS-style `MacrOSUI.Theme`,
+            `MacrOSUI.BindColor`, `MacrOSUI.ResolveIcon`, `MacrOSUI.LogoAsset` ...).
+            Everything here is the live object the window itself uses. ]]
+        Window.Theme = THEME
+        Window.BindColor = bindColor
+        Window.TweenColors = tweenColors
+        Window.RefreshTheme = refreshTheme
+        Window.ResolveIcon = resolveIcon
+        Window.CreateViewportIcon = createViewportIcon -- (parent, cfg, zIndex) -> {Frame, SetModel, SetAngle, SetZoom, Destroy}
+        Window.Icon3DDefaults = ICON3D_DEFAULTS
+        Window.TintIcon = tintIcon
+        Window.Icons = LUCIDE
+        Window.LogoAsset = LOGO_ASSET
+        Window.ScreenGui = ScreenGui
+        Window.Main = Main
+        Window.HttpGet = httpGet
+        Window.CreateBrowsePanel = function(_, parentFrame, bOpts)
+            -- gallery panel inside any frame of your own (no tab, no window)
+            return buildBrowsePanel(nil, bOpts or {}, {Parent = parentFrame})
+        end
+        for _, key in ipairs({"Theme", "BindColor", "TweenColors", "RefreshTheme", "ResolveIcon", "TintIcon",
+            "Icons", "LogoAsset", "ScreenGui", "Main", "HttpGet"}) do
+            Library[key] = Window[key]
+        end
+        Library.httpGet = httpGet
+        Library.Notify = function(opts) return Notify(opts) end
+        Library.CreateDialog = function(_, dOpts) return createDialog(type(_) == "table" and _ ~= Library and _ or dOpts) end
+        Library.Dialog = Library.CreateDialog
+        Library.Window = Window
+        Library.GetWindow = function() return Window end
 
         return Window
 
