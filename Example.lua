@@ -142,13 +142,23 @@ Target:CreateProgressBar({
     end,
 })
 
-Fight:CreateButtonRow("Actions", {
-    { Text = "Start", Callback = function() print("Start!") end },
-    { Text = "Stop", Callback = function() print("Stop!") end },
+Fight:CreateButtonRow({
+    Name = "Actions",
+    Icons3D = true,
+    IconSize = 36,
+    Icon3D = { Spin = true, Angle = Vector3.new(20, -35, 0) },
+    Buttons = {
+        { Text = "Start", Model = demoPart(Enum.PartType.Block, Color3.fromRGB(232, 92, 82), Vector3.new(1.4, 1.4, 1.4)), Callback = function() print("Start!") end },
+        { Text = "Stop", Icon = "pause", Callback = function() print("Stop!") end },
+    },
 })
 
 MoveTab:CreateSection("Speed", 1):CreateButton({
     Name = "Reset Speed",
+    Model = demoPart(Enum.PartType.Cylinder, Color3.fromRGB(84, 170, 255), Vector3.new(1.2, 1.8, 1.2)),
+    ["3DIcons"] = true,
+    IconSize = 36,
+    Icon3D = { Spin = true },
     Callback = function() print("Speed reset") end,
 })
 
@@ -287,7 +297,7 @@ local Catalog = Window:CreateBrowseWindow({
         -- return data.items, math.ceil(data.total / ctx.PageSize), data.total
         if not catalogCache then
             local ok, decoded = pcall(function()
-                return game:GetService("HttpService"):JSONDecode(game:HttpGet("https://raw.githubusercontent.com/dragonstrukov/test/main/browse.json"))
+                return game:GetService("HttpService"):JSONDecode(game:HttpGet("https://raw.githubusercontent.com/dragonstrukov/MacrOS-library/main/browse.json"))
             end)
             catalogCache = (ok and type(decoded) == "table" and decoded.items) or Browse:GetItems() -- offline fallback
         end
@@ -335,6 +345,120 @@ CatalogSection:CreateButton({
         local first = Catalog:GetItems()[1]
         if first then Catalog:ShowDetails(first) end
     end,
+})
+
+-- Separate Browsec / File Market UI. This is independent from the Browse
+-- gallery above and uses the same item/fetch API with build-specific fields.
+local marketModels = {
+    ["Sky Fortress"] = demoPart(Enum.PartType.Block, Color3.fromRGB(114, 135, 162), Vector3.new(4, 1.5, 4)),
+    ["Metal Block"] = demoPart(Enum.PartType.Block, Color3.fromRGB(145, 158, 175), Vector3.new(1, 1, 1)),
+    Glass = demoPart(Enum.PartType.Block, Color3.fromRGB(112, 205, 231), Vector3.new(1, 1, 1)),
+    Thruster = demoPart(Enum.PartType.Cylinder, Color3.fromRGB(255, 132, 78), Vector3.new(1.4, 0.8, 0.8)),
+    Wood = demoPart(Enum.PartType.Block, Color3.fromRGB(153, 105, 65), Vector3.new(1, 1, 1)),
+    ["Roof Tile"] = demoPart(Enum.PartType.Block, Color3.fromRGB(183, 83, 65), Vector3.new(1.3, 0.35, 1)),
+    Door = demoPart(Enum.PartType.Block, Color3.fromRGB(110, 80, 58), Vector3.new(0.7, 2, 0.2)),
+    Frame = demoPart(Enum.PartType.Block, Color3.fromRGB(130, 143, 154), Vector3.new(1.4, 0.5, 1)),
+    Wheel = demoPart(Enum.PartType.Cylinder, Color3.fromRGB(45, 48, 54), Vector3.new(0.5, 1, 1)),
+    Engine = demoPart(Enum.PartType.Cylinder, Color3.fromRGB(132, 140, 151), Vector3.new(1.2, 1.2, 1.2)),
+    Seat = demoPart(Enum.PartType.Block, Color3.fromRGB(70, 91, 112), Vector3.new(1, 0.8, 1)),
+    ["Metal Panel"] = demoPart(Enum.PartType.Block, Color3.fromRGB(165, 174, 184), Vector3.new(1.4, 0.25, 1)),
+}
+
+local FileMarket
+FileMarket = Window:CreateBrowsec({
+    Name = "File Market",
+    Description = "Community builds and files",
+    Width = 920, Height = 620,
+    ToggleKey = Enum.KeyCode.M,
+    Icons3D = true,
+    IconSize = 36,
+    Icon3D = { FOV = 38, Angle = Vector3.new(20, -35, 0), Padding = 1.15, Spin = false },
+    Models = marketModels,
+    Categories = { "Aircraft", "Buildings", "Vehicles" },
+    SortModes = { "Newest", "Most downloaded", "Most popular" },
+    Sort = "Most downloaded",
+    Items = {
+        {
+            Id = "sky-fortress", Name = "Sky Fortress", Category = "Aircraft",
+            Author = "Builder42", Verified = true, Published = "Oct 12, 2026",
+            Image = "rbxassetid://81973586053257", Model = marketModels["Sky Fortress"],
+            Fit = true, Downloads = 1824, Likes = 96,
+            BuildValue = 3226, Buildability = 94, BlockCount = 317,
+            BlockList = {
+                { Name = "Metal Block", Count = 220, Model = demoPart(Enum.PartType.Block, Color3.fromRGB(145, 158, 175), Vector3.new(1, 1, 1)) },
+                { Name = "Glass", Count = 52, Icon = "gem" },
+                { Name = "Thruster", Count = 45, Icon = "wind" },
+            },
+            ViewUrl = "https://example.com/builds/sky-fortress/3d",
+        },
+        {
+            Id = "desert-outpost", Name = "Desert Outpost", Category = "Buildings",
+            Author = "KiteWorks", Verified = true, Published = "Oct 10, 2026",
+            Image = "rbxassetid://130551565616516", Fit = true, Downloads = 986, Likes = 74,
+            BuildValue = 2180, Buildability = 0.88, BlockCount = 204,
+            BlockList = {
+                { Name = "Wood", Count = 118, Icon = "box" },
+                { Name = "Glass", Count = 36, Icon = "gem" },
+                { Name = "Roof Tile", Count = 44, Icon = "square" },
+                { Name = "Door", Count = 6, Icon = "house" },
+            },
+            ViewUrl = "https://example.com/builds/desert-outpost/3d",
+        },
+        {
+            Id = "rally-car", Name = "Rally Car", Category = "Vehicles",
+            Author = "NovaBuilds", Verified = false, Published = "Oct 08, 2026",
+            Image = "rbxassetid://110273524101447", Fit = true, Downloads = 731, Likes = 53,
+            BuildValue = 1740, Buildability = 0.76, BlockCount = 156,
+            BlockList = {
+                { Name = "Frame", Count = 100, Icon = "layers" },
+                { Name = "Wheel", Count = 4, Icon = "circle" },
+                { Name = "Engine", Count = 1, Icon = "cog" },
+                { Name = "Seat", Count = 1, Icon = "square" },
+                { Name = "Metal Panel", Count = 50, Icon = "blocks" },
+            },
+            ViewUrl = "https://example.com/builds/rally-car/3d",
+        },
+    },
+    DownloadCallback = function(item)
+        print("Download build:", item.Name, item.Data)
+    end,
+    Details = function(item)
+        return {
+            Stats = {
+                { Label = "Downloads", Value = item.Downloads, Icon = "download" },
+                { Label = "Build Value", Value = item.BuildValue, Icon = "coins" },
+            },
+            Buildability = { Value = item.Buildability, Label = "Buildability", Detail = "Required blocks found" },
+            BlocksButton = {
+                Text = "Required Blocks",
+                Title = "Blocks required for this build",
+                Icon = "blocks",
+                Columns = 2,
+                Icons3D = true,
+                IconSize = 36,
+                Icon3D = { FOV = 38, Angle = Vector3.new(20, -35, 0) },
+                Models = marketModels,
+            },
+            ShareLink = { Url = item.ViewUrl, Label = "View in 3D in your browser" },
+        }
+    end,
+    OnDetails = function(item, dialog)
+        dialog:AddHStack({
+            { Text = "Favorite", Icon = "plus", Callback = function(d) print("Favorite:", d.Data.Name) end },
+            { Text = "More from author", Icon = "user", Callback = function(d) FileMarket:Search(d.Data.Author) end },
+        })
+    end,
+})
+
+-- Add a third action to each card. Actions are laid out in one HStack.
+FileMarket:AddButton({
+    Text = "Author", Icon = "user",
+    Callback = function(item) print("Author:", item.Author) end,
+})
+local MarketSection = ToolsTab:CreateSection("File Market", 2)
+MarketSection:CreateButton({
+    Name = "Open File Market",
+    Callback = function() FileMarket:Open() end,
 })
 
 -- Dialogs can also be opened directly:
