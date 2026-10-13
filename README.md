@@ -53,6 +53,7 @@ Window methods:
 | `Window:CreateThemeTab(name, icon)` | Tab with the theme list + custom theme editor |
 | `Window:CreateBrowseTab(opts)` | Full-width gallery tab (search, categories, sort, pages, cards). See [Browse](#browse) |
 | `Window:CreateBrowseWindow(opts)` | The same gallery in its own draggable window, opened with `Browse:Open()`. See [Browse window](#browse-window) |
+| `Window:CreateBrowsec(opts)` | Separate File Market window with rank cards, category/sort filters, download actions and build details. See [Browsec File Market](#browsec-file-market) |
 | `Window:CreateDialog(opts)` / `Window:CloseDialog()` | Centered modal card with pictures, info lines and buttons. See [Dialog](#dialog) |
 | `Window:Notify({Title, Content, Duration, Icon})` | Notification (icon is a Lucide name) |
 | `Window:CreateKeybindList(opts)` | Draggable Keybinds overlay (also `GetKeybindList`, `SetKeybindListVisible`) |
@@ -106,8 +107,8 @@ print(toggle:Get())
 | Control | Options | Callback |
 |---|---|---|
 | `CreateToggle` | `Default` (bool) | `function(value)` |
-| `CreateButtonRow(name, {{Text, Callback}, ...})` | 1–2 buttons in a row, returns an array of `{Button, Fire, SetText}` handles | — |
-| `CreateButton({Name, Callback})` | Single button, returns `{Button, Fire, SetText}` | — |
+| `CreateButtonRow(name, {{Text, Icon, Model, Callback}, ...})` | 1–2 buttons in a row; returns `{Button, Icon, Icon3D, Fire, SetText}` handles | — |
+| `CreateButton({Name, Icon, Model, Callback})` | Single button; accepts the same 3D icon options as dropdowns | — |
 | `CreateSlider` | `Min`, `Max`, `Default`, `Decimals` | `function(value)` |
 | `CreateDropdown` | `Options` (array of strings or `{Text, Icon}`), `Default` (text or index) | `function(text, index)` |
 | `CreateMultiDropdown` | `Options`, `Default` (`{"A"}` or `{A = true}`) | `function(picked)` — array of selected |
@@ -121,11 +122,13 @@ print(toggle:Get())
 Orion-style aliases are available: `AddToggle`, `AddButton`, `AddSlider`,
 `AddDropdown`, `AddTextbox`, `AddBind`, `AddColorPicker`, `AddLabel`, etc.
 
-### 3D icons in dropdowns
+### 3D icons (buttons and dropdowns)
 
-`CreateDropdown` / `CreateMultiDropdown` can show a `ViewportFrame` instead of
-the lucide icon. Give an option a `Model` (any `Model`, `BasePart`, `Tool`,
-`Accessory`…; it is cloned, scripts stripped) and turn 3D icons on:
+Buttons, `CreateDropdown`, and `CreateMultiDropdown` render model icons in a
+`ViewportFrame`. Give a button or dropdown option a `Model` (any `Model`,
+`BasePart`, `Tool`, `Accessory`…; it is cloned and scripts are stripped). The
+feature auto-enables when a model is supplied; use `Icons3D = true/false` or
+`["3DIcons"] = true/false` to explicitly enable/disable it.
 
 ```lua
 Section:CreateDropdown({
@@ -153,14 +156,87 @@ Section:CreateDropdown({
 })
 ```
 
+Buttons use the same options. Put shared settings on a button row, or configure
+a single button directly. `Icon` may remain a 2D Lucide name while `Model`
+provides the 3D preview/fallback:
+
+```lua
+Section:CreateButton({
+    Name = "Preview sword",
+    Icon = "package",
+    Model = swordModel,
+    Icons3D = true,
+    IconSize = 36,
+    Icon3D = { Spin = true, Angle = Vector3.new(20, -35, 0) },
+    Callback = function() print("Preview") end,
+})
+
+Section:CreateButtonRow({
+    Name = "Actions",
+    Icons3D = true,
+    IconSize = 36,
+    Buttons = {
+        { Text = "Start", Model = swordModel, Callback = function() end },
+        { Text = "Stop", Icon = "pause", Callback = function() end },
+    },
+})
+```
+
 `Models` may be an Instance (searched recursively by name), a table
 `{Sword = model, ...}` or a `function(text)` returning an Instance. `Icons3D`
-may also be a number (= `IconSize`) or a table (= `Icon3D`). The handle exposes
-`.Icon` (slot of the closed control; `.Icon.Viewport` has `SetModel`,
-`SetAngle`, `SetZoom`) and `.Icon3D` (effective settings).
+may also be a number (= `IconSize`) or a table (= `Icon3D`). Button and
+dropdown handles expose `.Icon` (the icon slot; `.Icon.Viewport` has
+`SetModel`, `SetAngle`, `SetZoom`) and `.Icon3D` (effective settings).
 
 `Window.CreateViewportIcon(parent, cfg, zIndex)` is exported for custom UI:
 returns `{Frame, Camera, World, SetModel(inst), SetAngle(v3), SetZoom(n), Destroy}`.
+
+### 3D previews in Browse, FileMarket and Dialog
+
+The same model/camera settings work in gallery thumbnails, details dialogs,
+Dialog lines/stats/buttons, and required-block cards. Use `Model` / `Model3D`
+for a specific model, or `Models` as a shared Folder, table, or lookup function.
+A model is resolved first by the explicit model/icon key and then by its display
+name. `Icons3D = true` enables model lookup; it also auto-enables when `Model`
+or `Models` is supplied. `Icons3D = false` explicitly keeps the 2D behavior.
+`Icon3D` accepts the same camera fields shown above; `IconSize` sets the icon
+slot size. Existing Lucide `Icon` names and `Image` / `Images` assets remain
+valid and are used when no model is found.
+
+```lua
+local models = ReplicatedStorage.BuildModels
+
+local Market = Window:CreateBrowsec({
+    Icons3D = true,
+    Icon3D = { FOV = 40, Angle = Vector3.new(20, -35, 0), Spin = true },
+    Models = models, -- looked up by item name, block name, or an explicit Model key
+    Items = {
+        { Name = "Sky Fortress", Image = "rbxassetid://123", BlockList = {
+            { Name = "Metal Block", Count = 12 }, -- Models["Metal Block"] / matching child
+        } },
+    },
+})
+
+Window:CreateDialog({
+    Title = "Sky Fortress",
+    Images = { "rbxassetid://123" }, -- keep a 2D image alongside the model preview
+    Model = models:FindFirstChild("Sky Fortress"),
+    Icons3D = true,
+    Icon3D = { FOV = 35, Padding = 1.2 },
+    Models = models,
+    Lines = { { Text = "Verified build", Icon = "circle-check" } },
+    Stats = { { Label = "Blocks", Value = 12, Icon = "blocks" } },
+    BlocksGrid = {
+        Items = { { Name = "Metal Block", Count = 12 } },
+        Models = models, Icons3D = true,
+    },
+})
+```
+
+Per-item or per-block `Icons3D`, `Icon3D`, `IconSize` and `Models` values
+override the shared settings. `Images` may also contain model Instances or
+preview records such as `{ Name = "Preview", Model = model }`; ordinary image
+IDs/URLs still render as 2D images.
 
 ## Browse
 
@@ -222,6 +298,123 @@ with it. The header shows the logo, title, an item counter (`7 960`), the
 `Tabs` switch and a close button. `Window:CreateBrowsePanel(frame, opts)` puts
 the bare panel into any frame of your own.
 
+### Browsec File Market
+
+`CreateBrowsec` opens a **separate** File Market window; it does not replace or
+change `CreateBrowseTab` / `CreateBrowseWindow`. It uses the light three-column
+card layout, category chips and a sort dropdown (`Newest`, `Most downloaded`,
+`Most popular`). Cards can show rank, preview, block/download/popularity counts,
+and Details/Download actions. The wider details dialog supports author
+verification, crisp metrics, buildability and a copyable 3D link. Required
+blocks open in their own dialog as individual cards with an icon or 3D model and
+quantity. Thumbnail icons default to Fit; set `Fit = false` for cover art.
+
+3D previews are available on both card thumbnails and the details dialog. Set
+`Icons3D = true`, `Icon3D = { FOV, Angle, Padding, Zoom, Spin, ... }`, and
+`Models` on the market options for shared defaults; individual items can override
+these with `Model` / `Model3D`, `Icon3D`, `IconSize`, `Icons3D`, or `Models`.
+The same settings flow into required-block cards. Each block can provide a direct
+`Model`, or a named model can be found in `Models` by the block's `Name` (an
+explicit block icon/model key is checked first). If no model resolves, the
+existing `Image` / `Icon` rendering is kept; use `Icons3D = false` to force the
+2D fallback.
+
+```lua
+local Market
+Market = Window:CreateBrowsec({
+    Name = "File Market", Description = "7,460 builds on lsup.pro",
+    Width = 920, Height = 620,
+    Items = {
+        {
+            Id = "sky-fortress", Name = "Sky Fortress", Category = "Aircraft",
+            Author = "Builder42", Verified = true, Published = "Oct 2026",
+            Image = "rbxassetid://81973586053257", Fit = true, Downloads = 1824, Likes = 96,
+            BuildValue = 3226, Buildability = 0.94, BlockCount = 317,
+            BlockList = {
+                { Name = "Metal Block", Count = 220, Icon = "box" },
+                { Name = "Glass", Count = 52, Icon = "gem" },
+                { Name = "Thruster", Count = 45, Icon = "wind" },
+            },
+            ViewUrl = "https://example.com/builds/sky-fortress/3d",
+        },
+    },
+    Categories = { "Aircraft", "Buildings", "Vehicles" }, -- omit to infer from items
+    SortModes = { "Newest", "Most downloaded", "Most popular" },
+    Sort = "Most downloaded",
+    DownloadCallback = function(item, raw, market)
+        print("Download build:", item.Name, item.Data)
+    end,
+    Details = function(item, market) -- omitted fields keep the default detail UI
+        return {
+            Author = item.Author, Verified = item.Verified,
+            Stats = {
+                { Label = "Downloads", Value = item.Downloads, Icon = "download" },
+                { Label = "Build Value", Value = item.BuildValue, Icon = "coins" },
+            },
+            Buildability = { Value = item.Buildability, Label = "Buildability", Detail = "All required blocks found" },
+            BlocksButton = {
+                Text = "Required Blocks", Title = "Blocks required for this build",
+                Icon = "blocks", Columns = 2,
+            },
+            ShareLink = { Url = item.ViewUrl, Label = "View in 3D in your browser" },
+        }
+    end,
+    OnDetails = function(item, dialog)
+        -- Add a two-button horizontal group to the open details dialog.
+        dialog:AddHStack({
+            { Text = "Favorite", Icon = "plus", Callback = function(d) print("Favorite", d.Data.Name) end },
+            { Text = "More from author", Icon = "user", Callback = function(d) Market:Search(item.Author) end },
+        })
+    end,
+})
+
+Market:Open() -- also Close(), Toggle(), IsOpen(), SetItems(), Search(), etc.
+
+-- Card buttons share one HStack. The built-in Details and Download buttons can
+-- be customized with CardButtons, or append another button at runtime (up to 3
+-- fit comfortably in a row):
+Market:AddButton({ Text = "Author", Icon = "user", Callback = function(item) print(item.Author) end })
+-- Market:AddHStack({ {Text = "Preview", Icon = "eye", Callback = ...}, {Text = "Pin", Icon = "plus", Callback = ...} })
+```
+
+The default market card buttons are Details and Download. `CardButtons = { ... }`
+replaces them; each button accepts `Text`, `Icon`, `Primary`, `Action = "Details"`
+or `"Download"`, and `Callback(item, market)`. `Market:AddButton(def)` and
+`Market:AddHStack(defs)` add actions to every card. `DownloadCallback(item, raw,
+market)` runs for the built-in download action. Items accept `Downloads`,
+`Likes` / `Popularity`, `BuildValue`, `Buildability` (fraction or percent),
+`BlockCount`, `BlockList`, `Verified`, `Published`, `ViewUrl` and `Fit` in
+addition to the regular Browse fields. Each block can be a string or an object
+with `Name`, `Count` / `Amount` / `Quantity`, `Icon` or `Image`; use `Model` /
+`Model3D` (or `Models` plus the block name) for a ViewportFrame 3D preview.
+`Icons3D`, `IconSize`, `Icon3D` / `Icon3DConfig` and `Models` accept the shared
+settings above. `Icon` stays the Lucide/2D fallback when no model resolves.
+
+`BlocksButton` in a `Details` spec customizes the required-blocks button and
+its dialog. Its fields include `Text`, `Title`, `Icon`, `Items` / `Blocks`,
+`Count`, `Columns`, `MaxHeight`, `Models`, `Icon3D`, `IconSize`, `Icons3D` and
+`ImageLoader`. The item list/count default from `item.BlockList` / `item.BlockCount`. Set
+`BlocksButton = false` (or the window option `ShowBlocksButton = false`) to
+hide the button; old `Blocks = ...` detail specs remain as inline lists.
+
+For reusable content in `Details`, use `Stats`, `Buildability`, `Blocks`,
+`BlocksButton`, `ShareLink`, or a list of typed `Elements` such as
+`{ Type = "HStack", Items = { {Text = "One"}, {Text = "Two"} } }`.
+The returned dialog can also be extended from `OnDetails` with
+`dialog:AddButton`, `AddHStack`, `AddLabel` / `AddText`, `AddDivider`,
+`AddProgressBar`, `AddStats`, `AddBlocks`, `AddBlocksGrid`, `AddBlocksButton`,
+`AddCopyLink` or `AddElement`. `HStack` accepts two or three buttons (or
+text/button elements). Buttons with Lucide icons or 3D models keep the icon on
+the left. Callbacks in a `Details` spec receive `(item, dialog)`; callbacks
+passed to a runtime `dialog:AddButton` / `AddHStack` receive `(dialog)`.
+
+The standalone window and modal fit the available viewport on phones and small
+screens; the market switches to one/two columns as it gets narrower. On a
+resizable window, hold **Shift** while dragging the bottom-right grip to change
+the window size without scaling its controls. Without Shift, the existing
+scale-to-fit resize mode remains. `Mobile = true/false` can override device
+detection, and `MobileColumns` can set a fixed responsive column count.
+
 ### Server-side paging (`Fetch`)
 
 For APIs that page / search / sort on the server, give Browse a `Fetch`
@@ -257,12 +450,20 @@ Field names are matched case-insensitively with common aliases:
 | `Name` | `name`, `title` |
 | `Category` | `category`, `type`, `class`, `kind` |
 | `Rating` | `rating`, `likes`, `score`, `percent` (0–1 is treated as a fraction) |
-| `Image` / `Images` | `image`, `thumbnail`, `icon`, `images`, `thumbnails`, `previews` (up to 2 are shown side by side) |
+| `Image` / `Images` | `image`, `thumbnail`, `images`, `thumbnails`, `previews` (up to 2 are shown side by side) |
+| `Icon` | `icon` (Lucide name, image asset, or model lookup key) |
+| `Model` / `Models` | `model`, `model3d` / shared model folder, table, or lookup function |
 | `Author` | `author`, `creator`, `owner` |
 | `Date` | `date`, `time`, `created`, `timestamp` (used by the "New" sort) |
 | `Tags` | `tags` (also matched by category chips and search) |
 | `Data` | `data`, `payload`, `script`, `url`, `link`, `code` — whatever your callback needs |
 | `Fit` | `fit`, `contain` — show the picture with air around it (icons) instead of cropping it |
+| `Downloads` | `downloads`, `download_count` |
+| `Likes` / `Popularity` | `likes`, `favorites`, `stars` / `popularity` |
+| `BuildValue` / `Buildability` | `build_value`, `value`, `cost` / `buildability`, `completeness` (fraction or percent) |
+| `BlockCount` / `BlockList` | `block_count`, `part_count` / `blocks`, `block_list`, `block_names` |
+| `Verified` / `Published` | `verified`, `author_verified` / `published`, `published_at`, `created_at` |
+| `ViewUrl` | `view_url`, `preview_url`, `3d_url` — used for the copyable 3D preview link |
 
 The original object is kept in `item.Raw`. Images can be `rbxassetid://…`,
 `rbxthumb://…`, a bare asset id, or an `https://` link (downloaded once and
@@ -350,12 +551,26 @@ dialog:GetButton("swap"):SetEnabled(false)
 dialog:IsOpen() / dialog:Close()
 ```
 
+Dialog preview options include `Model` / `Model3D`, `Icon3D` (or
+`Icon3DConfig`), `Models`, `Icons3D` and `IconSize`. A model preview can be
+shown alongside ordinary `Images`; `Images` entries may also be model Instances
+or `{ Model = model, Name = "..." }` records. The same icon options are accepted
+by `HeaderButtons`, `Lines`, `Stats`, `Buildability`, typed `Elements`, HStack
+text/button entries, and button definitions. `Blocks` supports compact rows; `BlocksGrid` and
+`BlocksButton` render full required-block cards. All retain 2D Lucide/image
+fallbacks when 3D is off or a model cannot be resolved.
+
 Button styles: `Primary = true` (filled accent), `Accent = true` (accent text),
 default (neutral). `Close = true` closes the dialog after the callback. Only one
 dialog is open at a time; Esc, the ✕ button and a click on the backdrop close it
 (a press that starts inside the dialog never closes it, so dragging is safe).
-The header can be dragged. `Anchor = someFrame` centers the dialog over that
-frame instead of the main window; `ImageLoader` works like in Browse.
+The header can be dragged. Dialogs can also be resized from the bottom-right
+corner with mouse or touch; the body scrolls if you make a dialog shorter than
+its contents. Set `Resizable = false` to hide the resize grip, or pass
+`MinWidth` / `MinHeight` to adjust the smallest size. `OnResize(width, height,
+dialog)` fires when a resize drag ends. `Anchor = someFrame`
+centers the dialog over that frame instead of the main window; `ImageLoader`
+works like in Browse.
 
 ## Shared internals / companion scripts
 
