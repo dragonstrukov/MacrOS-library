@@ -2937,7 +2937,7 @@ local Library = (function()
 			Size = UDim2.new(1, 0, 0, 100),
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
-			ScrollBarThickness = 4,
+			ScrollBarThickness = 2,
 			ScrollBarImageColor3 = Theme.Accent,
 			ScrollBarImageTransparency = 0,
 			ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -4627,7 +4627,7 @@ local Library = (function()
 			Size = UDim2.new(1, 0, 0, ROW + 2),
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
-			ScrollBarThickness = TOUCH and 4 or 3,
+			ScrollBarThickness = 2,
 			ScrollBarImageColor3 = Theme.Accent,
 			ScrollBarImageTransparency = 0.4,
 			ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -6073,7 +6073,7 @@ local Library = (function()
 	end
 
 	function Window:_overControl(point)
-		if self._dialog or self:_overPopout(point) then
+		if self._dialog or self:_overPopout(point) or self:_overFloating(point) then
 			return true
 		end
 		if self._controlsDirty then
@@ -6458,10 +6458,25 @@ local Library = (function()
 		return skeleton, fade
 	end
 
+	function Window:_overFloating(point)
+		for _, panel in ipairs(self._floatingPanels or {}) do
+			if panel.Parent and panel.Parent.Visible and panel.Visible and pointInside(point, panel) then
+				return true
+			end
+		end
+		return false
+	end
+
 	function Library:_windowAt(point)
 		local best, order = nil, -math.huge
 		for _, w in ipairs(self.Windows) do
-			if not w._destroyed and w.Open and w.Root.Visible and w.Gui.Enabled and pointInside(point, w.Body) then
+			if
+				not w._destroyed
+				and w.Open
+				and w.Root.Visible
+				and w.Gui.Enabled
+				and (pointInside(point, w.Body) or w:_overFloating(point))
+			then
 				if w.Gui.DisplayOrder >= order then
 					best, order = w, w.Gui.DisplayOrder
 				end
@@ -7292,7 +7307,7 @@ local Library = (function()
 				Size = UDim2.new(1, -PAD * 2, 0, 16),
 				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
-				ScrollBarThickness = TOUCH and 4 or 3,
+				ScrollBarThickness = 2,
 				ScrollBarImageColor3 = Theme.Accent,
 				ScrollBarImageTransparency = 0.4,
 				ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -9879,7 +9894,7 @@ local Library = (function()
 			Size = UDim2.new(1, 0, 1, -top),
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
-			ScrollBarThickness = TOUCH and 4 or 2,
+			ScrollBarThickness = 2,
 			ScrollBarImageColor3 = Theme.Accent,
 			ScrollBarImageTransparency = 0.5,
 			ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -11246,7 +11261,7 @@ local Library = (function()
 			Size = UDim2.new(1, -8, 1, -8),
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
-			ScrollBarThickness = 3,
+			ScrollBarThickness = 2,
 			ScrollBarImageColor3 = Theme.Stroke,
 			CanvasSize = UDim2.new(),
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -15838,7 +15853,7 @@ local Library = (function()
 			Size = UDim2.new(1, -12, 1, -12),
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
-			ScrollBarThickness = TOUCH and 4 or 3,
+			ScrollBarThickness = 2,
 			ScrollBarImageColor3 = Theme.Accent,
 			ScrollBarImageTransparency = 0.4,
 			ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -17452,7 +17467,7 @@ local Library = (function()
 			Size = UDim2.new(1, -PAD * 2 + 6, 1, -(top + PAD - 4)),
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
-			ScrollBarThickness = TOUCH and 4 or 3,
+			ScrollBarThickness = 2,
 			ScrollBarImageColor3 = Theme.Accent,
 			ScrollBarImageTransparency = 0.4,
 			ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -18608,7 +18623,7 @@ local Library = (function()
 				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
 				BorderSizePixel = 0,
-				ScrollBarThickness = 3,
+				ScrollBarThickness = 2,
 				ScrollBarImageColor3 = Theme.Accent,
 				ScrollBarImageTransparency = 0.4,
 				ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -23843,7 +23858,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 10
+			Library.MacrOSRevision = 11
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
