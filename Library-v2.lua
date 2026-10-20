@@ -1644,6 +1644,15 @@ local Library = (function()
 		if cached then
 			return cached
 		end
+		local provider = Library._icon3D and Library._icon3D.PrepareProvider
+		if provider then
+			local ok, result = pcall(provider, model)
+			if ok and result then
+				icon3DPrepared[model] = result
+				return result
+			end
+			return nil
+		end
 		local ok, clone = pcall(function()
 			return model:Clone()
 		end)
@@ -1813,6 +1822,9 @@ local Library = (function()
 		handle.Distance = (prepared.Radius / math.sin(math.rad(handle.Config.FOV) / 2))
 			* handle.Config.Padding
 			/ math.max(handle.Config.Zoom, 0.05)
+		if prepared.Distance then
+			handle.Distance = prepared.Distance / math.max(handle.Config.Zoom, 0.05)
+		end
 		handle.Frame.Visible = true
 		icon3DAim(handle)
 		icon3DLive[handle] = true
@@ -5355,7 +5367,7 @@ local Library = (function()
 		-- Phones get a smaller logical window: the same content at a higher
 		-- scale reads far better than a desktop-sized window shrunk to fit.
 		local size = opts.Size or (TOUCH and UDim2.fromOffset(640, 430) or UDim2.fromOffset(760, 520))
-		local keybind = opts.Keybind or Enum.KeyCode.RightControl
+		local keybind = opts.Keybind == false and Enum.KeyCode.Unknown or (opts.Keybind or Enum.KeyCode.RightControl)
 
 		local self = setmetatable({
 			Tabs = {},
@@ -5398,7 +5410,9 @@ local Library = (function()
 		if startTheme ~= nil then
 			Library.DefaultTheme = startTheme
 		end
-		self:_applyDefaultTheme()
+		if not opts.SkipDefaultTheme then
+			self:_applyDefaultTheme()
+		end
 		self._uiScale = math.clamp(tonumber(opts.UIScale) or 1, 0.6, 1.5)
 		self._adaptive = opts.AdaptiveSize ~= false
 		self.UIScale = self._uiScale
@@ -5447,6 +5461,16 @@ local Library = (function()
 			Parent = gui,
 		})
 		self.Root = root
+		self._cursorGate = create("TextButton", {
+			Name = "CursorRelease",
+			Size = UDim2.fromOffset(1, 1),
+			BackgroundTransparency = 1,
+			Text = "",
+			AutoButtonColor = false,
+			Modal = true,
+			Active = false,
+			Parent = root,
+		})
 		local scale = create("UIScale", { Parent = root })
 		self.Scale = scale
 
@@ -5650,7 +5674,13 @@ local Library = (function()
 			Parent = body,
 		})
 		self.Content = content
-		self:_sidebarResize(sidebar, tonumber(opts.SidebarWidth) or SIDEBAR_WIDTH)
+		if opts.ContentOnly then
+			sidebar.Visible = false
+			content.Position = UDim2.fromOffset(0, 0)
+			content.Size = UDim2.fromScale(1, 1)
+		else
+			self:_sidebarResize(sidebar, tonumber(opts.SidebarWidth) or SIDEBAR_WIDTH)
+		end
 		self._outLayer = create("CanvasGroup", {
 			Name = "TransitionOut",
 			Size = UDim2.fromScale(1, 1),
@@ -5712,6 +5742,9 @@ local Library = (function()
 			self:Minimize()
 		end)
 		self.MinimizeButton = minimizeButton
+		if opts.ContentOnly then
+			minimizeButton.Visible = false
+		end
 
 		if opts.Search ~= false then
 			self:_buildSearch(content)
@@ -5762,6 +5795,14 @@ local Library = (function()
 		if opts.Background then
 			task.spawn(self.SetBackground, self, opts.Background)
 		end
+		table.insert(
+			self._connections,
+			UserInputService.InputBegan:Connect(function(input)
+				if isPress(input) and self:_pointerAllowed() then
+					self:_focusPointer()
+				end
+			end)
+		)
 		self:_enableDrag()
 		self.MaxSize = opts.MaxSize
 		self.KeepOnScreen = opts.KeepOnScreen ~= false
@@ -5950,7 +5991,12 @@ local Library = (function()
 			opts.LoadingDuration = opts.LoadingDuration or 0.5
 			loading = true
 		end
-		if loading == false then
+		if opts.StartHidden then
+			self._introDone = true
+			self.Open = false
+			self._cursorGate.Visible = false
+			self.Root.Visible = false
+		elseif loading == false then
 			task.defer(function()
 				self:_playIntro()
 			end)
@@ -6048,17 +6094,20 @@ local Library = (function()
 		local holder = create("CanvasGroup", {
 			Name = "Tooltip",
 			Size = UDim2.fromOffset(0, 0),
-			BackgroundTransparency = 1,
+			BackgroundColor3 = Theme.Surface2,
+			BackgroundTransparency = 0,
 			GroupTransparency = 1,
 			Visible = false,
 			ZIndex = 60,
 			Parent = self.Gui,
 		})
+		corner(holder, UDim.new(0, 8))
+		stroke(holder, Theme.Stroke, 1)
 		local tipScale = create("UIScale", { Parent = holder })
-		-- Bare text, no card: a dark outline keeps it readable over anything.
+		-- An opaque tooltip card stays legible over both game and other windows.
 		-- The holder is sized from the text by hand, since scale sizes inside an
 		-- automatic size would stretch it across the screen.
-		local PAD = 4
+		local PAD = 10
 		local panel = create("Frame", {
 			Position = UDim2.fromOffset(PAD, PAD),
 			Size = UDim2.fromOffset(0, 0),
@@ -6113,8 +6162,8 @@ local Library = (function()
 		})
 		outline(title)
 		local body = label({
-			Size = UDim2.fromOffset(0, 0),
-			AutomaticSize = Enum.AutomaticSize.XY,
+			Size = UDim2.fromOffset(240, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
 			TextSize = 12,
 			FontFace = Fonts.Medium,
 			TextWrapped = true,
@@ -6405,11 +6454,60 @@ local Library = (function()
 		return skeleton, fade
 	end
 
+	function Library:_windowAt(point)
+		local best, order = nil, -math.huge
+		for _, w in ipairs(self.Windows) do
+			if not w._destroyed and w.Open and w.Root.Visible and w.Gui.Enabled and pointInside(point, w.Body) then
+				if w.Gui.DisplayOrder >= order then
+					best, order = w, w.Gui.DisplayOrder
+				end
+			end
+		end
+		return best
+	end
+	function Window:_pointerAllowed()
+		local owner = Library._pointerOwner
+		return (owner == nil or owner == self) and Library:_windowAt(pointerPosition()) == self
+	end
+	function Window:_focusPointer()
+		Library._pointerOwner = self
+		local order = 999
+		for _, w in ipairs(Library.Windows) do
+			if w.Gui.Parent then
+				order = math.max(order, w.Gui.DisplayOrder)
+			end
+		end
+		self.Gui.DisplayOrder = order + 1
+	end
+
 	function Window:_enableDrag()
 		local dragging, moved = false, false
 		local grabOffset, pressPoint = Vector2.zero, Vector2.zero
 		local target = nil
 		local skeleton, fadeSkeleton = nil, nil
+		table.insert(
+			self._connections,
+			UserInputService.WindowFocusReleased:Connect(function()
+				dragging = false
+				target = nil
+				if skeleton then
+					skeleton:Destroy()
+					skeleton = nil
+					fadeSkeleton = nil
+				end
+				if Library._pointerOwner == self then
+					Library._pointerOwner = nil
+				end
+			end)
+		)
+		table.insert(
+			self._connections,
+			UserInputService.InputEnded:Connect(function(input)
+				if isPress(input) and Library._pointerOwner == self then
+					Library._pointerOwner = nil
+				end
+			end)
+		)
 
 		local function centre()
 			local root = self.Root
@@ -6446,13 +6544,14 @@ local Library = (function()
 				if self._resizeActive or (self._grip and pointInside(point, self._grip)) then
 					return
 				end
-				if not pointInside(point, self.Body) or self:_overControl(point) then
+				if not self:_pointerAllowed() or not pointInside(point, self.Body) or self:_overControl(point) then
 					return
 				end
 				if self._clampTween then
 					self._clampTween:Cancel()
 					self._clampTween = nil
 				end
+				self:_focusPointer()
 				dragging, moved = true, false
 				self._userMoved = true
 				pressPoint = point
@@ -7985,6 +8084,13 @@ local Library = (function()
 		local target = Vector2.zero
 		local applied = Vector2.zero
 
+		table.insert(
+			self._connections,
+			UserInputService.WindowFocusReleased:Connect(function()
+				resizing = false
+				lightGrip(false)
+			end)
+		)
 		local function readSize()
 			return Vector2.new(root.Size.X.Offset, root.Size.Y.Offset)
 		end
@@ -8018,7 +8124,7 @@ local Library = (function()
 		end
 
 		grip.InputBegan:Connect(function(input)
-			if not isPress(input) or not self.Open then
+			if not isPress(input) or not self.Open or not self:_pointerAllowed() then
 				return
 			end
 			if not self._resizeActive then
@@ -8027,6 +8133,7 @@ local Library = (function()
 				velocity = Vector2.zero
 				applied = current
 			end
+			self:_focusPointer()
 			self._resizeActive = true
 			resizing = true
 			startSize = current
@@ -16393,14 +16500,10 @@ local Library = (function()
 		local chip, text_, image, chipStroke = self:_homeChip(parent, order, icon, text)
 		local on = initial == true
 		local function paint(duration)
-			tween(
-				chip,
-				{
-					BackgroundColor3 = on and Theme.Accent or Theme.Surface3,
-					BackgroundTransparency = on and 0.85 or 0.2,
-				},
-				duration
-			)
+			tween(chip, {
+				BackgroundColor3 = on and Theme.Accent or Theme.Surface3,
+				BackgroundTransparency = on and 0.85 or 0.2,
+			}, duration)
 			tween(chipStroke, { Color = on and Theme.Accent or Theme.Stroke, Transparency = on and 0.6 or 0 }, duration)
 			tween(text_, { TextColor3 = on and Theme.Accent or Theme.Muted }, duration)
 			tween(image, { ImageColor3 = on and Theme.Accent or Theme.Muted }, duration)
@@ -22866,6 +22969,9 @@ local Library = (function()
 			return
 		end
 		self.Minimized = true
+		if self._cursorGate then
+			self._cursorGate.Visible = false
+		end
 		self._minimizeGeneration = (self._minimizeGeneration or 0) + 1
 		local generation = self._minimizeGeneration
 		self:_closePopups()
@@ -22940,6 +23046,9 @@ local Library = (function()
 			return
 		end
 		self.Minimized = false
+		if self._cursorGate then
+			self._cursorGate.Visible = true
+		end
 		self._minimizeGeneration = (self._minimizeGeneration or 0) + 1
 		local generation = self._minimizeGeneration
 		self:_refreshToggleButton()
@@ -23040,6 +23149,9 @@ local Library = (function()
 			return
 		end
 		self.Open = open
+		if self._cursorGate then
+			self._cursorGate.Visible = open
+		end
 		self:_refreshToggleButton()
 		self:_refreshBackdrop(open)
 		-- Like minimize, a plain ghost panel carries the scale and fade. The body
@@ -23283,6 +23395,12 @@ local Library = (function()
 	end
 
 	function Window:Destroy()
+		if self._cursorGate then
+			self._cursorGate.Modal = false
+		end
+		if Library._pointerOwner == self then
+			Library._pointerOwner = nil
+		end
 		if self._destroyed then
 			return
 		end
@@ -23508,6 +23626,14 @@ local Library = (function()
 			Tab.Section = Tab.Groupbox
 			Tab.CreateSection = Tab.Groupbox
 
+			function Window:ControlHost(parent)
+				return setmetatable(
+					{ Window = self, List = parent, _order = 0, _items = {}, _metrics = METRICS.Row },
+					Tab
+				)
+			end
+			Window.ControlHost = guarded(Window.ControlHost)
+
 			Library.ApplyIcon = guarded(applyIcon)
 			Library.StyleCorner = guarded(function(parent, radius)
 				return corner(parent, UDim.new(0, radius or 8))
@@ -23537,10 +23663,28 @@ local Library = (function()
 				end
 				badge.Text = tostring(value or "")
 				badge.Visible = badge.Text ~= ""
-				logo.Position = UDim2.new(0, 14, 0.5, 7)
-				title.Position = UDim2.new(0, 56, 0.5, sub and -9 or 0)
+				logo.Position = UDim2.new(0, 14, 0.5, 0)
+				title.Position = UDim2.new(0, 56, 0.5, sub and -15 or -9)
+				title.Size = UDim2.fromOffset(0, 18)
+				title.AutomaticSize = Enum.AutomaticSize.X
 				if sub then
-					sub.Position = UDim2.new(0, 56, 0.5, 9)
+					sub.Position = UDim2.new(0, 56, 0.5, 3)
+				end
+				local function place()
+					badge.Visible = title.Visible and tostring(value or "") ~= ""
+					badge.Position = UDim2.new(
+						0,
+						56 + math.ceil(title.AbsoluteSize.X / math.max(self.Scale.Scale, 0.01)) + 8,
+						0.5,
+						sub and -15 or -9
+					)
+				end
+				place()
+				if not self._versionPlacement then
+					self._versionPlacement = true
+					table.insert(self._connections, title:GetPropertyChangedSignal("AbsoluteSize"):Connect(place))
+					table.insert(self._connections, title:GetPropertyChangedSignal("Visible"):Connect(place))
+					table.insert(self._connections, self.Scale:GetPropertyChangedSignal("Scale"):Connect(place))
 				end
 			end
 			Window.SetVersionBadge = guarded(Window.SetVersionBadge)
@@ -23556,7 +23700,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 8
+			Library.MacrOSRevision = 9
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -23578,6 +23722,8 @@ local Library = (function()
 
 					local CFG_FILE = "MacrOS/Build A Boat For Treasure/config/icons.cfg"
 					local PARTS_DIR = "BuildingParts"
+					local REF_FOV = 30
+					local MARGIN = 1.12
 					local VIEW = Vector3.new(2.2, 1.7, 2.6)
 					local SPEED = 0.4
 					local MIN_SLOT = 4
@@ -23675,7 +23821,6 @@ local Library = (function()
 						[3040806618] = "EpicChest",
 						[3040808420] = "LegendaryChest",
 						[3040808977] = "Tools",
-
 						[3162469425] = "Piston",
 						[3162469847] = "CannonTurret",
 						[3162470626] = "Hinge",
@@ -23936,6 +24081,13 @@ local Library = (function()
 						return clone, distance
 					end
 
+					Library._icon3D.PrepareProvider = function(model)
+						local clone, distance = prepare(model)
+						if not clone then
+							return nil
+						end
+						return { Template = clone, Center = Vector3.zero, Radius = 1, Distance = distance }
+					end
 					local function partsFolder()
 						local ok, folder = pcall(function()
 							return Storage:FindFirstChild(PARTS_DIR)
@@ -24406,7 +24558,10 @@ local Library = (function()
 
 					local function visibleUp(node, depth)
 						for _ = 1, depth do
-							if node.Visible == false then
+							if
+								(node:IsA("GuiObject") and not node.Visible)
+								or (node:IsA("ScreenGui") and not node.Enabled)
+							then
 								return false
 							end
 							node = node.Parent
@@ -24470,7 +24625,7 @@ local Library = (function()
 						local ok, look = pcall(function()
 							return CFrame.lookAt(direction, Vector3.new())
 						end)
-						entry.camera.CFrame = ok and look or CFrame.new(direction, Vector3.new())
+						entry.camera.CFrame = if ok then look else CFrame.new(direction, Vector3.new())
 						entry.camera.FieldOfView = Icons.cfg.fov
 
 						entry.viewport.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -24673,7 +24828,6 @@ local Library = (function()
 					end
 
 					local sweeping = setmetatable({}, { __mode = "k" })
-
 					function Icons.sweep(root)
 						if not Icons.cfg.on or not root or not root.Parent or sweeping[root] then
 							return
@@ -24697,7 +24851,7 @@ local Library = (function()
 										end
 									end
 								end
-								count = count + 1
+								count += 1
 								if count >= 48 or os.clock() - slice >= 0.002 then
 									task.wait()
 									count = 0
@@ -24751,7 +24905,7 @@ local Library = (function()
 							return
 						end
 						pending[arg] = true
-						jobTail = jobTail + 1
+						jobTail += 1
 						jobQueue[jobTail] = { fn, arg }
 						if jobQueued then
 							return
@@ -24762,12 +24916,12 @@ local Library = (function()
 							while jobHead <= jobTail do
 								local job = jobQueue[jobHead]
 								jobQueue[jobHead] = nil
-								jobHead = jobHead + 1
+								jobHead += 1
 								if Icons.cfg.on then
 									pcall(job[1], job[2])
 								end
 								pendingJobs[job[1]][job[2]] = nil
-								count = count + 1
+								count += 1
 								if count >= 12 or os.clock() - slice >= 0.002 then
 									task.wait()
 									count = 0
@@ -24992,7 +25146,7 @@ local Library = (function()
 						end)
 					end
 
-					RunService.RenderStepped:Connect(function(delta)
+					local renderConnection = RunService.RenderStepped:Connect(function(delta)
 						local now = os.clock()
 						if not Icons.cfg.on or #entries == 0 then
 							return
@@ -25034,10 +25188,12 @@ local Library = (function()
 								if want then
 									e.clone:PivotTo(spin)
 								end
-								i = i + 1
+								i += 1
 							end
 						end
 					end)
+
+					table.insert(Window:_native()._connections, renderConnection)
 
 					task.spawn(function()
 						while MacrOSUI.ScreenGui and MacrOSUI.ScreenGui.Parent do
