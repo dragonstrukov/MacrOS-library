@@ -23792,6 +23792,87 @@ local Library = (function()
 			end
 			Window.PowerSavePanel = guarded(Window.PowerSavePanel)
 
+			function Library:ItemIcon(parent, opts)
+				opts = opts or {}
+				local engine = opts.Engine
+				local size = tonumber(opts.Size) or 24
+				local slot = create("Frame", {
+					Name = "ItemIcon",
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = opts.Position or UDim2.new(0, 8, 0.5, 0),
+					Size = UDim2.fromOffset(size, size),
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Parent = parent,
+				})
+				local flat = create("ImageLabel", {
+					Size = UDim2.fromScale(1, 1),
+					BackgroundTransparency = 1,
+					ImageColor3 = Theme.Text,
+					ScaleType = Enum.ScaleType.Fit,
+					Parent = slot,
+				})
+				flat:SetAttribute("NativeDropdownIcon", true)
+				applyIcon(flat, opts.Icon or "box", true)
+				local config = icon3DConfig({ Size = size, Spin = true, FOV = 50, Zoom = 1 }, nil)
+				local viewport = icon3DViewport(slot, config)
+				local handle = { Frame = slot, Destroyed = false }
+				local hot = false
+				local currentModel = nil
+				function handle:Refresh()
+					if self.Destroyed then
+						return
+					end
+					local live = engine and engine.cfg
+					local model = nil
+					if live and live.on and (not live.hover or hot) and type(engine.resolveModel) == "function" then
+						local ok, value = pcall(
+							engine.resolveModel,
+							{ Title = opts.Name or opts.Key, Name = opts.Key, Icon = opts.Icon },
+							opts.Key or opts.Name,
+							opts.Icon
+						)
+						if ok then
+							model = value
+						end
+					end
+					config.SpinSpeed = live and live.reverse and -45 or 45
+					if model ~= currentModel or (model ~= nil and not viewport.Model) then
+						icon3DSet(viewport, model)
+						currentModel = model
+					end
+					viewport.Frame.Visible = viewport.Model ~= nil
+					flat.Visible = not viewport.Frame.Visible
+				end
+				handle._rerender3D = function()
+					handle:Refresh()
+				end
+				local enter = parent.MouseEnter:Connect(function()
+					hot = true
+					if engine and engine.cfg and engine.cfg.hover then
+						handle:Refresh()
+					end
+				end)
+				local leave = parent.MouseLeave:Connect(function()
+					hot = false
+					if engine and engine.cfg and engine.cfg.hover then
+						handle:Refresh()
+					end
+				end)
+				slot.Destroying:Connect(function()
+					handle.Destroyed = true
+					enter:Disconnect()
+					leave:Disconnect()
+					icon3DLive[viewport] = nil
+				end)
+				if engine and engine.registerDropdown then
+					engine.registerDropdown(handle)
+				end
+				handle:Refresh()
+				return handle
+			end
+			Library.ItemIcon = guarded(Library.ItemIcon)
+
 			Library.ApplyIcon = guarded(applyIcon)
 			Library.StyleCorner = guarded(function(parent, radius)
 				return corner(parent, UDim.new(0, radius or 8))
@@ -23858,7 +23939,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 12
+			Library.MacrOSRevision = 13
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -23974,11 +24055,11 @@ local Library = (function()
 						[2783557827] = "BoxingGlove",
 						[2855511869] = "Heart",
 						[2910074282] = "Magnet",
-						[3040800633] = "UncommonChest",
-						[3040805332] = "RareChest",
-						[3040806618] = "EpicChest",
-						[3040808420] = "LegendaryChest",
-						[3040808977] = "Tools",
+						[3040800633] = "ChestCommon",
+						[3040805332] = "ChestUncommon",
+						[3040806618] = "ChestRare",
+						[3040808420] = "ChestEpic",
+						[3040808977] = "ChestLegendary",
 						[3162469425] = "Piston",
 						[3162469847] = "CannonTurret",
 						[3162470626] = "Hinge",
@@ -24001,11 +24082,7 @@ local Library = (function()
 						[4539748713] = "BoatMotorUltra",
 						[4539749166] = "Sign",
 						[4539749508] = "CoalBlock",
-						[4717826099] = "ChestCommon",
-						[4717826702] = "ChestUncommon",
-						[4717827311] = "ChestRare",
-						[4717828261] = "ChestEpic",
-						[4717828937] = "ChestLegendary",
+
 						[4736853414] = "BackWheel",
 						[4736855340] = "FrontWheel",
 						[4736872493] = "CarParts",
@@ -24477,6 +24554,11 @@ local Library = (function()
 
 					local flatOnlyNames = {
 						propertytool = true,
+						chestlegendary = true,
+						chestepic = true,
+						chestrare = true,
+						chestuncommon = true,
+						chestcommon = true,
 						commonchest = true,
 						uncommonchest = true,
 						rarechest = true,
