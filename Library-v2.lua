@@ -1587,7 +1587,7 @@ local Library = (function()
     at 20/-35 degrees, the model framed by its own bounding box), so the look
     is the one the menu was built against. ]]
 	local ICON3D = {
-		Size = 32,
+		Size = 24,
 		Padding = 1.15,
 		Zoom = 1,
 		FOV = 40,
@@ -2687,7 +2687,7 @@ local Library = (function()
 		local flatSize = 0
 		if imageOf then
 			ROW = math.max(ROW, TOUCH and 42 or 32)
-			flatSize = ROW - 8
+			flatSize = math.min(24, ROW - 8)
 		end
 		-- Stacked (the default in compact rows): the chip spans the whole row,
 		-- with the name (if any) above it.
@@ -23858,7 +23858,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 11
+			Library.MacrOSRevision = 12
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -24008,7 +24008,7 @@ local Library = (function()
 						[4717828937] = "ChestLegendary",
 						[4736853414] = "BackWheel",
 						[4736855340] = "FrontWheel",
-						[4736872493] = "HugeWheel",
+						[4736872493] = "CarParts",
 						[4742770672] = "HugeBackWheel",
 						[4742773097] = "HugeFrontWheel",
 						[4742940542] = "DragonEgg",
@@ -24022,7 +24022,7 @@ local Library = (function()
 						[5299317467] = "Trophy 1st",
 						[5299318083] = "Trophy 2nd",
 						[5299319293] = "Trophy 3rd",
-						[5452788883] = "Parachute",
+						[5452788883] = "HugeWheel",
 						[5463230918] = "1050Gold",
 						[5463231610] = "7700Gold",
 						[5463232101] = "23000Gold",
@@ -24083,7 +24083,7 @@ local Library = (function()
 						reverse = false,
 						hover = false,
 
-						zoom = 1.35,
+						zoom = 1.0,
 						fov = 50,
 						pixels = 50,
 					}
@@ -24475,7 +24475,60 @@ local Library = (function()
 						return nil
 					end
 
+					local flatOnlyNames = {
+						propertytool = true,
+						commonchest = true,
+						uncommonchest = true,
+						rarechest = true,
+						epicchest = true,
+						legendarychest = true,
+					}
+					local flatOnlyAssets = {}
+					function Icons.registerFlatOnly(name, asset)
+						flatOnlyNames[key(name)] = true
+						if asset then
+							flatOnlyAssets[tostring(asset)] = true
+						end
+					end
+					function Icons.isFlatOnly(row, text, category)
+						local name = text
+						local asset
+						if type(row) == "table" then
+							if row.Icons3D == false then
+								return true
+							end
+							name = row.Title or row.Name or name
+							category = row.Category or category
+							asset = row.Icon or row.Image
+						elseif type(row) == "string" then
+							name = name or row
+							asset = row
+						end
+						local group = key(category)
+						return group == "gamepasses"
+							or group == "gamepass"
+							or group == "chests"
+							or flatOnlyNames[key(cleanName(name) or name)] == true
+							or flatOnlyAssets[tostring(asset)] == true
+					end
+
 					function Icons.resolveModel(keyOrValue, text, iconName, plain)
+						if
+							plain == true
+							or Icons.isFlatOnly(keyOrValue, text)
+							or (iconName and flatOnlyAssets[tostring(iconName)])
+						then
+							return nil
+						end
+						local name = type(keyOrValue) == "table" and (keyOrValue.Title or keyOrValue.Name)
+							or text
+							or keyOrValue
+						local normalized = key(cleanName(name) or name)
+						if normalized == "carpack" or normalized == "carparts" then
+							return partsModel("CarParts") or partsModel("CarPack")
+						elseif normalized == "hugewheel" then
+							return partsModel("HugeWheel") or partsModel("WheelHuge")
+						end
 						if typeof(keyOrValue) == "Instance" then
 							return keyOrValue
 						end
@@ -24801,6 +24854,9 @@ local Library = (function()
 					end
 
 					local function attach(label, scope)
+						if not label.Parent or Icons.isFlatOnly(label.Image, captionOf(label.Parent)) then
+							return
+						end
 						if label:GetAttribute("NativeDropdownIcon") then
 							return
 						end
@@ -24829,7 +24885,7 @@ local Library = (function()
 						viewport.AnchorPoint = Vector2.new(0.5, 0.5)
 						viewport.Position = UDim2.fromScale(0.5, 0.5)
 						if scope == "dropdown" then
-							viewport.Size = UDim2.new(0, 100, 0, 100)
+							viewport.Size = UDim2.fromOffset(24, 24)
 						else
 							local w, h = label.AbsoluteSize.X, label.AbsoluteSize.Y
 							if w <= 0 or h <= 0 then
