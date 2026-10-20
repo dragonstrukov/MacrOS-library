@@ -578,6 +578,16 @@ local Library = (function()
 
 	Library.ThemeName = "Midnight"
 
+	pcall(function()
+		if type(makefolder) == "function" then
+			for _, folder in ipairs({ "MacrOS", "MacrOS/UI", "MacrOS/UI/assets", "MacrOS/UI/fonts" }) do
+				if type(isfolder) ~= "function" or not isfolder(folder) then
+					pcall(makefolder, folder)
+				end
+			end
+		end
+	end)
+
 	Library.Assets = {
 		Shadow = "rbxassetid://6014261993",
 		Glow = "rbxassetid://8992230677",
@@ -631,7 +641,7 @@ local Library = (function()
 			warn("[AirFlow] no font weights for " .. name)
 			return false
 		end
-		local folder = opts.Folder or "AirFlowFonts"
+		local folder = opts.Folder or "MacrOS/UI/fonts"
 		pcall(function()
 			if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder(folder) then
 				makefolder(folder)
@@ -786,7 +796,7 @@ local Library = (function()
 		if type(writefile) ~= "function" or typeof(getcustomasset) ~= "function" then
 			return
 		end
-		local folder = "AirFlowAssets"
+		local folder = "MacrOS/UI/assets"
 		if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder(folder) then
 			makefolder(folder)
 		end
@@ -5451,7 +5461,7 @@ local Library = (function()
 			_islandLocked = opts.IslandDraggable == false,
 		}, Window)
 		local saving = type(opts.ConfigurationSaving) == "table" and opts.ConfigurationSaving or {}
-		self.ConfigFolder = saving.FolderName or "AirflowUI"
+		self.ConfigFolder = saving.FolderName or "MacrOS/UI/config"
 		-- Re-executing the script unloads the copy it left behind first, so the
 		-- old toggles stop before the new autoload starts them again.
 		self._registryKey = "AirFlow:" .. tostring(self.ConfigFolder) .. ":" .. tostring(opts.Title or "Airflow")
@@ -24054,7 +24064,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 15
+			Library.MacrOSRevision = 16
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -25668,10 +25678,10 @@ local Library = (function()
 		local ROOT = "MacrOS/Build A Boat For Treasure"
 		local CONFIG = ROOT .. "/config"
 		local LINKS = {
-			{ id = "discord", text = "discord.gg/UtzvjjHWd" },
+			{ id = "discord", text = "discord.gg/4arUqucss" },
 			{ id = "telegram", text = "t.me/MacrOS_rbx" },
 		}
-		local VERSION = cfg.Version or "v2.6"
+		local VERSION = cfg.Version or "v2.7"
 
 		local TEXT = {
 			en = {
@@ -26695,7 +26705,7 @@ local Library = (function()
 			if not getter then
 				return nil
 			end
-			local path = ROOT .. "/cache/logo_airflow.png"
+			local path = "MacrOS/UI/assets/logo_airflow.png"
 			local existing = readFile(path)
 			if existing and #existing > 512 then
 				local ok, asset = pcall(getter, path)
@@ -26712,7 +26722,7 @@ local Library = (function()
 			end
 			pcall(function()
 				if type(isfolder) == "function" and type(makefolder) == "function" then
-					local folder = ROOT .. "/cache"
+					local folder = "MacrOS/UI/assets"
 					if not isfolder(folder) then
 						makefolder(folder)
 					end
@@ -26727,24 +26737,68 @@ local Library = (function()
 		end
 
 		local function themeOf(name)
-			if name == "Default" then
-				name = "Lunar"
+			local aliases = {
+				Default = "Lunar",
+				Dark = "Midnight",
+				Light = "Frost",
+				Plant = "Matcha",
+				Red = "Crimson",
+				Indigo = "Nebula",
+				Sky = "Ocean",
+				Violet = "Velvet",
+				Rainbow = "Synthwave",
+			}
+			name = aliases[name] or name
+			local theme = Library.ThemePresets[name]
+			if not theme and type(name) == "string" and not name:find("[\\/]") and not name:find("..", 1, true) then
+				local raw = readFile(ROOT .. "/themes/" .. name .. ".json")
+					or readFile(CONFIG .. "/themes/" .. name .. ".json")
+				if raw then
+					local ok, value = pcall(function()
+						return game:GetService("HttpService"):JSONDecode(raw)
+					end)
+					if ok and type(value) == "table" then
+						theme = value
+					end
+				end
 			end
-			local palette = THEMES[name]
-			if palette then
+			if theme then
+				local base = Library.ThemePresets.Lunar or Library.Theme
+				local palette = {}
+				for _, key in ipairs({
+					"Background",
+					"Surface",
+					"Surface2",
+					"Surface3",
+					"Stroke",
+					"StrokeHover",
+					"Accent",
+					"AccentDark",
+					"Text",
+					"Muted",
+				}) do
+					local value = toColor(theme[key]) or toColor(base[key])
+					if not value then
+						return THEMES.Lunar, "Lunar"
+					end
+					palette[#palette + 1] = math.floor(value.R * 255 + 0.5)
+					palette[#palette + 1] = math.floor(value.G * 255 + 0.5)
+					palette[#palette + 1] = math.floor(value.B * 255 + 0.5)
+				end
 				return palette, name
 			end
-			return THEMES.Lunar, "Lunar"
+			return THEMES[name] or THEMES.Lunar, name
 		end
-
 		local function savedTheme()
-			for _, path in ipairs({ CONFIG .. "/theme.cfg", ROOT .. "/theme.cfg", "MacrOS/config/theme.cfg" }) do
+			for _, path in ipairs({
+				ROOT .. "/themes/default.txt",
+				CONFIG .. "/theme.cfg",
+				ROOT .. "/theme.cfg",
+				"MacrOS/config/theme.cfg",
+			}) do
 				local raw = readFile(path)
 				if raw then
-					local name = tostring(raw):match("^%s*(.-)%s*$")
-					if THEMES[name] or name == "Default" then
-						return themeOf(name)
-					end
+					return themeOf(tostring(raw):match("^%s*(.-)%s*$"))
 				end
 			end
 			return themeOf("Lunar")
@@ -27312,13 +27366,13 @@ local Library = (function()
 				local cta = new("Frame", {
 					Name = "Cta",
 					Position = UDim2.fromOffset(18, 176),
-					Size = UDim2.fromOffset(140, 36),
+					Size = UDim2.new(1, -36, 0, 36),
 					BackgroundColor3 = opts.accent and C.accent or C.surface3,
 					BackgroundTransparency = opts.accent and 0 or 0.35,
 					BorderSizePixel = 0,
 					Parent = card,
 				})
-				corner(cta, 18)
+				corner(cta, 9)
 				local ctaStroke = stroke(cta, opts.accent and C.accent or C.stroke, 1, opts.accent and 1 or 0.2)
 				local ctaLabel = label(cta, {
 					Size = UDim2.fromScale(1, 1),
@@ -27350,7 +27404,7 @@ local Library = (function()
 
 				function entry.paint(hovered, sibling)
 					if hovered then
-						tween(cardScale, 0.28, { Scale = 1.05 }, Enum.EasingStyle.Quint)
+						tween(cardScale, 0.28, { Scale = 1.015 }, Enum.EasingStyle.Quint)
 						tween(card, 0.18, { BackgroundColor3 = C.surface2 })
 						tween(cardStroke, 0.18, { Color = C.accent, Transparency = 0.1 })
 						tween(scrim, 0.18, { BackgroundTransparency = 1 })
@@ -27364,10 +27418,10 @@ local Library = (function()
 						tween(ctaLabel, 0.18, { TextColor3 = opts.accent and C.accentDark or C.accent })
 					elseif sibling then
 						-- stepped back: smaller, dimmed, the border all but gone
-						tween(cardScale, 0.32, { Scale = 0.972 }, Enum.EasingStyle.Quad)
+						tween(cardScale, 0.32, { Scale = 0.99 }, Enum.EasingStyle.Quad)
 						tween(card, 0.24, { BackgroundColor3 = C.background })
 						tween(cardStroke, 0.24, { Color = C.stroke, Transparency = 0.7 })
-						tween(scrim, 0.24, { BackgroundTransparency = 0.45 })
+						tween(scrim, 0.24, { BackgroundTransparency = 0.72 })
 						tween(sheen, 0.2, { BackgroundTransparency = 1 })
 						tween(haloStroke, 0.2, { Transparency = 1 })
 						tween(tile, 0.24, { BackgroundColor3 = C.surface3 })
@@ -27492,41 +27546,6 @@ local Library = (function()
 				TextSize = 12,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, "medium")
-
-			do
-				local row = new("Frame", {
-					Name = "Hotkey",
-					AnchorPoint = Vector2.new(0.5, 0),
-					Position = UDim2.new(0.5, 0, 0, 357),
-					Size = UDim2.fromOffset(236, 22),
-					BackgroundTransparency = 1,
-					Parent = body,
-				})
-				local cap = new("Frame", {
-					Name = "Key",
-					Position = UDim2.fromOffset(0, 1),
-					Size = UDim2.fromOffset(34, 20),
-					BackgroundColor3 = C.background,
-					BorderSizePixel = 0,
-					Parent = row,
-				})
-				corner(cap, 5)
-				stroke(cap, C.stroke, 1, 0.1)
-				label(cap, {
-					Size = UDim2.fromScale(1, 1),
-					Text = "Ctrl",
-					TextSize = 10,
-					TextXAlignment = Enum.TextXAlignment.Center,
-					TextColor3 = C.muted,
-				}, "medium")
-				label(row, {
-					Position = UDim2.fromOffset(44, 0),
-					Size = UDim2.new(1, -44, 1, 0),
-					Text = T.hint,
-					TextSize = 12,
-					TextColor3 = C.muted,
-				}, "regular")
-			end
 
 			-- outlined chips for the two links, the way the menu draws small buttons
 			for index, link in ipairs(LINKS) do
