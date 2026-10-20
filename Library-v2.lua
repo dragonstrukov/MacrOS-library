@@ -3880,8 +3880,22 @@ local Library = (function()
 				fitBox(true)
 			end
 		end)
+		local liveGeneration = 0
 		box:GetPropertyChangedSignal("Text"):Connect(function()
 			fitBox(false)
+			if opts.Live and focused then
+				liveGeneration += 1
+				local generation = liveGeneration
+				task.delay(0.12, function()
+					if generation ~= liveGeneration or not focused or not box.Parent then
+						return
+					end
+					local value = opts.Numeric and Library._parseAmount(box.Text) or box.Text
+					if value ~= nil then
+						safeCall(opts.Callback, value, false)
+					end
+				end)
+			end
 		end)
 		box:GetPropertyChangedSignal("TextBounds"):Connect(function()
 			fitBox(false)
@@ -3894,6 +3908,7 @@ local Library = (function()
 			fitBox(false)
 		end)
 		box.FocusLost:Connect(function(enterPressed)
+			liveGeneration += 1
 			focused = false
 			tween(boxStroke, { Color = Theme.Stroke }, 0.15)
 			fitBox(false)
@@ -24039,7 +24054,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 14
+			Library.MacrOSRevision = 15
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -24055,6 +24070,13 @@ local Library = (function()
 			}
 
 			function Library:InstallBABFTIcons(MacrOS, Window, MacrOSUI)
+				local task = MacrOS.Tasks or task
+				local keepConnection = MacrOS.trackConnection or function(v)
+					return v
+				end
+				local keepInstance = MacrOS.trackInstance or function(v)
+					return v
+				end
 				do
 					local Icons = {}
 					MacrOS.Icons = Icons
@@ -24332,7 +24354,7 @@ local Library = (function()
 					end
 
 					local function prepare(model)
-						local clone = model:Clone()
+						local clone = keepInstance(model:Clone())
 						if clone:IsA("BasePart") then
 							local wrapper = Instance.new("Model")
 							clone.Parent = wrapper
@@ -24998,9 +25020,9 @@ local Library = (function()
 							return
 						end
 						local ok, connection = pcall(function()
-							return node:GetPropertyChangedSignal("Visible"):Connect(function()
+							return keepConnection(node:GetPropertyChangedSignal("Visible"):Connect(function()
 								visibilityDirty = true
-							end)
+							end))
 						end)
 						if ok then
 							visibleWatches[node] = connection
@@ -25096,7 +25118,7 @@ local Library = (function()
 							viewport.Size = UDim2.new(0, s, 0, s)
 						end
 
-						local clone = made.clone:Clone()
+						local clone = keepInstance(made.clone:Clone())
 						clone.Parent = viewport
 
 						local camera = Instance.new("Camera")
@@ -25132,18 +25154,18 @@ local Library = (function()
 						end
 
 						local host = hoverTarget(label)
-						entry.hoverIn = host.MouseEnter:Connect(function()
+						entry.hoverIn = keepConnection(host.MouseEnter:Connect(function()
 							entry.hot = true
-						end)
-						entry.hoverOut = host.MouseLeave:Connect(function()
+						end))
+						entry.hoverOut = keepConnection(host.MouseLeave:Connect(function()
 							entry.hot = false
-						end)
+						end))
 
-						entry.imageSignal = label:GetPropertyChangedSignal("Image"):Connect(function()
+						entry.imageSignal = keepConnection(label:GetPropertyChangedSignal("Image"):Connect(function()
 							if entry.shown and label.Image ~= "" then
 								hideIcon(entry)
 							end
-						end)
+						end))
 
 						viewport.Parent = label
 						watchVisibility(label)
@@ -25191,7 +25213,7 @@ local Library = (function()
 							return
 						end
 						local ok, connection = pcall(function()
-							return label:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+							return keepConnection(label:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 								if label.AbsoluteSize.X > 0 and label.AbsoluteSize.Y > 0 then
 									local open = watchers[label]
 									if open then
@@ -25208,7 +25230,7 @@ local Library = (function()
 										Icons.errors[#Icons.errors + 1] = tostring(err)
 									end
 								end
-							end)
+							end))
 						end)
 						if ok then
 							watchers[label] = connection
@@ -25225,11 +25247,12 @@ local Library = (function()
 							return
 						end
 						if not imageWatches[label] then
-							imageWatches[label] = label:GetPropertyChangedSignal("Image"):Connect(function()
-								if Icons.cfg.on and not byLabel[label] and label.Image ~= "" and queueJob then
-									queueJob(absorb, label)
-								end
-							end)
+							imageWatches[label] =
+								keepConnection(label:GetPropertyChangedSignal("Image"):Connect(function()
+									if Icons.cfg.on and not byLabel[label] and label.Image ~= "" and queueJob then
+										queueJob(absorb, label)
+									end
+								end))
 						end
 						local kind = classify(label)
 						if kind == "dropdown" or kind == "button" then
@@ -25392,11 +25415,11 @@ local Library = (function()
 
 						Icons.sweep(container)
 
-						container.DescendantAdded:Connect(function(inst)
+						keepConnection(container.DescendantAdded:Connect(function(inst)
 							if inst:IsA("ImageLabel") or inst:IsA("ImageButton") then
 								queueJob(absorb, inst)
 							end
-						end)
+						end))
 						return true
 					end
 
@@ -25408,11 +25431,11 @@ local Library = (function()
 						watchedScreens[gui] = true
 						roots[#roots + 1] = gui
 						Icons.sweep(gui)
-						gui.DescendantAdded:Connect(function(inst)
+						keepConnection(gui.DescendantAdded:Connect(function(inst)
 							if inst:IsA("ImageLabel") or inst:IsA("ImageButton") then
 								queueJob(absorb, inst)
 							end
-						end)
+						end))
 					end
 
 					local function dropdownScreens()
@@ -25561,7 +25584,7 @@ local Library = (function()
 						end)
 					end
 
-					local renderConnection = RunService.RenderStepped:Connect(function(delta)
+					local renderConnection = keepConnection(RunService.RenderStepped:Connect(function(delta)
 						local now = os.clock()
 						if not Icons.cfg.on or #entries == 0 then
 							return
@@ -25606,7 +25629,7 @@ local Library = (function()
 								i += 1
 							end
 						end
-					end)
+					end))
 
 					table.insert(Window:_native()._connections, renderConnection)
 
