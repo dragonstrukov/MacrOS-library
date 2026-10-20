@@ -2649,7 +2649,8 @@ local Library = (function()
 		local compact = metrics.Compact
 		local chipHeight = metrics.Chip
 		local window = self.Window
-		local ROW = TOUCH and 34 or 22
+		local detailsOf = type(opts.OptionDetails) == "function" and opts.OptionDetails or nil
+		local ROW = detailsOf and 44 or (TOUCH and 34 or 22)
 		local MAX_ROWS = opts.MaxRows or 6
 		-- 3D rows: Icons3D plus a Models resolver turns every option into the
 		-- model standing behind it. The rows grow to fit the icon instead of the
@@ -2978,7 +2979,17 @@ local Library = (function()
 		local function lowerOf(option)
 			local key = lowerKeys[option]
 			if key == nil then
-				key = string.lower(tostring(option))
+				local detail = detailsOf and detailsOf(option)
+				key = string.lower(
+					tostring(option)
+						.. (
+							detail
+								and (" " .. tostring(detail.Title) .. " " .. tostring(detail.Desc) .. " " .. tostring(
+									detail.TeamName
+								))
+							or ""
+						)
+				)
 				lowerKeys[option] = key
 			end
 			return key
@@ -2993,7 +3004,8 @@ local Library = (function()
 			return (text:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"))
 		end
 		local function optionText(option)
-			local text = tostring(option)
+			local detail = detailsOf and detailsOf(option)
+			local text = detail and tostring(detail.Title or option) or tostring(option)
 			local at = filter ~= "" and string.find(string.lower(text), filter, 1, true)
 			if not at then
 				return escapeRich(text)
@@ -3038,7 +3050,7 @@ local Library = (function()
 		local function restRow(entry, duration)
 			local on, hover = entry.On == true, entry.Hover == true
 			tween(entry.Frame, { BackgroundTransparency = hover and 0.6 or 1 }, duration)
-			tween(entry.Label, { TextColor3 = on and Theme.Accent or Theme.Text }, duration)
+			tween(entry.Label, { TextColor3 = not detailsOf and on and Theme.Accent or Theme.Text }, duration)
 		end
 
 		local function paintOption(button, animate)
@@ -3079,7 +3091,9 @@ local Library = (function()
 					fullText = #value > 0 and table.concat(value, ", ") or (opts.NoneText or "None")
 				end
 			else
-				fullText = value ~= nil and tostring(value) or (opts.NoneText or "None")
+				local detail = detailsOf and value ~= nil and detailsOf(value)
+				fullText = detail and tostring(detail.Title or value)
+					or (value ~= nil and tostring(value) or (opts.NoneText or "None"))
 			end
 			valueLabel.Text = trimmed()
 			-- A picked value reads in full colour; "None" stays muted.
@@ -3400,7 +3414,30 @@ local Library = (function()
 				RichText = true,
 				Parent = row,
 			})
+			local descLabel = detailsOf
+				and label({
+					Position = UDim2.fromOffset(14, 24),
+					Size = UDim2.new(1, -38, 0, 15),
+					Text = "",
+					TextSize = 11,
+					TextColor3 = Theme.Muted,
+					FontFace = Fonts.Regular,
+					Parent = row,
+				})
+			local teamDot = detailsOf
+				and create("Frame", {
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -12, 0.5, 0),
+					Size = UDim2.fromOffset(7, 7),
+					BorderSizePixel = 0,
+					Parent = row,
+				})
+			if teamDot then
+				corner(teamDot, UDim.new(1, 0))
+			end
 			local entry = {
+				DescLabel = descLabel,
+				TeamDot = teamDot,
 				Option = nil,
 				Frame = row,
 				Box = box,
@@ -3537,6 +3574,15 @@ local Library = (function()
 						local inset = width > 0 and width + 8 or 0
 						entry.Label.Position = UDim2.fromOffset((multi and 36 or 14) + inset, 0)
 						entry.Label.Size = UDim2.new(1, (multi and -44 or -46) - inset, 1, 0)
+					end
+					if detailsOf then
+						local detail = detailsOf(option) or {}
+						entry.Label.Position = UDim2.fromOffset(14, 4)
+						entry.Label.Size = UDim2.new(1, -38, 0, 18)
+						entry.Label.TextColor3 = Theme.Text
+						entry.DescLabel.Text = tostring(detail.Desc or "")
+							.. (detail.TeamName and (" · " .. detail.TeamName) or "")
+						entry.TeamDot.BackgroundColor3 = detail.TeamColor or Theme.Muted
 					end
 					entry.Frame.Visible = true
 				end
@@ -5903,6 +5949,7 @@ local Library = (function()
 		self._introDone = false
 
 		table.insert(Library.Windows, self)
+		Library:_installCursorLease()
 
 		if opts.Home ~= false then
 			self:_buildHome(type(opts.Home) == "table" and opts.Home or {})
@@ -7780,6 +7827,58 @@ local Library = (function()
 	end
 
 	-- Nearest centre that keeps the whole window inside the viewport.
+	function Library:ReleasePointer()
+		self._pointerOwner = nil
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		UserInputService.MouseIconEnabled = true
+	end
+	function Library:_installCursorLease()
+		if self._cursorLeaseInstalled then
+			return
+		end
+		self._cursorLeaseInstalled = true
+		local holding = false
+		RunService:BindToRenderStep("MacrOSCursorLease", Enum.RenderPriority.Camera.Value + 1, function()
+			local visible = false
+			for _, w in ipairs(Library.Windows) do
+				local active = not w._destroyed and w.Open and not w.Minimized and w.Root.Visible and w.Gui.Enabled
+				if w._cursorGate then
+					w._cursorGate.Modal = active
+					w._cursorGate.Visible = active
+				end
+				if active then
+					visible = true
+				end
+			end
+			if visible then
+				if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+					UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+				end
+				UserInputService.MouseIconEnabled = true
+			elseif holding then
+				Library:ReleasePointer()
+			end
+			holding = visible
+			if #Library.Windows == 0 then
+				RunService:UnbindFromRenderStep("MacrOSCursorLease")
+				Library._cursorLeaseInstalled = false
+			end
+		end)
+	end
+	function Window:Center()
+		if self._destroyed then
+			return
+		end
+		if self._clampTween then
+			self._clampTween:Cancel()
+		end
+		local viewport = self:_viewport()
+		local centre = self:_clampedCentre(Vector2.new(viewport.X / 2, viewport.Y / 2))
+		self.Root.AnchorPoint = Vector2.new(0.5, 0.5)
+		self.Root.Position = UDim2.fromOffset(centre.X, centre.Y)
+		Library:ReleasePointer()
+	end
+
 	function Window:_clampedCentre(centre)
 		local viewport = self:_viewport()
 		if viewport.X <= 1 or viewport.Y <= 1 then
@@ -22988,6 +23087,7 @@ local Library = (function()
 			return
 		end
 		self.Minimized = true
+		Library:ReleasePointer()
 		if self._cursorGate then
 			self._cursorGate.Visible = false
 		end
@@ -23939,7 +24039,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 13
+			Library.MacrOSRevision = 14
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -24573,6 +24673,14 @@ local Library = (function()
 						end
 					end
 					function Icons.isFlatOnly(row, text, category)
+						if
+							type(row) == "table"
+							and row.IconContext == "GiveItems"
+							and tostring(row.Value):match("^Chest")
+							and row.Icons3D ~= false
+						then
+							return false
+						end
 						local name = text
 						local asset
 						if type(row) == "table" then
@@ -24595,6 +24703,17 @@ local Library = (function()
 					end
 
 					function Icons.resolveModel(keyOrValue, text, iconName, plain)
+						if
+							plain ~= true
+							and type(keyOrValue) == "table"
+							and keyOrValue.IconContext == "GiveItems"
+							and keyOrValue.Icons3D ~= false
+						then
+							local chest = keyOrValue.Value
+							if type(chest) == "string" and chest:match("^Chest") then
+								return partsModel(chest) or iconModel(keyOrValue.Icon)
+							end
+						end
 						if
 							plain == true
 							or Icons.isFlatOnly(keyOrValue, text)
