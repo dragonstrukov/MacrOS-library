@@ -5992,6 +5992,10 @@ local Library = (function()
 			loading = true
 		end
 		if opts.StartHidden then
+			self._bodyAlpha = 0
+			self._fader.GroupTransparency = 0
+			self.Body.Parent = self.Root
+			self._fader.Visible = false
 			self._introDone = true
 			self.Open = false
 			self._cursorGate.Visible = false
@@ -23149,6 +23153,9 @@ local Library = (function()
 			return
 		end
 		self.Open = open
+		if open and self._bodyAlpha ~= 0 then
+			self:_fade(0, 0)
+		end
 		if self._cursorGate then
 			self._cursorGate.Visible = open
 		end
@@ -23634,6 +23641,142 @@ local Library = (function()
 			end
 			Window.ControlHost = guarded(Window.ControlHost)
 
+			function Window:PowerSavePanel(opts)
+				opts = opts or {}
+				local owner = self
+				local gui = create("ScreenGui", {
+					Name = "AirFlowPowerSave",
+					IgnoreGuiInset = true,
+					ResetOnSpawn = false,
+					DisplayOrder = 880,
+					Enabled = false,
+					ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+					Parent = self.Gui.Parent,
+				})
+				local background = create("Frame", {
+					Size = UDim2.fromScale(1, 1),
+					BackgroundColor3 = Theme.Background,
+					BorderSizePixel = 0,
+					Parent = gui,
+				})
+				local card = create("Frame", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.fromOffset(380, 210),
+					BackgroundColor3 = Theme.Surface2,
+					BorderSizePixel = 0,
+					Parent = background,
+				})
+				corner(card, UDim.new(0, 10))
+				stroke(card, Theme.Stroke)
+				local scale = create("UIScale", { Parent = card })
+				local function fit()
+					scale.Scale = math.min(
+						1,
+						math.max(0.2, (gui.AbsoluteSize.X - 24) / 380),
+						math.max(0.2, (gui.AbsoluteSize.Y - 24) / 210)
+					)
+				end
+				local fitConnection = gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+				fit()
+				local title = label({
+					Position = UDim2.fromOffset(20, 18),
+					Size = UDim2.new(1, -40, 0, 40),
+					FontFace = Fonts.Bold,
+					TextSize = 15,
+					TextWrapped = true,
+					Parent = card,
+				})
+				local body = label({
+					Position = UDim2.fromOffset(20, 64),
+					Size = UDim2.new(1, -40, 0, 78),
+					FontFace = Fonts.Regular,
+					TextSize = 13,
+					TextWrapped = true,
+					TextColor3 = Theme.Muted,
+					Parent = card,
+				})
+				local handle = { Gui = gui, Enabled = false, Destroyed = false }
+				local stats
+				local function tr(text)
+					if type(opts.Translate) == "function" then
+						return opts.Translate(text)
+					end
+					return text
+				end
+				local button, buttonText = softButton(
+					card,
+					"",
+					{ Position = UDim2.new(0, 20, 1, -54), Size = UDim2.new(1, -40, 0, 36) },
+					function()
+						handle:SetEnabled(false)
+						if type(opts.OnResume) == "function" then
+							opts.OnResume()
+						end
+					end
+				)
+				function handle:RefreshText()
+					if self.Destroyed then
+						return
+					end
+					title.Text = tr("MacrOS Power Save (3D Off)")
+					body.Text = tr("3D rendering is paused to save GPU/battery.")
+					if stats then
+						body.Text = body.Text
+							.. "\n"
+							.. string.format(
+								tr("Session Gold: +%s | Balance: %s | Runs: %d"),
+								tostring(stats[1]),
+								tostring(stats[2]),
+								stats[3]
+							)
+					end
+					buttonText.Text = tr("Resume 3D Rendering")
+				end
+				function handle:SetStats(gold, balance, runs)
+					stats = { gold, balance, tonumber(runs) or 0 }
+					self:RefreshText()
+				end
+				function handle:SetEnabled(value)
+					if self.Destroyed then
+						return false
+					end
+					value = value == true
+					if self.Enabled ~= value then
+						local ok, err = pcall(RunService.Set3dRenderingEnabled, RunService, not value)
+						if not ok then
+							warn("[AirFlow] rendering toggle: " .. tostring(err))
+							return false
+						end
+					end
+					self.Enabled = value
+					gui.Enabled = value
+					if value then
+						self:RefreshText()
+						fit()
+					end
+					return true
+				end
+				function handle:Destroy()
+					if self.Destroyed then
+						return
+					end
+					if self.Enabled then
+						pcall(RunService.Set3dRenderingEnabled, RunService, true)
+					end
+					self.Enabled = false
+					self.Destroyed = true
+					fitConnection:Disconnect()
+					gui:Destroy()
+				end
+				owner.Gui.Destroying:Connect(function()
+					handle:Destroy()
+				end)
+				handle:RefreshText()
+				return handle
+			end
+			Window.PowerSavePanel = guarded(Window.PowerSavePanel)
+
 			Library.ApplyIcon = guarded(applyIcon)
 			Library.StyleCorner = guarded(function(parent, radius)
 				return corner(parent, UDim.new(0, radius or 8))
@@ -23700,7 +23843,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 9
+			Library.MacrOSRevision = 10
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
