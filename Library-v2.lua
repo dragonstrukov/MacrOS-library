@@ -1832,7 +1832,7 @@ local Library = (function()
 		handle.Distance = (prepared.Radius / math.sin(math.rad(handle.Config.FOV) / 2))
 			* handle.Config.Padding
 			/ math.max(handle.Config.Zoom, 0.05)
-		if prepared.Distance and not handle.Config.FitRadius then
+		if prepared.Distance then
 			handle.Distance = prepared.Distance / math.max(handle.Config.Zoom, 0.05)
 		end
 		handle.Frame.Visible = true
@@ -24069,7 +24069,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 18
+			Library.MacrOSRevision = 17
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -24100,9 +24100,7 @@ local Library = (function()
 					local PARTS_DIR = "BuildingParts"
 					local REF_FOV = 30
 					local MARGIN = 1.12
-					local VIEW = (CFrame.Angles(0, math.rad(-35), 0) * CFrame.Angles(math.rad(-25), 0, 0)):VectorToWorldSpace(
-						Vector3.new(0, 0, 1)
-					)
+					local VIEW = Vector3.new(2.2, 1.7, 2.6)
 					local SPEED = 0.4
 					local MIN_SLOT = 4
 					local MAX_SLOT = 64
@@ -24452,15 +24450,15 @@ local Library = (function()
 
 						local fovRad = math.rad(Icons.cfg.fov or 50)
 						local distance = (size.Magnitude * 0.5) / math.tan(fovRad / 2) * 1.05
-						return clone, distance, math.max(size.Magnitude * 0.5, 0.05)
+						return clone, distance
 					end
 
 					Library._icon3D.PrepareProvider = function(model)
-						local clone, distance, radius = prepare(model)
+						local clone, distance = prepare(model)
 						if not clone then
 							return nil
 						end
-						return { Template = clone, Center = Vector3.zero, Radius = radius, Distance = distance }
+						return { Template = clone, Center = Vector3.zero, Radius = 1, Distance = distance }
 					end
 					local function partsFolder()
 						local ok, folder = pcall(function()
