@@ -1832,7 +1832,7 @@ local Library = (function()
 		handle.Distance = (prepared.Radius / math.sin(math.rad(handle.Config.FOV) / 2))
 			* handle.Config.Padding
 			/ math.max(handle.Config.Zoom, 0.05)
-		if prepared.Distance then
+		if prepared.Distance and not handle.Config.FitRadius then
 			handle.Distance = prepared.Distance / math.max(handle.Config.Zoom, 0.05)
 		end
 		handle.Frame.Visible = true
@@ -4051,8 +4051,12 @@ local Library = (function()
 				self.Window._consumedKey = input.KeyCode
 				self.Window._consumedAt = os.clock()
 				if input.KeyCode == Enum.KeyCode.Escape then
-					self_.Listening = false
-					render()
+					if opts.ClearOnEscape then
+						self_:Set(nil)
+					else
+						self_.Listening = false
+						render()
+					end
 				else
 					self_:Set(input.KeyCode)
 				end
@@ -5462,6 +5466,7 @@ local Library = (function()
 		}, Window)
 		local saving = type(opts.ConfigurationSaving) == "table" and opts.ConfigurationSaving or {}
 		self.ConfigFolder = saving.FolderName or "MacrOS/UI/config"
+		self.ThemeFolder = opts.ThemeFolder
 		-- Re-executing the script unloads the copy it left behind first, so the
 		-- old toggles stop before the new autoload starts them again.
 		self._registryKey = "AirFlow:" .. tostring(self.ConfigFolder) .. ":" .. tostring(opts.Title or "Airflow")
@@ -9543,7 +9548,7 @@ local Library = (function()
 	end
 
 	local function themeFolder(self)
-		return self.ConfigFolder .. "/themes"
+		return self.ThemeFolder or self.ConfigFolder .. "/themes"
 	end
 
 	function Window:SaveTheme(name)
@@ -24064,7 +24069,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 16
+			Library.MacrOSRevision = 18
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -24095,7 +24100,9 @@ local Library = (function()
 					local PARTS_DIR = "BuildingParts"
 					local REF_FOV = 30
 					local MARGIN = 1.12
-					local VIEW = Vector3.new(2.2, 1.7, 2.6)
+					local VIEW = (CFrame.Angles(0, math.rad(-35), 0) * CFrame.Angles(math.rad(-25), 0, 0)):VectorToWorldSpace(
+						Vector3.new(0, 0, 1)
+					)
 					local SPEED = 0.4
 					local MIN_SLOT = 4
 					local MAX_SLOT = 64
@@ -24445,15 +24452,15 @@ local Library = (function()
 
 						local fovRad = math.rad(Icons.cfg.fov or 50)
 						local distance = (size.Magnitude * 0.5) / math.tan(fovRad / 2) * 1.05
-						return clone, distance
+						return clone, distance, math.max(size.Magnitude * 0.5, 0.05)
 					end
 
 					Library._icon3D.PrepareProvider = function(model)
-						local clone, distance = prepare(model)
+						local clone, distance, radius = prepare(model)
 						if not clone then
 							return nil
 						end
-						return { Template = clone, Center = Vector3.zero, Radius = 1, Distance = distance }
+						return { Template = clone, Center = Vector3.zero, Radius = radius, Distance = distance }
 					end
 					local function partsFolder()
 						local ok, folder = pcall(function()
@@ -25681,7 +25688,7 @@ local Library = (function()
 			{ id = "discord", text = "discord.gg/4arUqucss" },
 			{ id = "telegram", text = "t.me/MacrOS_rbx" },
 		}
-		local VERSION = cfg.Version or "v2.7"
+		local VERSION = cfg.Version or "v1.1"
 
 		local TEXT = {
 			en = {
@@ -26969,37 +26976,24 @@ local Library = (function()
 			end)
 		end
 
-		local function glyphBox(parent, colour)
-			-- lucide "box", drawn from three plates and centred in a 44 px tile
-			local lid = new("Frame", {
-				Name = "Lid",
-				Position = UDim2.fromOffset(11, 12),
-				Size = UDim2.fromOffset(22, 7),
-				BackgroundColor3 = colour,
-				BorderSizePixel = 0,
-				Parent = parent,
-			})
-			corner(lid, 2)
-			local box = new("Frame", {
-				Name = "Box",
-				Position = UDim2.fromOffset(12.5, 19.5),
-				Size = UDim2.fromOffset(19, 12.5),
-				BackgroundColor3 = colour,
-				BorderSizePixel = 0,
-				Parent = parent,
-			})
-			corner(box, 3)
-			-- the notch reads as a cut in the body and keeps the tile colour
-			local notch = new("Frame", {
-				Name = "Notch",
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.4),
-				Size = UDim2.fromOffset(6, 2.2),
-				BackgroundColor3 = C.background,
-				BorderSizePixel = 0,
-				Parent = box,
-			})
-			corner(notch, 1)
+		local function glyphCheck(parent, colour)
+			-- Stable build: a clean check, centered inside the existing 44 px tile.
+			for _, segment in ipairs({
+				{ Name = "CheckShort", X = 16.5, Y = 24.5, Length = 10, Angle = 45 },
+				{ Name = "CheckLong", X = 25, Y = 22, Length = 17, Angle = -45 },
+			}) do
+				local line = new("Frame", {
+					Name = segment.Name,
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromOffset(segment.X, segment.Y),
+					Size = UDim2.fromOffset(segment.Length, 3),
+					Rotation = segment.Angle,
+					BackgroundColor3 = colour,
+					BorderSizePixel = 0,
+					Parent = parent,
+				})
+				corner(line, 1.5)
+			end
 		end
 
 		local function glyphSpark(parent, colour)
@@ -27290,7 +27284,7 @@ local Library = (function()
 				if opts.icon == "spark" then
 					glyphSpark(tile, glyphColour)
 				else
-					glyphBox(tile, glyphColour)
+					glyphCheck(tile, glyphColour)
 				end
 				local glyph = {}
 				for _, child in ipairs(tile:GetChildren()) do
@@ -27477,7 +27471,7 @@ local Library = (function()
 			local mainEntry = makeCard("CardMain", 24, {
 				title = T.main,
 				desc = T.mainDesc,
-				icon = "box",
+				icon = "check",
 				badge = T.badge,
 				cta = T.cta,
 				accent = true,
@@ -27895,6 +27889,565 @@ local Library = (function()
 		end)
 
 		return ui
+	end
+
+	-- Compatibility surface for the existing Life in Prison runtime.
+	-- It changes UI contracts only; targeting, hooks and visuals remain in the client script.
+	function Library:CreateLIPWindow(opts)
+		opts = opts or {}
+		local function keyCode(value)
+			if typeof(value) == "EnumItem" then
+				return value ~= Enum.KeyCode.Unknown and value or nil
+			end
+			if value == nil or value == "" or value == "None" or value == "Unknown" then
+				return nil
+			end
+			local ok, key = pcall(function()
+				return Enum.KeyCode[tostring(value)]
+			end)
+			return ok and key or nil
+		end
+		local function keyText(value)
+			local key = keyCode(value)
+			return key and key.Name or "None"
+		end
+		local native = self:CreateWindow({
+			Name = opts.Name or "MacrOS",
+			LoadingTitle = "MacrOS",
+			LoadingSubtitle = "Life in Prison",
+			Version = opts.Version or "v1.1",
+			ToggleUIKeybind = keyCode(opts.ToggleKey),
+			ThemeFolder = "MacrOS/UI/themes",
+			ConfigurationSaving = { Enabled = false, FolderName = "MacrOS/UI" },
+			Home = { Name = "Home", GameName = "Life in Prison" },
+			ToggleButton = false,
+		})
+		native:SetVersionBadge(opts.Version or "v1.1")
+		local w = { ScreenGui = native.Gui, Native = native, Tabs = {}, Flags = {}, _keyRows = {} }
+		local overlay = { Visible = true, HideUnbound = false, ShowToggleKey = true }
+		local panel = create(
+			"Frame",
+			{
+				Name = "LifeInPrisonKeybinds",
+				Position = UDim2.fromOffset(24, 220),
+				Size = UDim2.fromOffset(226, 40),
+				BackgroundColor3 = Theme.Surface,
+				BorderSizePixel = 0,
+				Parent = native.Gui,
+			}
+		)
+		corner(panel, UDim.new(0, 8))
+		stroke(panel, Theme.Stroke)
+		bindColors(panel, { BackgroundColor3 = Theme.Surface })
+		local header = label({
+			Position = UDim2.fromOffset(12, 0),
+			Size = UDim2.new(1, -24, 0, 32),
+			Text = "Keybinds",
+			TextSize = 13,
+			Parent = panel,
+		})
+		header.Active = true
+		local function paintOverlay()
+			local y = 34
+			for _, entry in ipairs(w._keyRows) do
+				local show = (not entry.Menu or overlay.ShowToggleKey)
+					and (not overlay.HideUnbound or entry.Key ~= "None")
+				entry.Frame.Visible = show
+				if show then
+					entry.Frame.Position = UDim2.fromOffset(10, y)
+					entry.NameLabel.Text = entry.Title
+					entry.KeyLabel.Text = entry.Key
+					entry.Dot.BackgroundColor3 = entry.Active and Theme.Success or Theme.Muted
+					entry.Dot.BackgroundTransparency = entry.Active and 0 or 0.55
+					y += 24
+				end
+			end
+			panel.Size = UDim2.fromOffset(226, math.max(40, y + 6))
+			panel.Visible = overlay.Visible
+		end
+		onTheme(panel, paintOverlay)
+		local function keyEntry(id, title, key, menu)
+			local entry = w._keyRows[id]
+			if not entry then
+				local row =
+					create("Frame", { Size = UDim2.new(1, -20, 0, 22), BackgroundTransparency = 1, Parent = panel })
+				local dot = create(
+					"Frame",
+					{ Position = UDim2.new(0, 0, 0.5, -3), Size = UDim2.fromOffset(6, 6), BorderSizePixel = 0, Parent = row }
+				)
+				corner(dot, UDim.new(1, 0))
+				entry = {
+					Frame = row,
+					Dot = dot,
+					NameLabel = label({
+						Position = UDim2.fromOffset(14, 0),
+						Size = UDim2.new(1, -86, 1, 0),
+						TextSize = 12,
+						Text = "",
+						Parent = row,
+					}),
+					KeyLabel = label({
+						AnchorPoint = Vector2.new(1, 0),
+						Position = UDim2.fromScale(1, 0),
+						Size = UDim2.fromOffset(72, 22),
+						TextSize = 11,
+						TextColor3 = Theme.Muted,
+						TextXAlignment = Enum.TextXAlignment.Right,
+						Text = "",
+						Parent = row,
+					}),
+				}
+				w._keyRows[id] = entry
+				table.insert(w._keyRows, entry)
+			end
+			entry.Title = title
+			entry.Key = keyText(key)
+			entry.Menu = menu
+			paintOverlay()
+			return entry
+		end
+		function overlay:SetVisible(value)
+			self.Visible = value == true
+			paintOverlay()
+		end
+		function overlay:Configure(config)
+			for _, k in ipairs({ "Visible", "HideUnbound", "ShowToggleKey" }) do
+				if config[k] ~= nil then
+					self[k] = config[k] == true
+				end
+			end
+			paintOverlay()
+		end
+		function overlay:SetActive(id, value)
+			local e = w._keyRows[id]
+			if e then
+				e.Active = value == true
+				paintOverlay()
+			end
+		end
+		function w:CreateKeybindList(config)
+			overlay:Configure(config or {})
+			return overlay
+		end
+		local dragInput, dragStart, dragOrigin
+		table.insert(
+			native._connections,
+			header.InputBegan:Connect(function(input)
+				if
+					input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch
+				then
+					dragInput = input
+					dragStart = Vector2.new(input.Position.X, input.Position.Y)
+					dragOrigin = panel.AbsolutePosition - native.Gui.AbsolutePosition
+				end
+			end)
+		)
+		table.insert(
+			native._connections,
+			UserInputService.InputChanged:Connect(function(input)
+				if dragInput and (input == dragInput or input.UserInputType == Enum.UserInputType.MouseMovement) then
+					local pos = dragOrigin + Vector2.new(input.Position.X, input.Position.Y) - dragStart
+					local view = native.Gui.AbsoluteSize
+					panel.Position = UDim2.fromOffset(
+						math.clamp(pos.X, 0, math.max(0, view.X - 226)),
+						math.clamp(pos.Y, 0, math.max(0, view.Y - 32))
+					)
+				end
+			end)
+		)
+		table.insert(
+			native._connections,
+			UserInputService.InputEnded:Connect(function(input)
+				if input == dragInput or input.UserInputType == Enum.UserInputType.MouseButton1 then
+					dragInput = nil
+				end
+			end)
+		)
+		local function legacyHandle(control, kind, cfg, options, updateOptions)
+			local h = { Native = control }
+			local function valueOf(value)
+				if kind == "Keybind" then
+					return keyText(value)
+				end
+				return value
+			end
+			h.Set = function(value, silent)
+				if kind == "Keybind" then
+					value = keyCode(value)
+				end
+				control:Set(value, silent)
+			end
+			h.Get = function()
+				return valueOf(control:Get())
+			end
+			h.Refresh = function(values, selected)
+				options = values or options
+				updateOptions(options)
+				control:SetOptions(options, { KeepSelection = true, Silent = true })
+				if kind == "MultiDropdown" and type(selected) == "table" then
+					local chosen = {}
+					for i, value in ipairs(options) do
+						if selected[value] or selected[i] then
+							chosen[#chosen + 1] = value
+						end
+					end
+					control:Set(chosen, true)
+				elseif selected ~= nil then
+					control:Set(selected, true)
+				end
+			end
+			h.SetVisible = function(value)
+				if control.SetVisible then
+					control:SetVisible(value)
+				end
+			end
+			h.Destroy = function()
+				control:Destroy()
+			end
+			return h
+		end
+		local function sectionFacade(group)
+			local section = { Native = group }
+			function section:SetOpen(value)
+				group:SetCollapsed(not value)
+			end
+			function section:GetOpen()
+				return not group:IsCollapsed()
+			end
+			function section:CreateLabel(value)
+				return group:Paragraph({ Name = tostring(value), TextSize = 12 })
+			end
+			function section:CreateDivider()
+				return group:Divider()
+			end
+			function section:CreateButton(cfg)
+				return group:Button({ Name = cfg.Name or cfg.Text, Desc = cfg.Description or cfg.Desc, Callback = cfg.Callback })
+			end
+			function section:CreateButtonRow(cfg)
+				local buttons = {}
+				for i, item in ipairs(cfg.Buttons or {}) do
+					buttons[i] = { Name = item.Text or item.Name, Callback = item.Callback, Icon = item.Icon }
+				end
+				return group:ButtonRow({ Name = cfg.Name, Buttons = buttons })
+			end
+			for _, kind in ipairs({ "Toggle", "Slider", "Dropdown", "MultiDropdown", "Input", "Keybind", "ColorPicker" }) do
+				section["Create" .. kind] = function(_, cfg)
+					cfg = cfg or {}
+					local options = cfg.Options or {}
+					local function changed(value)
+						if kind == "Keybind" then
+							value = keyText(value)
+							if cfg.Overlay ~= false then
+								keyEntry(cfg.Flag or cfg.Name, cfg.OverlayName or cfg.Name, value, false)
+							end
+						end
+						w.Flags[cfg.Flag or cfg.Name] = value
+						if cfg.Callback then
+							if kind == "MultiDropdown" then
+								local chosen = {}
+								for _, v in ipairs(value or {}) do
+									chosen[v] = true
+								end
+								local states = {}
+								for i, v in ipairs(options) do
+									states[i] = chosen[v] == true
+								end
+								cfg.Callback(options, states)
+							else
+								cfg.Callback(value)
+							end
+						end
+					end
+					local args = {
+						Name = cfg.Name,
+						Desc = cfg.Description or cfg.Desc,
+						Default = cfg.Default,
+						Flag = nil,
+						Callback = changed,
+					}
+					local constructor = kind
+					if kind == "Slider" then
+						args.Min = cfg.Min
+						args.Max = cfg.Max
+						args.Step = 10 ^ -(cfg.Decimals or 0)
+					elseif kind == "Dropdown" or kind == "MultiDropdown" then
+						constructor = "Dropdown"
+						args.Options = options
+						args.Multi = kind == "MultiDropdown"
+						args.AllowNone = args.Multi
+						args.Searchable = true
+					elseif kind == "Input" then
+						args.Placeholder = cfg.Placeholder
+					elseif kind == "Keybind" then
+						args.Default = keyCode(cfg.Default)
+						args.Callback = nil
+						args.OnChanged = changed
+						args.ClearOnEscape = true
+						if cfg.Overlay ~= false then
+							keyEntry(cfg.Flag or cfg.Name, cfg.OverlayName or cfg.Name, cfg.Default, false)
+						end
+					end
+					local control = group[constructor](group, args)
+					return legacyHandle(control, kind, cfg, options, function(values)
+						options = values
+					end)
+				end
+			end
+			return section
+		end
+		local category
+		local sidebarOrder = #native.Tabs
+		function w:CreateCategory(title)
+			if type(title) == "table" then
+				title = title.Name or title.Title
+			end
+			local c = { Tabs = {}, Collapsed = false }
+			sidebarOrder += 1
+			local button = create(
+				"TextButton",
+				{
+					Size = UDim2.new(1, 0, 0, 26),
+					LayoutOrder = sidebarOrder,
+					BackgroundTransparency = 1,
+					Text = "",
+					AutoButtonColor = false,
+					Parent = native._tabStack,
+				}
+			)
+			local text = label({
+				Position = UDim2.fromOffset(10, 0),
+				Size = UDim2.new(1, -20, 1, 0),
+				Text = tostring(title),
+				TextSize = 11,
+				TextColor3 = Theme.Muted,
+				Parent = button,
+			})
+			local function refresh()
+				text.Text = (c.Collapsed and "+ " or "− ") .. tostring(title)
+				for _, tab in ipairs(c.Tabs) do
+					tab._button.Visible = not c.Collapsed
+				end
+			end
+			c.Collapse = function()
+				c.Collapsed = true
+				refresh()
+			end
+			c.Expand = function()
+				c.Collapsed = false
+				refresh()
+			end
+			c.IsCollapsed = function()
+				return c.Collapsed
+			end
+			table.insert(
+				native._connections,
+				button.MouseButton1Click:Connect(function()
+					c.Collapsed = not c.Collapsed
+					refresh()
+				end)
+			)
+			category = c
+			refresh()
+			return c
+		end
+		function w:CreateTab(name, icon)
+			local tab = native:Tab({ Name = name, Icon = icon })
+			sidebarOrder += 1
+			tab._button.LayoutOrder = sidebarOrder
+			if category then
+				table.insert(category.Tabs, tab)
+				tab._button.Visible = not category.Collapsed
+			end
+			local facade = { Name = name, Native = tab }
+			function facade:CreateSection(config)
+				return sectionFacade(
+					tab:Groupbox({ Name = config.Title or config.Name, Side = config.Column, PopOut = false })
+				)
+			end
+			function facade:Select()
+				native:SelectTab(tab)
+			end
+			w.Tabs[name] = facade
+			return facade
+		end
+		function w:MountThemeEditor(section)
+			section.Native:ThemeManager({ Name = "Appearance" })
+		end
+		function w:SetToggleKey(key)
+			native:SetKeybind(keyCode(key))
+			keyEntry("MenuKey", "Menu", key, true)
+		end
+		function w:SetAnonymous(value)
+			native:SetHideName(value)
+			native:SetHideAvatar(value)
+		end
+		function w:Center()
+			native:Center()
+		end
+		function w:Notify(config)
+			return native:Notify(config)
+		end
+		function w:Toggle(value)
+			native:Toggle(value)
+		end
+		function w:GetLayout()
+			local p = native.Root.Position
+			return {
+				NativeV2 = true,
+				XScale = p.X.Scale,
+				XOffset = p.X.Offset,
+				YScale = p.Y.Scale,
+				YOffset = p.Y.Offset,
+				Scale = native:GetUIScale(),
+				Width = native.Root.Size.X.Offset,
+				Height = native.Root.Size.Y.Offset,
+				Tab = native.CurrentTab and native.CurrentTab.Name,
+				KeybindX = panel.Position.X.Offset,
+				KeybindY = panel.Position.Y.Offset,
+			}
+		end
+		function w:ApplyLayout(layout)
+			if type(layout) ~= "table" then
+				return
+			end
+			local function num(v, default, lo, hi)
+				return type(v) == "number" and v == v and math.abs(v) < math.huge and math.clamp(v, lo, hi) or default
+			end
+			local width = num(layout.Width, 790, 400, 2000)
+			local height = num(layout.Height, 490, 260, 1500)
+			native.Root.Size = UDim2.fromOffset(width, height)
+			native:SetUIScale(num(layout.Scale, 1, 0.6, 1.5))
+			local x = num(layout.XOffset, 0, -4000, 4000)
+			local y = num(layout.YOffset, 0, -4000, 4000)
+			if not layout.NativeV2 then
+				x += width * native.Scale.Scale / 2
+				y += height * native.Scale.Scale / 2
+			end
+			native.Root.Position = UDim2.new(num(layout.XScale, 0.5, 0, 1), x, num(layout.YScale, 0.5, 0, 1), y)
+			native:_clampToScreen()
+			panel.Position = UDim2.fromOffset(
+				num(layout.KeybindX, 24, 0, math.max(0, native.Gui.AbsoluteSize.X - 226)),
+				num(layout.KeybindY, 220, 0, math.max(0, native.Gui.AbsoluteSize.Y - 32))
+			)
+		end
+		function w:FinishStartupBuild() end
+		function w:Destroy()
+			native:Destroy()
+		end
+		w:SetToggleKey(opts.ToggleKey)
+		function w:CreateFastVisuals()
+			local fast = {}
+			function fast.SetVisual(node, key, value)
+				if node[key] ~= value then
+					node[key] = value
+				end
+			end
+			function fast.Rect(item, x, y, w, h, color, visible)
+				local node = item.Node
+				if not visible or w <= 0 or h <= 0 then
+					if node.Visible then
+						node.Visible = false
+					end
+					return
+				end
+				fast.SetVisual(node, "Position", UDim2.fromOffset(x, y))
+				fast.SetVisual(node, "Size", UDim2.fromOffset(w, h))
+				if item.Stroke then
+					fast.SetVisual(item.Stroke, "Color", color)
+				else
+					fast.SetVisual(node, "BackgroundTransparency", 0)
+					fast.SetVisual(node, "BackgroundColor3", color)
+				end
+				if not node.Visible then
+					node.Visible = true
+				end
+			end
+			function fast.Text(item, x, y, value, color, visible)
+				if item.Node.Visible ~= visible then
+					item.Node.Visible = visible
+				end
+				if not visible then
+					return
+				end
+				fast.SetVisual(item.Node, "Position", UDim2.fromOffset(x, y))
+				fast.SetVisual(item.Node, "Text", value)
+				fast.SetVisual(item.Node, "TextColor3", color)
+			end
+			function fast.Bounds(character, camera, withCorners)
+				local ok, cf, size = pcall(character.GetBoundingBox, character)
+				if not ok then
+					return nil
+				end
+				local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
+				local front = 0
+				local corners = withCorners and {} or nil
+				for x = -1, 1, 2 do
+					for y = -1, 1, 2 do
+						for z = -1, 1, 2 do
+							local point = camera:WorldToViewportPoint(
+								cf:PointToWorldSpace(Vector3.new(size.X * x / 2, size.Y * y / 2, size.Z * z / 2))
+							)
+							if point.Z <= 0.05 then
+								return nil
+							end -- reject near-plane crossings, not giant screen boxes
+							if corners then
+								corners[#corners + 1] = Vector2.new(point.X, point.Y)
+							end
+							front += 1
+							minX = math.min(minX, point.X)
+							minY = math.min(minY, point.Y)
+							maxX = math.max(maxX, point.X)
+							maxY = math.max(maxY, point.Y)
+						end
+					end
+				end
+				local view = camera.ViewportSize
+				if front == 0 or maxX < 0 or maxY < 0 or minX > view.X or minY > view.Y then
+					return nil
+				end
+				return minX, minY, maxX - minX, maxY - minY, corners
+			end
+			function fast.HideESP(self, esp)
+				for _, item in pairs(esp) do
+					if type(item) == "table" and item.Node and item.Node.Visible then
+						item.Node.Visible = false
+					end
+				end
+			end
+			function fast.RenderBox3D(self, esp, corners, color, visible)
+				if not visible and not esp.BoxEdge1 then
+					return
+				end
+				for i, edge in ipairs(self.BoxEdges) do
+					local key = self.BoxEdgeKeys[i]
+					local line = esp[key]
+					if not visible or not corners then
+						if line and line.Node.Visible then
+							line.Node.Visible = false
+						end
+						continue
+					end
+					if not line then
+						line = self:Primitive("Fill", esp.Container)
+						line.Node.AnchorPoint = Vector2.new(0.5, 0.5)
+						line.Node.ZIndex = 2
+						esp[key] = line
+					end
+					local a, b = corners[edge[1]], corners[edge[2]]
+					local delta = b - a
+					local length = delta.Magnitude
+					if length < 0.1 then
+						line.Node.Visible = false
+						continue
+					end
+					self.Rect(line, (a.X + b.X) / 2, (a.Y + b.Y) / 2, length, 1.5, color, true)
+					self.SetVisual(line.Node, "Rotation", math.deg(math.atan2(delta.Y, delta.X)))
+				end
+			end
+			return fast
+		end
+		return w
 	end
 
 	return Library
