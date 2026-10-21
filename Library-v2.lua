@@ -3981,10 +3981,12 @@ local Library = (function()
 		end
 		local compact = metricsOf(self).Compact
 		local chipHeight = metricsOf(self).Chip
+		local resetWidth = opts.ShowResetButton and (TOUCH and 44 or 28) or 0
+		local resetSpace = resetWidth > 0 and (resetWidth + 6) or 0
 
 		local chip = create("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, compact and -14 or -10, 0.5, 0),
+			Position = UDim2.new(1, (compact and -14 or -10) - resetSpace, 0.5, 0),
 			Size = UDim2.fromOffset(44, chipHeight),
 			BackgroundColor3 = Theme.Surface,
 			BorderSizePixel = 0,
@@ -4008,7 +4010,7 @@ local Library = (function()
 
 		local function fitChip(instant)
 			local width = math.max(chipLabel.TextBounds.X + 20, TOUCH and 44 or 36)
-			reserveRight(titleLabel, descLabel, width + (compact and 24 or 20))
+			reserveRight(titleLabel, descLabel, width + resetSpace + (compact and 24 or 20))
 			if instant then
 				chip.Size = UDim2.fromOffset(width, chipHeight)
 			else
@@ -4036,6 +4038,30 @@ local Library = (function()
 			if not silent then
 				safeCall(opts.OnChanged, keyCode)
 			end
+		end
+
+		-- Opt-in clear button: uses the same change callback as rebinding.
+		if opts.ShowResetButton then
+			local reset = create("TextButton", {
+				Name = "ResetKeybind",
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, compact and -14 or -10, 0.5, 0),
+				Size = UDim2.fromOffset(resetWidth, chipHeight),
+				BackgroundColor3 = Theme.Surface,
+				BorderSizePixel = 0,
+				Text = "×",
+				TextSize = 20,
+				TextColor3 = Theme.Muted,
+				FontFace = Fonts.Medium,
+				AutoButtonColor = false,
+				Parent = frame,
+			})
+			corner(reset, UDim.new(0, 6))
+			local resetStroke = stroke(reset)
+			hoverStroke(reset, resetStroke)
+			reset.MouseButton1Click:Connect(function()
+				self_:Set(nil)
+			end)
 		end
 
 		chip.MouseButton1Click:Connect(function()
@@ -24069,7 +24095,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 18
+			Library.MacrOSRevision = 19
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28207,6 +28233,7 @@ local Library = (function()
 						args.Callback = nil
 						args.OnChanged = changed
 						args.ClearOnEscape = true
+						args.ShowResetButton = true
 						if cfg.Overlay ~= false then
 							keyEntry(cfg.Flag or cfg.Name, cfg.OverlayName or cfg.Name, cfg.Default, false)
 						end
