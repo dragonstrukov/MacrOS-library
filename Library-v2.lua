@@ -24095,7 +24095,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 19
+			Library.MacrOSRevision = 20
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -27952,7 +27952,7 @@ local Library = (function()
             Icon = logo,
 			LoadingTitle = "MacrOS",
 			LoadingSubtitle = "Life in Prison",
-			Version = opts.Version or "v1.1",
+			Version = "Life In Prison",
 			ToggleUIKeybind = keyCode(opts.ToggleKey),
 			ThemeFolder = "MacrOS/UI/themes",
 			ConfigurationSaving = { Enabled = false, FolderName = "MacrOS/UI" },
@@ -27971,7 +27971,7 @@ local Library = (function()
 			ToggleButton = false,
 		})
 		self:SetTheme({ Accent = Color3.fromRGB(128, 160, 246) }, true)
-        native:SetVersionBadge(opts.Version or "v1.1")
+        native:SetVersionBadge(opts.Version or "v1.2")
 		local w = { ScreenGui = native.Gui, Native = native, Tabs = {}, Flags = {}, _keyRows = {} }
 		local overlay = { Visible = true, HideUnbound = false, ShowToggleKey = true }
 		local panel = create(
