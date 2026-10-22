@@ -822,7 +822,7 @@ local Library = (function()
 	if not TOUCH and UserInputService.TouchEnabled then
 		local camera = workspace.CurrentCamera
 		local size = camera and camera.ViewportSize
-		if size and size.X and size.X > 0 and size.X < 1000 then
+		if size and size.X > 0 and size.Y > 0 and math.min(size.X, size.Y) < 850 then
 			TOUCH = true
 		end
 	end
@@ -3151,9 +3151,11 @@ local Library = (function()
 			local bodyHeight = host.AbsoluteSize.Y / scale
 			local chipTop = (chip.AbsolutePosition.Y - host.AbsolutePosition.Y) / scale
 			local room = math.max(bodyHeight - (chipTop + chip.AbsoluteSize.Y / scale) - 14, chipTop - 14) - top - 16
-			if room >= ROW then
-				listHeight = math.min(listHeight, room)
-			end
+            if room >= ROW then
+                listHeight = math.min(listHeight, room)
+            else
+                listHeight = math.min(listHeight, math.max(1, bodyHeight - top - 32))
+            end
 			list.Position = UDim2.fromOffset(0, top)
 			list.Size = UDim2.new(1, 0, 0, listHeight)
 			renderRows()
@@ -3211,7 +3213,7 @@ local Library = (function()
 				inner.Position = UDim2.fromScale(0, 1)
 			else
 				popup.AnchorPoint = Vector2.new(1, 0)
-				popup.Position = UDim2.fromOffset(right, below)
+				popup.Position = UDim2.fromOffset(right, math.clamp(below, 8, math.max(8, bodySize.Y - targetSize.Y - 8)))
 				inner.AnchorPoint = Vector2.zero
 				inner.Position = UDim2.fromScale(0, 0)
 			end
@@ -5467,7 +5469,9 @@ local Library = (function()
 		end
 		-- Phones get a smaller logical window: the same content at a higher
 		-- scale reads far better than a desktop-sized window shrunk to fit.
-		local size = opts.Size or (TOUCH and UDim2.fromOffset(640, 430) or UDim2.fromOffset(760, 520))
+		local cameraSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.zero
+        local tablet = TOUCH and cameraSize.X >= 900 and cameraSize.Y >= 720
+        local size = opts.Size or (TOUCH and not tablet and UDim2.fromOffset(640, 430) or UDim2.fromOffset(760, 520))
 		local keybind = opts.Keybind == false and Enum.KeyCode.Unknown or (opts.Keybind or Enum.KeyCode.RightControl)
 
 		local self = setmetatable({
@@ -5486,6 +5490,7 @@ local Library = (function()
 			_hideName = false,
 			_hideAvatar = false,
 			Title = opts.Title or "Airflow",
+            _compactMode = "Auto",
 			_logoIcon = opts.Icon or Assets.Logo,
 			_sessionStart = os.clock(),
 			_islandLocked = opts.IslandDraggable == false,
@@ -6780,26 +6785,28 @@ local Library = (function()
 		local divider = sidebar:FindFirstChild("Divider")
 		local want = width
 		local function apply(value, remember)
-			if remember ~= false then
-				want = value
-				if not self._compact then
+            if remember ~= false and not self._compact then
+                want = value
+                if not self._compact then
 					-- the width the player picked, kept apart from the compact rail
 					self._sidebarWanted = value
 				end
 			end
-			local room = self.Body.AbsoluteSize.X / self.Scale.Scale - 300
+			local room = self.Body.AbsoluteSize.X / math.max(self.Scale.Scale, 0.01) - 300
 			-- The compact rail is narrower than the normal floor, so the clamp
 			-- has to follow the mode instead of pinning 150.
 			local floorWidth = self._compact and COMPACT_WIDTH or 150
-			value = math.floor(math.clamp(value, floorWidth, math.max(math.min(320, room), floorWidth)))
+			value = self._compact and COMPACT_WIDTH
+                or math.floor(math.clamp(value, floorWidth, math.max(math.min(320, room), floorWidth)))
 			self.SidebarWidth = value
 			sidebar.Size = UDim2.new(0, value, 1, 0)
 			self.Content.Position = UDim2.fromOffset(value + 1, 0)
 			self.Content.Size = UDim2.new(1, -(value + 1), 1, 0)
 		end
-		self.SetSidebarWidth = function(_, value)
-			apply(tonumber(value) or SIDEBAR_WIDTH)
-		end
+        self.SetSidebarWidth = function(_, value)
+            apply(tonumber(value) or SIDEBAR_WIDTH)
+            if self._sidebarGrip then self._sidebarGrip.Visible = not self._compact end
+        end
 		apply(width)
 		local grip = create("TextButton", {
 			AnchorPoint = Vector2.new(1, 0),
@@ -6812,7 +6819,10 @@ local Library = (function()
 			Parent = sidebar,
 		})
 		grip:SetAttribute("NoDrag", true)
+        self._sidebarGrip = grip
+        grip.Visible = not self._compact
 		local dragging, startX, startWidth = false, 0, width
+        local activeInput
 		local function light(on)
 			if divider then
 				tween(divider, { BackgroundColor3 = on and Theme.Accent or Theme.Stroke }, 0.15)
@@ -6827,17 +6837,19 @@ local Library = (function()
 			end
 		end)
 		grip.InputBegan:Connect(function(input)
+            if self._compact or dragging then return end
 			if
 				input.UserInputType == Enum.UserInputType.MouseButton1
 				or input.UserInputType == Enum.UserInputType.Touch
 			then
 				dragging, startX, startWidth = true, input.Position.X, self.SidebarWidth
+                activeInput = input
 				want = startWidth
 				light(true)
 			end
 		end)
 		self:_listen("Changed", function(input)
-			if dragging and isMove(input) then
+			if dragging and isMove(input) and (input.UserInputType ~= Enum.UserInputType.Touch or input == activeInput) then
 				apply(startWidth + (input.Position.X - startX) / self.Scale.Scale)
 			end
 		end)
@@ -6846,7 +6858,7 @@ local Library = (function()
 				dragging
 				and (
 					input.UserInputType == Enum.UserInputType.MouseButton1
-					or input.UserInputType == Enum.UserInputType.Touch
+					or (input.UserInputType == Enum.UserInputType.Touch and input == activeInput)
 				)
 			then
 				dragging = false
@@ -6866,11 +6878,12 @@ local Library = (function()
 	-- just the avatar, and the page gets the rest of the window.
 	function Window:SetCompact(enabled)
 		enabled = enabled == true
-		if self._compact == enabled then
-			return
-		end
+        if self._compact == enabled then
+            if enabled and self.SetSidebarWidth then self:SetSidebarWidth(COMPACT_WIDTH) end
+            return
+        end
 		self._compact = enabled
-		if self._compactMode ~= "Auto" then
+		if self._compactMode ~= nil and self._compactMode ~= "Auto" then
 			self._compactManual = enabled
 		end
 		if self.SetSidebarWidth then
@@ -6954,7 +6967,9 @@ local Library = (function()
 		-- 320 px is not a real screen (it is what a freshly built ScreenGui
 		-- reports before the first frame), and must not flip the mode.
 		if width > 320 then
-			self:SetCompact(TOUCH or width < 900)
+			local logicalWidth = self.Root.Size.X.Offset
+            local needsTouchRail = TOUCH and ((viewport.Y or 0) < 720 or logicalWidth < 700)
+            self:SetCompact(width < 900 or needsTouchRail)
 		elseif TOUCH then
 			self:SetCompact(true)
 		end
@@ -7719,7 +7734,7 @@ local Library = (function()
 		local scale = math.min(wanted, roomX / math.max(size.X.Offset, 1), roomY / math.max(size.Y.Offset, 1))
 		-- 0.45 was a floor that made a big saved window spill off a small screen;
 		-- a phone has to be allowed to go lower before it is cut off.
-		self._fitScale = math.clamp(scale, TOUCH and 0.3 or 0.4, 1.75)
+		self._fitScale = math.clamp(scale, 0.01, 1.75)
 		self._inset = inset
 		if TOUCH and inset > 0 and not self._userMoved and self._introDone then
 			-- centred in the area below the top bar, not the raw screen
@@ -10151,7 +10166,7 @@ local Library = (function()
 			if width <= 0 then
 				return
 			end
-			local stacked = width < STACK_BELOW
+			local stacked = width < ((TOUCH and window._compact) and 620 or STACK_BELOW)
 			local gap = layout.Padding.Offset
 			if stacked == set.Stacked and gap == set.Gap then
 				return
@@ -24066,6 +24081,7 @@ local Library = (function()
 					sub.Position = UDim2.new(0, 56, 0.5, 3)
 				end
 				local function place()
+                    logo.Position = self._compact and UDim2.fromScale(0.5, 0.5) or UDim2.new(0, 14, 0.5, 0)
 					badge.Visible = title.Visible and tostring(value or "") ~= ""
 					badge.Position = UDim2.new(
 						0,
@@ -24095,7 +24111,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 20
+			Library.MacrOSRevision = 22
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -24203,6 +24219,7 @@ local Library = (function()
 						[2302342262] = "MiniGun",
 						[2413603467] = "Lamp",
 						[2413603938] = "Candle",
+                        [4079113414] = "JackOLantern",
 						[2417963634] = "GrassBlock",
 						[2418018500] = "SandBlock",
 						[2501530509] = "HalloweenThruster",
@@ -24394,8 +24411,18 @@ local Library = (function()
 						return tostring(text or ""):lower():gsub("[^%w]", "")
 					end
 
+                    local iconFraming = {
+                        frontwheelcookie=1.25, backwheelcookie=1.25,
+                        frontwheelmint=1.25, backwheelmint=1.25,
+                        hugefrontwheel=1.3, hugebackwheel=1.3, hugemotor=1.3,
+                        fireworka=1.3, fireworkb=1.3, fireworkc=1.3, fireworkd=1.3,
+                        harpoondragon=1.3, boxingglove=1.3, dragonegg=1.25, pinetree=1.3,
+                        bar=1.12, rope=1.12,
+                    }
 					local function prepare(model)
-						local clone = keepInstance(model:Clone())
+						local framingKey = key(model.Name)
+                        local framingScale = iconFraming[framingKey]
+                        local clone = keepInstance(model:Clone())
 						if clone:IsA("BasePart") then
 							local wrapper = Instance.new("Model")
 							clone.Parent = wrapper
@@ -24457,7 +24484,7 @@ local Library = (function()
 						local ppart = clone:FindFirstChild("PPart")
 						local box = clone:GetBoundingBox()
 						local size = clone:GetExtentsSize()
-						if ppart and ppart:IsA("BasePart") then
+						if not framingScale and ppart and ppart:IsA("BasePart") then
 							box = ppart.CFrame
 							if size.Magnitude > ppart.Size.Magnitude * 2.5 then
 								size = ppart.Size
@@ -24476,15 +24503,20 @@ local Library = (function()
 
 						local fovRad = math.rad(Icons.cfg.fov or 50)
 						local distance = (size.Magnitude * 0.5) / math.tan(fovRad / 2) * 1.05
-						return clone, distance
+						local centre = Vector3.zero
+                        if framingScale then distance = distance * framingScale end
+                        if framingKey == "bar" or framingKey == "rope" then
+                            centre = Vector3.new(0, size.Y * 0.06, 0)
+                        end
+                        return clone, distance, centre
 					end
 
 					Library._icon3D.PrepareProvider = function(model)
-						local clone, distance = prepare(model)
+						local clone, distance, centre = prepare(model)
 						if not clone then
 							return nil
 						end
-						return { Template = clone, Center = Vector3.zero, Radius = 1, Distance = distance }
+						return { Template = clone, Center = centre, Radius = 1, Distance = distance }
 					end
 					local function partsFolder()
 						local ok, folder = pcall(function()
@@ -24853,9 +24885,9 @@ local Library = (function()
 							return nil
 						end
 
-						local ok, clone, base = pcall(prepare, model)
+						local ok, clone, base, centre = pcall(prepare, model)
 						if ok and clone then
-							cached = { clone = clone, base = base }
+							cached = { clone = clone, base = base, centre = centre }
 							templates[cacheKey] = cached
 							return cached
 						end
@@ -25097,10 +25129,11 @@ local Library = (function()
 					local function frame(entry)
 						local zoom = math.max(Icons.cfg.zoom or 1.0, 1.0)
 						local direction = VIEW.Unit * (entry.base / zoom)
+                        local centre = entry.centre or Vector3.zero
 						local ok, look = pcall(function()
-							return CFrame.lookAt(direction, Vector3.new())
+							return CFrame.lookAt(centre + direction, centre)
 						end)
-						entry.camera.CFrame = if ok then look else CFrame.new(direction, Vector3.new())
+						entry.camera.CFrame = if ok then look else CFrame.new(centre + direction, centre)
 						entry.camera.FieldOfView = Icons.cfg.fov
 
 						entry.viewport.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -25179,6 +25212,7 @@ local Library = (function()
 							clone = clone,
 							camera = camera,
 							base = made.base,
+                            centre = made.centre,
 							hidden = hidden,
 							scope = scope,
 							live = true,
