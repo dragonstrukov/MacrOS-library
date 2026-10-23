@@ -732,6 +732,7 @@ local Library = (function()
 			return nil
 		end
 		local name = icon:gsub("^lucide:", "")
+        if name == "alert-triangle" then name = "triangle-alert" end
 		local set = loadLucide()
 		if not set then
 			return nil
@@ -24111,7 +24112,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 22
+			Library.MacrOSRevision = 23
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
