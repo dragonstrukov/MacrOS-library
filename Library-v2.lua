@@ -7910,10 +7910,10 @@ local Library = (function()
 		end
 		self._cursorLeaseInstalled = true
 		local holding = false
-		RunService:BindToRenderStep("MacrOSCursorLease", Enum.RenderPriority.Camera.Value + 1, function()
+		RunService:BindToRenderStep("MacrOSCursorLease", Enum.RenderPriority.Last.Value + 1, function()
 			local visible = false
 			for _, w in ipairs(Library.Windows) do
-				local active = not w._destroyed and w.Open and not w.Minimized and w.Root.Visible and w.Gui.Enabled
+				local active = not w._destroyed and w.Open and not w.Minimized and w.Root and w.Root.Parent and w.Root.Visible and w.Gui and w.Gui.Parent and w.Gui.Enabled
 				if w._cursorGate then
 					w._cursorGate.Modal = active
 					w._cursorGate.Visible = active
@@ -7923,10 +7923,14 @@ local Library = (function()
 				end
 			end
 			if visible then
-				if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+                -- Open UI owns the cursor, including during RMB presses.
+                -- Run after camera updates so camera lock cannot pin UI input.
+				if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
 					UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 				end
-				UserInputService.MouseIconEnabled = true
+                if not UserInputService.MouseIconEnabled then
+					UserInputService.MouseIconEnabled = true
+                end
 			elseif holding then
 				Library:ReleasePointer()
 			end
@@ -24112,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 23
+			Library.MacrOSRevision = 24
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
