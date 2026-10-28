@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 31
+			Library.MacrOSRevision = 33
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -27954,6 +27954,178 @@ local Library = (function()
 		return ui
 	end
 
+    -- Single native keybind-list implementation shared by LIP and regular windows.
+    local function createNativeKeybindList(native,opts)
+        opts=opts or {}
+        local entries={}
+        local function keyText(value)
+            if typeof(value)=="EnumItem" then return value~=Enum.KeyCode.Unknown and value.Name or "None"end
+            if value==nil or value==""or value=="Unknown"then return "None"end
+            return tostring(value)
+        end
+		local overlay = { Visible = true, HideUnbound = false, ShowToggleKey = true }
+		local panel = create(
+			"Frame",
+			{
+				Name = opts.Name or "NativeKeybinds",
+				Position = UDim2.fromOffset(24, 220),
+				Size = UDim2.fromOffset(226, 40),
+				BackgroundColor3 = Theme.Surface,
+				BorderSizePixel = 0,
+				Parent = native.Gui,
+			}
+		)
+		corner(panel, UDim.new(0, 8))
+		stroke(panel, Theme.Stroke)
+		bindColors(panel, { BackgroundColor3 = Theme.Surface })
+		local header = label({
+			Position = UDim2.fromOffset(12, 0),
+			Size = UDim2.new(1, -24, 0, 32),
+			Text = "Keybinds",
+			TextSize = 13,
+			Parent = panel,
+		})
+		header.Active = true
+		local function paintOverlay()
+            if not panel.Parent then return end
+			local y = 34
+			for _, entry in ipairs(entries) do
+				local show = (not entry.Menu or overlay.ShowToggleKey)
+					and (not overlay.HideUnbound or entry.Key ~= "None")
+				entry.Frame.Visible = show
+				if show then
+					entry.Frame.Position = UDim2.fromOffset(10, y)
+					entry.NameLabel.Text = entry.Title
+					entry.KeyLabel.Text = entry.Key
+					entry.Dot.BackgroundColor3 = entry.Active and Theme.Success or Theme.Muted
+					entry.Dot.BackgroundTransparency = entry.Active and 0 or 0.55
+					y += 24
+				end
+			end
+			panel.Size = UDim2.fromOffset(226, math.max(40, y + 6))
+			panel.Visible = overlay.Visible
+		end
+		onTheme(panel, paintOverlay)
+		local function keyEntry(id, title, key, menu)
+			local entry = entries[id]
+			if not entry then
+				local row =
+					create("Frame", { Size = UDim2.new(1, -20, 0, 22), BackgroundTransparency = 1, Parent = panel })
+				local dot = create(
+					"Frame",
+					{ Position = UDim2.new(0, 0, 0.5, -3), Size = UDim2.fromOffset(6, 6), BorderSizePixel = 0, Parent = row }
+				)
+				corner(dot, UDim.new(1, 0))
+				entry = {
+					Frame = row,
+					Dot = dot,
+					NameLabel = label({
+						Position = UDim2.fromOffset(14, 0),
+						Size = UDim2.new(1, -86, 1, 0),
+						TextSize = 12,
+						Text = "",
+						Parent = row,
+					}),
+					KeyLabel = label({
+						AnchorPoint = Vector2.new(1, 0),
+						Position = UDim2.fromScale(1, 0),
+						Size = UDim2.fromOffset(72, 22),
+						TextSize = 11,
+						TextColor3 = Theme.Muted,
+						TextXAlignment = Enum.TextXAlignment.Right,
+						Text = "",
+						Parent = row,
+					}),
+				}
+				entries[id] = entry
+				table.insert(entries, entry)
+			end
+			entry.Title = title
+			entry.Key = keyText(key)
+			entry.Menu = menu
+			paintOverlay()
+			return entry
+		end
+		function overlay:SetVisible(value)
+            if self.Visible == (value == true) then return end
+			self.Visible = value == true
+			paintOverlay()
+		end
+		function overlay:Configure(config)
+            local changed=false
+			for _, k in ipairs({ "Visible", "HideUnbound", "ShowToggleKey" }) do
+				if config[k] ~= nil and self[k] ~= (config[k] == true) then
+                    changed=true
+					self[k] = config[k] == true
+				end
+			end
+            if config.Title then header.Text=tostring(config.Title) end
+            if changed then paintOverlay()end
+		end
+		function overlay:SetActive(id, value)
+			local e = entries[id]
+			if e and e.Active ~= (value == true) then
+				e.Active = value == true
+				paintOverlay()
+			end
+		end
+		local dragInput, dragStart, dragOrigin
+		table.insert(
+			native._connections,
+			header.InputBegan:Connect(function(input)
+				if
+					input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch
+				then
+					dragInput = input
+					dragStart = Vector2.new(input.Position.X, input.Position.Y)
+					dragOrigin = panel.AbsolutePosition - native.Gui.AbsolutePosition
+				end
+			end)
+		)
+		table.insert(
+			native._connections,
+			UserInputService.InputChanged:Connect(function(input)
+				if dragInput and (input == dragInput or input.UserInputType == Enum.UserInputType.MouseMovement) then
+					local pos = dragOrigin + Vector2.new(input.Position.X, input.Position.Y) - dragStart
+					local view = native.Gui.AbsoluteSize
+					panel.Position = UDim2.fromOffset(
+						math.clamp(pos.X, 0, math.max(0, view.X - 226)),
+						math.clamp(pos.Y, 0, math.max(0, view.Y - 32))
+					)
+				end
+			end)
+		)
+		table.insert(
+			native._connections,
+			UserInputService.InputEnded:Connect(function(input)
+				if input == dragInput or input.UserInputType == Enum.UserInputType.MouseButton1 then
+					dragInput = nil
+				end
+			end)
+		)
+        overlay.Entries=entries
+        function overlay:SetEntry(id,title,key,menu)return keyEntry(id,title,key,menu)end
+        function overlay:GetPosition()
+            local p=panel.Position
+            return {p.X.Scale,p.X.Offset,p.Y.Scale,p.Y.Offset}
+        end
+        function overlay:SetPosition(p)
+            if type(p)~="table"then return end
+            for i=1,4 do if type(p[i])~="number"or p[i]~=p[i]or math.abs(p[i])>100000 then return end end
+            panel.Position=UDim2.new(p[1],p[2],p[3],p[4])
+        end
+        function overlay:ResetPosition()panel.Position=UDim2.fromOffset(24,220)end
+        overlay:Configure(opts)
+        paintOverlay()
+        return overlay
+    end
+    function Window:CreateKeybindList(opts)
+        if self._nativeKeybindList then self._nativeKeybindList:Configure(opts or {});return self._nativeKeybindList end
+        self._nativeKeybindList=createNativeKeybindList(self,opts)
+        return self._nativeKeybindList
+    end
+
 	-- Compatibility surface for the existing Life in Prison runtime.
 	-- It changes UI contracts only; targeting, hooks and visuals remain in the client script.
 	function Library:CreateLIPWindow(opts)
@@ -28012,146 +28184,10 @@ local Library = (function()
 		self:SetTheme({ Accent = Color3.fromRGB(128, 160, 246) }, true)
         native:SetVersionBadge(opts.Version or "v1.2")
 		local w = { ScreenGui = native.Gui, Native = native, Tabs = {}, Flags = {}, _keyRows = {} }
-		local overlay = { Visible = true, HideUnbound = false, ShowToggleKey = true }
-		local panel = create(
-			"Frame",
-			{
-				Name = "LifeInPrisonKeybinds",
-				Position = UDim2.fromOffset(24, 220),
-				Size = UDim2.fromOffset(226, 40),
-				BackgroundColor3 = Theme.Surface,
-				BorderSizePixel = 0,
-				Parent = native.Gui,
-			}
-		)
-		corner(panel, UDim.new(0, 8))
-		stroke(panel, Theme.Stroke)
-		bindColors(panel, { BackgroundColor3 = Theme.Surface })
-		local header = label({
-			Position = UDim2.fromOffset(12, 0),
-			Size = UDim2.new(1, -24, 0, 32),
-			Text = "Keybinds",
-			TextSize = 13,
-			Parent = panel,
-		})
-		header.Active = true
-		local function paintOverlay()
-			local y = 34
-			for _, entry in ipairs(w._keyRows) do
-				local show = (not entry.Menu or overlay.ShowToggleKey)
-					and (not overlay.HideUnbound or entry.Key ~= "None")
-				entry.Frame.Visible = show
-				if show then
-					entry.Frame.Position = UDim2.fromOffset(10, y)
-					entry.NameLabel.Text = entry.Title
-					entry.KeyLabel.Text = entry.Key
-					entry.Dot.BackgroundColor3 = entry.Active and Theme.Success or Theme.Muted
-					entry.Dot.BackgroundTransparency = entry.Active and 0 or 0.55
-					y += 24
-				end
-			end
-			panel.Size = UDim2.fromOffset(226, math.max(40, y + 6))
-			panel.Visible = overlay.Visible
-		end
-		onTheme(panel, paintOverlay)
-		local function keyEntry(id, title, key, menu)
-			local entry = w._keyRows[id]
-			if not entry then
-				local row =
-					create("Frame", { Size = UDim2.new(1, -20, 0, 22), BackgroundTransparency = 1, Parent = panel })
-				local dot = create(
-					"Frame",
-					{ Position = UDim2.new(0, 0, 0.5, -3), Size = UDim2.fromOffset(6, 6), BorderSizePixel = 0, Parent = row }
-				)
-				corner(dot, UDim.new(1, 0))
-				entry = {
-					Frame = row,
-					Dot = dot,
-					NameLabel = label({
-						Position = UDim2.fromOffset(14, 0),
-						Size = UDim2.new(1, -86, 1, 0),
-						TextSize = 12,
-						Text = "",
-						Parent = row,
-					}),
-					KeyLabel = label({
-						AnchorPoint = Vector2.new(1, 0),
-						Position = UDim2.fromScale(1, 0),
-						Size = UDim2.fromOffset(72, 22),
-						TextSize = 11,
-						TextColor3 = Theme.Muted,
-						TextXAlignment = Enum.TextXAlignment.Right,
-						Text = "",
-						Parent = row,
-					}),
-				}
-				w._keyRows[id] = entry
-				table.insert(w._keyRows, entry)
-			end
-			entry.Title = title
-			entry.Key = keyText(key)
-			entry.Menu = menu
-			paintOverlay()
-			return entry
-		end
-		function overlay:SetVisible(value)
-			self.Visible = value == true
-			paintOverlay()
-		end
-		function overlay:Configure(config)
-			for _, k in ipairs({ "Visible", "HideUnbound", "ShowToggleKey" }) do
-				if config[k] ~= nil then
-					self[k] = config[k] == true
-				end
-			end
-			paintOverlay()
-		end
-		function overlay:SetActive(id, value)
-			local e = w._keyRows[id]
-			if e then
-				e.Active = value == true
-				paintOverlay()
-			end
-		end
-		function w:CreateKeybindList(config)
-			overlay:Configure(config or {})
-			return overlay
-		end
-		local dragInput, dragStart, dragOrigin
-		table.insert(
-			native._connections,
-			header.InputBegan:Connect(function(input)
-				if
-					input.UserInputType == Enum.UserInputType.MouseButton1
-					or input.UserInputType == Enum.UserInputType.Touch
-				then
-					dragInput = input
-					dragStart = Vector2.new(input.Position.X, input.Position.Y)
-					dragOrigin = panel.AbsolutePosition - native.Gui.AbsolutePosition
-				end
-			end)
-		)
-		table.insert(
-			native._connections,
-			UserInputService.InputChanged:Connect(function(input)
-				if dragInput and (input == dragInput or input.UserInputType == Enum.UserInputType.MouseMovement) then
-					local pos = dragOrigin + Vector2.new(input.Position.X, input.Position.Y) - dragStart
-					local view = native.Gui.AbsoluteSize
-					panel.Position = UDim2.fromOffset(
-						math.clamp(pos.X, 0, math.max(0, view.X - 226)),
-						math.clamp(pos.Y, 0, math.max(0, view.Y - 32))
-					)
-				end
-			end)
-		)
-		table.insert(
-			native._connections,
-			UserInputService.InputEnded:Connect(function(input)
-				if input == dragInput or input.UserInputType == Enum.UserInputType.MouseButton1 then
-					dragInput = nil
-				end
-			end)
-		)
+        local overlay=createNativeKeybindList(native,{Name="LifeInPrisonKeybinds"})
+        w._keyRows=overlay.Entries
+        local function keyEntry(id,title,key,menu)return overlay:SetEntry(id,title,key,menu)end
+        function w:CreateKeybindList(config)overlay:Configure(config or {});return overlay end
 		local function legacyHandle(control, kind, cfg, options, updateOptions)
 			local h = { Native = control }
 			local function valueOf(value)
@@ -28541,8 +28577,8 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v9. Additive: existing BABFT/LIP APIs are unchanged.
-Library.UpgradeOverlayVersion = 9
+-- Optional combat overlay API v11. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 11
 function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
@@ -28644,22 +28680,25 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     local ringOuter=make("UIStroke",{Thickness=4,Color=Color3.new(0,0,0)},ringOutline)
     local dot=make("Frame",{AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0,Visible=false},crosshair);round(dot,10000)
     local dotEdge=make("UIStroke",{Thickness=1,Color=Color3.new(0,0,0)},dot)
-    local fovRing=make("Frame",{AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0.5,0.5),BackgroundTransparency=1,Visible=false},overlay);round(fovRing,10000)
-    local fovStroke=make("UIStroke",{Thickness=1},fovRing)
-    local bindPanel=make("Frame",{Name="KeybindOverlay",Visible=false,Size=UDim2.fromOffset(240,45),Position=UDim2.new(0,18,0.5,40),BackgroundColor3=Color3.fromRGB(15,18,27),BorderSizePixel=0},overlay);round(bindPanel,10)
-    local bindScale=make("UIScale",{Scale=1},bindPanel)
-    local bindTitle=text(bindPanel,"KEYBINDS",11);bindTitle.Position=UDim2.fromOffset(12,8);bindTitle.Size=UDim2.fromOffset(216,22);bindTitle.TextXAlignment=Enum.TextXAlignment.Left
+    local fovRing,fovStroke,bindPanel,bindScale,bindTitle,bindBorder,bindCounter,bindDivider,bindEmpty,bindRows,damageFlash,compass,telemetry
+    if not opts.Compact then
+    fovRing=make("Frame",{AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0.5,0.5),BackgroundTransparency=1,Visible=false},overlay);round(fovRing,10000)
+    fovStroke=make("UIStroke",{Thickness=1},fovRing)
+    bindPanel=make("Frame",{Name="KeybindOverlay",Visible=false,Size=UDim2.fromOffset(240,45),Position=UDim2.new(0,18,0.5,40),BackgroundColor3=Color3.fromRGB(15,18,27),BorderSizePixel=0},overlay);round(bindPanel,10)
+    bindScale=make("UIScale",{Scale=1},bindPanel)
+    bindTitle=text(bindPanel,"KEYBINDS",11);bindTitle.Position=UDim2.fromOffset(12,8);bindTitle.Size=UDim2.fromOffset(216,22);bindTitle.TextXAlignment=Enum.TextXAlignment.Left
     bindTitle.Text="Keybinds";bindTitle.TextSize=13;bindTitle.TextStrokeTransparency=1;bindTitle.Font=Enum.Font.GothamBold
     bindTitle.Position=UDim2.fromOffset(14,10);bindTitle.Size=UDim2.fromOffset(180,22)
-    local bindBorder=make("UIStroke",{Thickness=1,Transparency=0.2},bindPanel)
-    local bindCounter=text(bindPanel,"0",11);bindCounter.Name="KeybindCount";bindCounter.TextStrokeTransparency=1;bindCounter.Position=UDim2.new(1,-48,0,12);bindCounter.Size=UDim2.fromOffset(34,18)
-    local bindDivider=make("Frame",{Position=UDim2.fromOffset(14,40),Size=UDim2.new(1,-28,0,1),BorderSizePixel=0},bindPanel)
-    local bindEmpty=text(bindPanel,"Assign a key in module settings",11);bindEmpty.TextStrokeTransparency=1;bindEmpty.Position=UDim2.fromOffset(14,49);bindEmpty.Size=UDim2.new(1,-28,0,24);bindEmpty.TextXAlignment=Enum.TextXAlignment.Left
-    local bindRows={}
-    local damageFlash=make("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(230,45,65),BackgroundTransparency=1,BorderSizePixel=0,Visible=false,ZIndex=0},overlay)
-    local compass=text(overlay,"",14);compass.AnchorPoint=Vector2.new(0.5,0);compass.Position=UDim2.new(0.5,0,0,12);compass.Size=UDim2.fromOffset(360,25);compass.Visible=false
-    local telemetry=text(overlay,"",12);telemetry.Position=UDim2.new(0,18,1,-65);telemetry.Size=UDim2.fromOffset(420,50);telemetry.TextXAlignment=Enum.TextXAlignment.Left;telemetry.Visible=false
+    bindBorder=make("UIStroke",{Thickness=1,Transparency=0.2},bindPanel)
+    bindCounter=text(bindPanel,"0",11);bindCounter.Name="KeybindCount";bindCounter.TextStrokeTransparency=1;bindCounter.Position=UDim2.new(1,-48,0,12);bindCounter.Size=UDim2.fromOffset(34,18)
+    bindDivider=make("Frame",{Position=UDim2.fromOffset(14,40),Size=UDim2.new(1,-28,0,1),BorderSizePixel=0},bindPanel)
+    bindEmpty=text(bindPanel,"Assign a key in module settings",11);bindEmpty.TextStrokeTransparency=1;bindEmpty.Position=UDim2.fromOffset(14,49);bindEmpty.Size=UDim2.new(1,-28,0,24);bindEmpty.TextXAlignment=Enum.TextXAlignment.Left
+    bindRows={}
+    damageFlash=make("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(230,45,65),BackgroundTransparency=1,BorderSizePixel=0,Visible=false,ZIndex=0},overlay)
+    compass=text(overlay,"",14);compass.AnchorPoint=Vector2.new(0.5,0);compass.Position=UDim2.new(0.5,0,0,12);compass.Size=UDim2.fromOffset(360,25);compass.Visible=false
+    telemetry=text(overlay,"",12);telemetry.Position=UDim2.new(0,18,1,-65);telemetry.Size=UDim2.fromOffset(420,50);telemetry.TextXAlignment=Enum.TextXAlignment.Left;telemetry.Visible=false
     drag(bindPanel);drag(compass);drag(telemetry)
+    end
     local self={overlay=overlay,highlightFolder=highlightFolder,markers=markers,targetHud=targetHud,hudScale=hudScale,initials=initials,
         targetAvatar=targetAvatar,targetName=targetName,targetDetails=targetDetails,hpBack=hpBack,hpTrail=hpTrail,hpFill=hpFill,targetFooter=targetFooter,
         radar=radar,watermark=watermark,moduleList=moduleList,crosshair=crosshair}
@@ -28801,13 +28840,16 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         dot.Visible=cfg.crossDot or shape=="Dot" or shape=="Circle + Dot"
         dot.Size=UDim2.fromOffset(cfg.crossDotSize,cfg.crossDotSize);dot.BackgroundColor3=cfg.crossColor;dot.BackgroundTransparency=cfg.crossAlpha
         dotEdge.Enabled=cfg.crossOutline;dotEdge.Transparency=cfg.crossAlpha
-        fovRing.Visible=cfg.fovCircle and cfg.fov<179 and not cfg.freecam
+        if fovRing then
+        fovRing.Visible=cfg.fovCircle==true and cfg.fov<179 and not cfg.freecam
         if fovRing.Visible then
             local radius=math.tan(math.rad(cfg.fov/2))/math.tan(math.rad(camera.FieldOfView/2))*camera.ViewportSize.Y/2
             fovRing.Size=UDim2.fromOffset(radius*2,radius*2);fovStroke.Color=cfg.enemyColor;fovStroke.Transparency=cfg.fovCircleAlpha
         end
     end
+    end
     function self:UpdateKeybinds(bindings,cfg)
+        if not bindPanel then return end
         bindPanel.Visible=cfg.keybindOverlay;bindScale.Scale=cfg.keybindScale;bindPanel.BackgroundTransparency=cfg.keybindAlpha
         if not cfg.keybindOverlay then return end
         bindPanel.BackgroundColor3=themeColor("Surface");bindBorder.Color=themeColor("Stroke");bindDivider.BackgroundColor3=themeColor("Stroke")
@@ -28845,6 +28887,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         bindPanel.Size=UDim2.fromOffset(280,math.max(84,54+count*30+(total>count and 24 or 0)))
     end
     function self:UpdateTelemetry(data,cfg,dt)
+        if not compass then return end
         compass.Visible=cfg.compass;telemetry.Visible=cfg.coordinates or cfg.speedometer
         if cfg.compass then
             local yaw=(math.deg(math.atan2(data.look.X,-data.look.Z))+360)%360
@@ -28861,11 +28904,12 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     local function resetBasePositions()
         dragged[targetHud]=nil;lastTargetStyle="";radar.Position=UDim2.new(1,-180,0,85)
         watermark.Position=UDim2.fromOffset(18,12);moduleList.Position=UDim2.new(1,-240,0,265)
-        bindPanel.Position=UDim2.new(0,18,0.5,40);compass.Position=UDim2.new(0.5,0,0,12);telemetry.Position=UDim2.new(0,18,1,-65)
+        if bindPanel then bindPanel.Position=UDim2.new(0,18,0.5,40);compass.Position=UDim2.new(0.5,0,0,12);telemetry.Position=UDim2.new(0,18,1,-65)end
     end
     -- Shared pooled overlay primitives: no runtime Instance creation in the game client.
     local readouts={}
     local readoutDefs: {{any}}={{"inventoryHUD","INVENTORY",18,160},{"statusHUD","STATUS",18,390},{"progressHUD","PROGRESSION",-265,350},{"sessionHUD","SESSION",-265,510},{"chargeHUD","ATTACK CHARGE",18,540},{"potionsHUD","POTION TIMERS",280,160},{"nearbyHUD","NEARBY PLAYERS",280,390}}
+    if opts.Compact then readoutDefs={{"potionsHUD","POTION TIMERS",280,160}}end
     for _,def in ipairs(readoutDefs)do
         local panel=make("Frame",{Visible=false,Size=UDim2.fromOffset(245,60),Position=UDim2.new(def[3]<0 and 1 or 0,def[3],0,def[4]),BackgroundColor3=Color3.fromRGB(16,18,25),BackgroundTransparency=0.12,BorderSizePixel=0},overlay);round(panel,8)
         local title=text(panel,def[2],11);title.Position=UDim2.fromOffset(12,7);title.Size=UDim2.fromOffset(220,20);title.TextXAlignment=Enum.TextXAlignment.Left
@@ -28945,7 +28989,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     end
     function self:SetUtilityReadouts(potions,rows,nearby,nearbyRows)
         for _,entry in ipairs({{readouts.potionsHUD,potions,rows},{readouts.nearbyHUD,nearby,nearbyRows}})do
-            local view=entry[1];view.rows=entry[3];view.panel.Visible=entry[2]==true
+            local view=entry[1];if not view then continue end;view.rows=entry[3];view.panel.Visible=entry[2]==true
             view.content.Text=table.concat(entry[3],"\n");view.panel.Size=UDim2.fromOffset(245,38+18*math.max(1,#entry[3]));view.content.Size=UDim2.fromOffset(220,18*math.max(1,#entry[3]))
         end
     end
@@ -29064,6 +29108,12 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                     worldLine(base+tangent*(math.cos(a)*radius*0.23)+axis*(math.sin(a)*radius*0.12),base+tangent*(math.cos(b)*radius*0.23)+axis*(math.sin(b)*radius*0.12),0.95,width)
                 end
             end end
+        elseif mode=="Ring"then
+            local base=center+Vector3.new(0,0.08,0)
+            for i=0,63 do
+                local a=i/64*math.pi*2+phase;local b=(i+1)/64*math.pi*2+phase
+                worldLine(base+Vector3.new(math.cos(a)*radius,0,math.sin(a)*radius),base+Vector3.new(math.cos(b)*radius,0,math.sin(b)*radius),0.65+0.35*math.cos(a-phase)^2,width)
+            end
         elseif mode=="Halo"then
             local base=center+Vector3.new(0,math.sin(phase)*info.height*0.45,0)
             for i=0,47 do
@@ -29091,9 +29141,11 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             end
         end
     end
+    local graph
+    if not opts.Compact then
     local aimGuide=make("Frame",{Name="AimFOVGuide",AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0.5,0.5),BackgroundTransparency=1,Visible=false},overlay);round(aimGuide,10000)
     local aimGuideStroke=make("UIStroke",{Thickness=1.5,Transparency=0.4},aimGuide)
-    local graph=make("Frame",{Name="SpeedGraph",Visible=false,Position=UDim2.new(0,280,1,-145),Size=UDim2.fromOffset(260,112),BorderSizePixel=0,BackgroundTransparency=0.1},overlay);round(graph,10);drag(graph)
+    graph=make("Frame",{Name="SpeedGraph",Visible=false,Position=UDim2.new(0,280,1,-145),Size=UDim2.fromOffset(260,112),BorderSizePixel=0,BackgroundTransparency=0.1},overlay);round(graph,10);drag(graph)
     local graphBorder=make("UIStroke",{Thickness=1},graph)
     local graphTitle=text(graph,"Speed history",12);graphTitle.Position=UDim2.fromOffset(12,8);graphTitle.Size=UDim2.fromOffset(236,20);graphTitle.TextXAlignment=Enum.TextXAlignment.Left;graphTitle.TextStrokeTransparency=1
     local graphValue=text(graph,"",10);graphValue.Position=UDim2.fromOffset(12,86);graphValue.Size=UDim2.fromOffset(236,18);graphValue.TextXAlignment=Enum.TextXAlignment.Left;graphValue.TextStrokeTransparency=1
@@ -29120,6 +29172,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         end
     end
     -- Local 3D cone; all geometry belongs to the library, never the game client.
+    end
     local hatParts={}
     local hatShown=false
     local function hatWedge(index,a,b,c)
@@ -29155,7 +29208,9 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             part.Color=cfg.hatRainbow and Color3.fromHSV((now*0.1+i/64)%1,0.65,1)or cfg.hatColor
         end
     end
-    local keysPanel=make("Frame",{Name="Keystrokes",Visible=false,Position=UDim2.new(0,18,1,-255),Size=UDim2.fromOffset(166,160),BorderSizePixel=0,BackgroundTransparency=0.1},overlay);round(keysPanel,10);drag(keysPanel)
+    local keysPanel,jumpPanel
+    if not opts.Compact then
+    keysPanel=make("Frame",{Name="Keystrokes",Visible=false,Position=UDim2.new(0,18,1,-255),Size=UDim2.fromOffset(166,160),BorderSizePixel=0,BackgroundTransparency=0.1},overlay);round(keysPanel,10);drag(keysPanel)
     local keysBorder=make("UIStroke",{Thickness=1},keysPanel)
     local keyViews={}
     for _,def in ipairs({{"W",62,10,42},{"A",14,44,42},{"S",62,44,42},{"D",110,44,42},{"SPACE",14,78,90},{"SHIFT",110,78,42},{"LMB",14,112,66},{"RMB",86,112,66}})do
@@ -29163,7 +29218,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         local label=text(node,def[1],10);label.TextStrokeTransparency=1;label.Size=UDim2.fromScale(1,1)
         keyViews[def[1]]={node=node,label=label}
     end
-    local jumpPanel=make("Frame",{Name="JumpStats",Visible=false,Position=UDim2.new(0,300,1,-260),Size=UDim2.fromOffset(250,100),BorderSizePixel=0,BackgroundTransparency=0.1},overlay);round(jumpPanel,10);drag(jumpPanel)
+    jumpPanel=make("Frame",{Name="JumpStats",Visible=false,Position=UDim2.new(0,300,1,-260),Size=UDim2.fromOffset(250,100),BorderSizePixel=0,BackgroundTransparency=0.1},overlay);round(jumpPanel,10);drag(jumpPanel)
     local jumpBorder=make("UIStroke",{Thickness=1},jumpPanel)
     local jumpTitle=text(jumpPanel,"Jump stats",12);jumpTitle.TextStrokeTransparency=1;jumpTitle.TextXAlignment=Enum.TextXAlignment.Left;jumpTitle.Position=UDim2.fromOffset(12,8);jumpTitle.Size=UDim2.fromOffset(226,20)
     local jumpText=text(jumpPanel,"",11);jumpText.TextStrokeTransparency=1;jumpText.TextXAlignment=Enum.TextXAlignment.Left;jumpText.Position=UDim2.fromOffset(12,32);jumpText.Size=UDim2.fromOffset(226,58)
@@ -29178,6 +29233,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         jumpPanel.BackgroundColor3=themeColor("Surface");jumpBorder.Color=themeColor("Stroke");jumpTitle.TextColor3=themeColor("Text");jumpText.TextColor3=themeColor("Muted")
         jumpText.Text=jump and string.format("%s  ·  %.2f s\nDistance %.2f b\nPeak height %.2f b",jump.flying and "Airborne"or "Last jump",jump.time,jump.distance,jump.height)or "Waiting for a native jump\nRequires MovementController"
     end
+    end
     local heldPostEffects={}
     function self:RememberPostEffect(effect,parent)heldPostEffects[effect]=parent end
     function self:ForgetPostEffect(effect)heldPostEffects[effect]=nil end
@@ -29188,9 +29244,56 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         ambienceEffect.TintColor=Color3.new(1,1,1):Lerp(cfg.ambienceColor,cfg.ambienceStrength)
         ambienceEffect.Brightness=cfg.ambienceBrightness;ambienceEffect.Contrast=cfg.ambienceContrast;ambienceEffect.Saturation=cfg.ambienceSaturation
     end
+    function self:ConfigureRadar(cfg)
+        local corner=radar:FindFirstChildOfClass("UICorner")
+        if corner then corner.CornerRadius=UDim.new(0,cfg.radarShape=="Circle"and 80 or cfg.radarShape=="Rounded Square"and 16 or 0)end
+        radar.BackgroundColor3=cfg.radarColor
+    end
+    -- Bounded projected world-space particles. Nodes belong to this library and
+    -- are pooled across manual/automatic confirmed melee hits.
+    local hitPool={}
+    local hitCursor=0
+    local symbols={Star="★",Circle="●",Square="■",Diamond="◆",Cross="✚"}
+    function self:EmitHitParticles(position,cfg,now)
+        for i=1,math.clamp(cfg.hitParticleCount,1,32)do
+            hitCursor=hitCursor%192+1
+            local item=hitPool[hitCursor]
+            if not item then
+                local node=text(overlay,"",12);node.Name="HitParticle_"..hitCursor;node.AnchorPoint=Vector2.new(0.5,0.5);node.TextStrokeTransparency=1;node.Visible=false
+                item={node=node};hitPool[hitCursor]=item
+            end
+            local angle=math.random()*math.pi*2
+            local speed=2+math.random()*3
+            item.position=position;item.velocity=Vector3.new(math.cos(angle)*speed,1+math.random()*4,math.sin(angle)*speed)
+            item.start=now;item.duration=cfg.hitParticleDuration;item.size=cfg.hitParticleSize;item.active=true
+            item.node.Text=symbols[cfg.hitParticleShape]or symbols.Star;item.node.TextColor3=cfg.hitParticleColor
+            item.spin=math.random(-150,150)
+        end
+    end
+    function self:ClearHitParticles()
+        for _,item in ipairs(hitPool)do item.active=false;item.node.Visible=false end
+    end
+    function self:RenderHitParticles(now,camera,enabled)
+        if not enabled then self:ClearHitParticles();return end
+        for _,item in ipairs(hitPool)do
+            local node=item.node;node.Visible=false
+            if item.active then
+                local age=now-item.start;local t=age/item.duration
+                if t>=1 or t<0 then item.active=false
+                else
+                    local point=item.position+item.velocity*age+Vector3.new(0,-3*age*age,0)
+                    local p,onScreen=camera:WorldToViewportPoint(point)
+                    if onScreen and p.Z>0.1 then
+                        local size=item.size*(1-t*0.5)
+                        node.Visible=true;node.Position=UDim2.fromOffset(p.X,p.Y);node.Size=UDim2.fromOffset(size*2,size*2);node.TextSize=size;node.TextTransparency=t;node.Rotation=item.spin*age
+                    end
+                end
+            end
+        end
+    end
     function self:ResetPositions()
-        keysPanel.Position=UDim2.new(0,18,1,-255);jumpPanel.Position=UDim2.new(0,300,1,-260)
-        graph.Position=UDim2.new(0,280,1,-145)
+        if keysPanel then keysPanel.Position=UDim2.new(0,18,1,-255);jumpPanel.Position=UDim2.new(0,300,1,-260)end
+        if graph then graph.Position=UDim2.new(0,280,1,-145)end
         resetBasePositions()
         for _,view in pairs(readouts)do view.panel.Position=view.position end
     end
