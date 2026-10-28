@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 25
+			Library.MacrOSRevision = 26
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28541,9 +28541,9 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v3. Additive: existing BABFT/LIP APIs are unchanged.
-Library.UpgradeOverlayVersion = 3
-function Library:CreateCombatOverlay(opts)
+-- Optional combat overlay API v4. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 4
+function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
     local connections={}
@@ -28589,12 +28589,13 @@ local function hideMarker(record)
         if obj:IsA("GuiObject")then obj.Visible=false elseif obj:IsA("Highlight")then obj.Enabled=false end
     end
 end
+local dragged: {[GuiObject]: boolean}={}
 local function drag(frame)
     frame.Active=true
     local active,start,position
     track(frame.InputBegan:Connect(function(input)
         if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-            active=input;start=input.Position;position=frame.Position
+            active=input;start=input.Position;position=frame.Position;dragged[frame]=true
         end
     end))
     track(UIS.InputChanged:Connect(function(input)
@@ -28605,8 +28606,9 @@ local function drag(frame)
     end))
     track(UIS.InputEnded:Connect(function(input)if input==active then active=nil end end))
 end
-local targetHud=make("Frame",{Name="TargetInfo",Visible=false,Size=UDim2.fromOffset(280,94),Position=UDim2.new(0.5,45,0.5,90),BackgroundColor3=Color3.fromRGB(15,18,27),BackgroundTransparency=0.08,BorderSizePixel=0},overlay)
-round(targetHud,12);make("UIStroke",{Color=Color3.fromRGB(65,72,102),Transparency=0.2},targetHud)
+local targetHud=make("CanvasGroup",{Name="TargetInfo",AnchorPoint=Vector2.new(0.5,0.5),Visible=false,Size=UDim2.fromOffset(280,94),Position=UDim2.new(0.5,45,0.5,90),BackgroundColor3=Color3.fromRGB(15,18,27),BackgroundTransparency=0.08,BorderSizePixel=0},overlay)
+local targetCorner=make("UICorner",{CornerRadius=UDim.new(0,12)},targetHud)
+local targetBorder=make("UIStroke",{Color=Color3.fromRGB(65,72,102),Transparency=0.2},targetHud)
 local hudScale=make("UIScale",{Scale=1},targetHud)
 local avatar=make("Frame",{Size=UDim2.fromOffset(55,55),Position=UDim2.fromOffset(13,13),BackgroundColor3=Color3.fromRGB(45,52,79),BorderSizePixel=0},targetHud);round(avatar,10)
 local initials=text(avatar,"?",23);initials.Size=UDim2.fromScale(1,1)
@@ -28651,6 +28653,77 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     local self={overlay=overlay,highlightFolder=highlightFolder,markers=markers,targetHud=targetHud,hudScale=hudScale,initials=initials,
         targetAvatar=targetAvatar,targetName=targetName,targetDetails=targetDetails,hpBack=hpBack,hpTrail=hpTrail,hpFill=hpFill,targetFooter=targetFooter,
         radar=radar,watermark=watermark,moduleList=moduleList,crosshair=crosshair}
+    local targetNumber=text(targetHud,"",12)
+    targetNumber.TextXAlignment=Enum.TextXAlignment.Right
+    targetNumber.TextStrokeTransparency=1
+    targetName.TextStrokeTransparency=1;targetDetails.TextStrokeTransparency=1
+    local targetAnim={alpha=0,health=1,trail=1,previousHP=0,hurt=0,hasData=false}
+    local lastTargetData: any=nil
+    local lastTargetStyle=""
+    local function targetLayout(style)
+        if style==lastTargetStyle then return end
+        lastTargetStyle=style
+        if not dragged[targetHud]then targetHud.Position=style=="Delta 1.16" and UDim2.fromScale(0.5,0.72)or style=="Delta 1.21" and UDim2.fromScale(0.5,0.55)or UDim2.new(0.5,185,0.5,137)end
+        local legacy=style=="MacrOS"
+        local classic=style=="Delta 1.16"
+        targetHud.Size=legacy and UDim2.fromOffset(280,94) or UDim2.fromOffset(classic and 230 or 244,60)
+        targetHud.BackgroundColor3=legacy and Color3.fromRGB(15,18,27) or Color3.fromRGB(16,17,21)
+        targetBorder.Enabled=legacy
+        targetCorner.CornerRadius=UDim.new(0,legacy and 12 or 7)
+        avatar.Size=UDim2.fromOffset(legacy and 55 or 44,legacy and 55 or 44)
+        avatar.Position=UDim2.fromOffset(legacy and 13 or 8,legacy and 13 or 8)
+        avatar.BackgroundTransparency=legacy and 0 or 1
+        targetName.Position=UDim2.fromOffset(legacy and 80 or 61,legacy and 12 or 8)
+        targetName.Size=UDim2.fromOffset(legacy and 186 or (classic and 158 or 125),22)
+        targetName.TextSize=legacy and 14 or 13
+        hpBack.Position=UDim2.fromOffset(legacy and 80 or 61,legacy and 64 or 35)
+        hpBack.Size=UDim2.fromOffset(legacy and 185 or (classic and 126 or 167),legacy and 7 or 8)
+        targetNumber.Position=UDim2.fromOffset(classic and 190 or 189,classic and 29 or 8)
+        targetNumber.Size=UDim2.fromOffset(classic and 31 or 45,22)
+        targetNumber.TextSize=classic and 11 or 13
+        targetDetails.Visible=legacy;targetFooter.Visible=legacy;targetNumber.Visible=not legacy
+    end
+    function self:RenderTargetHUD(data,cfg,dt)
+        targetLayout(cfg.targetStyle)
+        local desired=cfg.targetInfo and data~=nil
+        local rate=cfg.targetAnimations and 14 or 10000
+        targetAnim.alpha+=( (desired and 1 or 0)-targetAnim.alpha)*math.min(1,1-math.exp(-rate*dt))
+        if not cfg.targetInfo then targetAnim.alpha=0 end
+        if data then
+            if not lastTargetData or lastTargetData.id~=data.id then
+                targetAnim.health=data.ratio or 0;targetAnim.trail=targetAnim.health;targetAnim.previousHP=data.hp or 0;targetAnim.hurt=0
+            elseif data.hp and data.hp<targetAnim.previousHP then targetAnim.hurt=1 end
+            targetAnim.previousHP=data.hp or 0
+            lastTargetData=data
+        end
+        targetHud.Visible=targetAnim.alpha>0.01 and lastTargetData~=nil
+        if not targetHud.Visible then return end
+        local d=lastTargetData
+        local ratio=d.ratio or 0
+        local speed=cfg.targetSmooth
+        targetAnim.health+=(ratio-targetAnim.health)*(1-math.exp(-speed*dt))
+        targetAnim.trail+=(ratio-targetAnim.trail)*(1-math.exp(-speed*0.3*dt))
+        targetAnim.hurt=math.max(0,targetAnim.hurt-dt*4)
+        targetHud.GroupTransparency=1-targetAnim.alpha
+        hudScale.Scale=cfg.hudScale*(cfg.targetAnimations and (0.88+0.12*targetAnim.alpha) or 1)
+        targetHud.BackgroundTransparency=cfg.targetBackground
+        targetName.Text=d.name or "Target"
+        initials.Text=string.upper(string.sub(d.name or "?",1,(utf8.offset(d.name or "?",3)or #(d.name or "?")+1)-1))
+        targetAvatar.Visible=d.userId~=nil
+        targetAvatar.Image=d.userId and ("rbxthumb://type=AvatarHeadShot&id="..tostring(d.userId).."&w=150&h=150") or ""
+        targetAvatar.ImageColor3=Color3.new(1,1,1):Lerp(Color3.fromRGB(255,100,100),cfg.targetHurtTint and targetAnim.hurt*0.6 or 0)
+        local color=cfg.targetStyle=="Delta 1.16" and Color3.fromRGB(218,46,99) or cfg.targetStyle=="Delta 1.21" and Color3.fromRGB(51,174,212) or cfg.enemyColor
+        if cfg.targetCustomColor then color=cfg.targetColorHUD end
+        if cfg.targetAccent then color=Color3.fromRGB(240,85,95):Lerp(Color3.fromRGB(85,230,155),ratio)end
+        hpFill.BackgroundColor3=color;hpTrail.BackgroundColor3=color:Lerp(Color3.new(1,1,1),0.35)
+        hpBack.Visible=d.ratio~=nil
+        hpFill.Size=UDim2.fromScale(targetAnim.health,1);hpTrail.Size=UDim2.fromScale(cfg.targetTrail and targetAnim.trail or targetAnim.health,1)
+        targetNumber.Text=d.hp and string.format("%.1f",d.hp) or "?"
+        targetNumber.TextColor3=cfg.targetStyle=="Delta 1.21" and color or Color3.fromRGB(165,168,180)
+        targetDetails.Text=string.format("%s HP   •   %.1f blocks",d.hp and (d.maxHP and string.format("%.0f / %.0f",d.hp,d.maxHP)or string.format("%.0f",d.hp)) or "?",d.distance or 0)
+        targetFooter.Text=d.preview and "PREVIEW · drag to reposition" or (d.username and "@"..d.username or "CURRENT TARGET")
+        if d.preview and cfg.targetStyle~="MacrOS"then targetName.Text="Preview Player"end
+    end
     local rotation=0
     function self:GetMarker(other)return getMarker(other)end
     function self:ClearMarker(id)clearMarker(id)end
@@ -28741,10 +28814,65 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         damageFlash.Visible=cfg.hurtIndicator and (data.hurt or 0)>0
         damageFlash.BackgroundTransparency=1-math.clamp(data.hurt or 0,0,1)*0.22
     end
-    function self:ResetPositions()
-        targetHud.Position=UDim2.new(0.5,45,0.5,90);radar.Position=UDim2.new(1,-180,0,85)
+    local function resetBasePositions()
+        dragged[targetHud]=nil;lastTargetStyle="";radar.Position=UDim2.new(1,-180,0,85)
         watermark.Position=UDim2.fromOffset(18,12);moduleList.Position=UDim2.new(1,-240,0,265)
         bindPanel.Position=UDim2.new(0,18,0.5,40);compass.Position=UDim2.new(0.5,0,0,12);telemetry.Position=UDim2.new(0,18,1,-65)
+    end
+    -- Shared pooled overlay primitives: no runtime Instance creation in the game client.
+    local readouts={}
+    local readoutDefs: {{any}}={{"inventoryHUD","INVENTORY",18,160},{"statusHUD","STATUS",18,390},{"progressHUD","PROGRESSION",-265,350},{"sessionHUD","SESSION",-265,510},{"chargeHUD","ATTACK CHARGE",18,540}}
+    for _,def in ipairs(readoutDefs)do
+        local panel=make("Frame",{Visible=false,Size=UDim2.fromOffset(245,60),Position=UDim2.new(def[3]<0 and 1 or 0,def[3],0,def[4]),BackgroundColor3=Color3.fromRGB(16,18,25),BackgroundTransparency=0.12,BorderSizePixel=0},overlay);round(panel,8)
+        local title=text(panel,def[2],11);title.Position=UDim2.fromOffset(12,7);title.Size=UDim2.fromOffset(220,20);title.TextXAlignment=Enum.TextXAlignment.Left
+        local content=text(panel,"",12);content.Position=UDim2.fromOffset(12,32);content.Size=UDim2.fromOffset(220,25);content.TextXAlignment=Enum.TextXAlignment.Left;content.TextYAlignment=Enum.TextYAlignment.Top;content.TextTruncate=Enum.TextTruncate.AtEnd
+        readouts[def[1]]={panel=panel,title=title,content=content,position=panel.Position};drag(panel)
+    end
+    local pools={}
+    local function plotLine(key,index,a,b,color,alpha,width)
+        local pool=pools[key];if not pool then pool={};pools[key]=pool end
+        local node=pool[index]
+        if not node then node=make("Frame",{Name="Effect_"..key.."_"..tostring(index),AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0,Visible=false},overlay);pool[index]=node end
+        local delta=b-a
+        node.Visible=true;node.Position=UDim2.fromOffset((a.X+b.X)/2,(a.Y+b.Y)/2);node.Size=UDim2.fromOffset(delta.Magnitude,width or 2)
+        node.Rotation=math.deg(math.atan2(delta.Y,delta.X));node.BackgroundColor3=color;node.BackgroundTransparency=alpha
+    end
+    local function worldRing(key,center,radius,color,alpha,camera)
+        for i=1,32 do
+            local t=(i-1)/32*math.pi*2;local n=i/32*math.pi*2
+            local a=camera:WorldToViewportPoint(center+Vector3.new(math.cos(t)*radius,0,math.sin(t)*radius))
+            local b=camera:WorldToViewportPoint(center+Vector3.new(math.cos(n)*radius,0,math.sin(n)*radius))
+            if a.Z>0.1 and b.Z>0.1 then plotLine(key,i,Vector2.new(a.X,a.Y),Vector2.new(b.X,b.Y),color,alpha,2)end
+        end
+    end
+    function self:RenderExtras(data,cfg,camera)
+        for _,pool in pairs(pools)do for _,node in ipairs(pool)do node.Visible=false end end
+        for key,view in pairs(readouts)do
+            view.panel.Visible=cfg[key]==true
+            if view.panel.Visible then
+                local rows=data[key] or {"Unavailable"}
+                view.title.TextColor3=cfg.enemyColor;view.content.Text=table.concat(rows,"\n")
+                view.panel.Size=UDim2.fromOffset(245,38+18*math.max(1,#rows));view.content.Size=UDim2.fromOffset(220,18*math.max(1,#rows))
+            end
+        end
+        if cfg.targetRing and data.targetFeet then
+            worldRing("target",data.targetFeet+Vector3.new(0,0.08,0),cfg.targetRingRadius*data.blockSize,cfg.targetColor,0.12,camera)
+        end
+        if cfg.jumpCircles then for i,jump in ipairs(data.jumps or {})do
+            local age=(data.now-jump.time)/cfg.jumpDuration
+            if age>=0 and age<1 then worldRing("jump"..i,jump.position+Vector3.new(0,0.06,0),(0.2+age*cfg.jumpRadius)*data.blockSize,cfg.enemyColor,math.clamp(age,0,1),camera)end
+        end end
+        if cfg.motionTrail then
+            local trail=data.trail or {}
+            for i=2,#trail do
+                local a=camera:WorldToViewportPoint(trail[i-1].position);local b=camera:WorldToViewportPoint(trail[i].position)
+                if a.Z>0.1 and b.Z>0.1 then plotLine("trail",i-1,Vector2.new(a.X,a.Y),Vector2.new(b.X,b.Y),cfg.enemyColor,1-i/#trail*0.8,2)end
+            end
+        end
+    end
+    function self:ResetPositions()
+        resetBasePositions()
+        for _,view in pairs(readouts)do view.panel.Position=view.position end
     end
     function self:Destroy()
         if self.destroyed then return end;self.destroyed=true
