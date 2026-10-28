@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 39
+			Library.MacrOSRevision = 40
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28577,8 +28577,8 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v17. Additive: existing BABFT/LIP APIs are unchanged.
-Library.UpgradeOverlayVersion = 17
+-- Optional combat overlay API v18. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 18
 function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
@@ -28792,7 +28792,6 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         local icons={}
         local nativeFace=nil
         local hudGear=nil
-        local gearLayout=nil
         local function makeView(parent,name)
             local viewport=make("ViewportFrame",{Name=name,Size=UDim2.fromScale(1,1),BackgroundTransparency=1,BorderSizePixel=0,Ambient=Color3.fromRGB(225,225,225),LightColor=Color3.new(1,1,1),LightDirection=Vector3.new(-1,-1,-2),Visible=false},parent)
             local camera=make("Camera",{FieldOfView=24},viewport);viewport.CurrentCamera=camera
@@ -28855,10 +28854,10 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             if helmet then sources[#sources+1]=helmet end
             return snapshot(nativeFace,sources,head.CFrame,model,true)
         end
-        local function makeGear(parent)
-            local row={frame=make("Frame",{Name="EquipmentRow",Size=UDim2.fromOffset(118,24),BackgroundTransparency=1,BorderSizePixel=0},parent),slots={}}
+        local function makeGear(parent,size,external)
+            local row={size=size,frame=make(external and "CanvasGroup"or "Frame",{Name=external and "TargetEquipmentRow"or "EquipmentRow",Size=UDim2.fromOffset(5*(size+2)-2,size),BackgroundTransparency=1,BorderSizePixel=0},parent),slots={}}
             for i=1,5 do
-                local frame=make("Frame",{Name=({"Boots","Leggings","Chestplate","Helmet","HeldItem"})[i],Position=UDim2.fromOffset((i-1)*24,0),Size=UDim2.fromOffset(22,22),BackgroundColor3=Color3.fromRGB(24,26,34),BackgroundTransparency=0.15,BorderSizePixel=0},row.frame);round(frame,3)
+                local frame=make("Frame",{Name=({"Boots","Leggings","Chestplate","Helmet","HeldItem"})[i],Position=UDim2.fromOffset((i-1)*(size+2),0),Size=UDim2.fromOffset(size,size),BackgroundTransparency=1,BorderSizePixel=0},row.frame)
                 local view=makeView(frame,"EquipmentView")
                 local icon=make("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image="",Visible=false,ResampleMode=Enum.ResamplerMode.Pixelated},frame)
                 row.slots[i]={frame=frame,view=view,icon=icon}
@@ -28873,7 +28872,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                 local show=(i<=4 and armor)or(i==5 and weapon)
                 slot.frame.Visible=show;slot.icon.Visible=false
                 if show then
-                    slot.frame.Position=UDim2.fromOffset(index*24,0);index+=1
+                    slot.frame.Position=UDim2.fromOffset(index*(row.size+2),0);index+=1
                     local name=({"Armor_feet","Armor_legs","Armor_chest","Armor_head","HeldItem"})[i]
                     local source=model and model:FindFirstChild(name)
                     local held=i==5 and model and model:GetAttribute("HeldItem")
@@ -28887,27 +28886,27 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                     end
                 else if slot.view.count>0 then clearView(slot.view)end;slot.view.viewport.Visible=false end
             end
-            row.frame.Size=UDim2.fromOffset(math.max(0,index*24-2),22)
+            row.frame.Size=UDim2.fromOffset(math.max(0,index*(row.size+2)-2),row.size)
+        end
+        function self:HideNativeGear()
+            if hudGear then hudGear.frame.Visible=false end
         end
         function self:RenderNativeGear(data,cfg)
             if not opts.NativeFace then return end
-            local enabled=cfg.targetArmor==true or cfg.targetWeapon==true
-            local baseHeight=cfg.targetStyle=="MacrOS"and 108 or 60
-            if gearLayout~=enabled or(enabled and targetHud.Size.Y.Offset==baseHeight)then
-                gearLayout=enabled;lastTargetStyle="";targetLayout(cfg.targetStyle)
-                if enabled then
-                    targetHud.Size=UDim2.fromOffset(targetHud.Size.X.Offset,targetHud.Size.Y.Offset+26)
-                    for _,node in ipairs({avatar,targetName,hpBack,targetNumber,targetDetails,targetFooter,targetStripe,targetDistance})do
-                        local p=node.Position;node.Position=UDim2.new(p.X.Scale,p.X.Offset,p.Y.Scale,p.Y.Offset+26)
-                    end
-                end
+            if not(cfg.targetArmor==true or cfg.targetWeapon==true)then self:HideNativeGear();return end
+            if not hudGear then
+                hudGear=makeGear(overlay,16,true)
+                hudGear.scale=make("UIScale",{Scale=1},hudGear.frame)
             end
-            if not enabled then if hudGear then hudGear.frame.Visible=false end;return end
-            if not hudGear then hudGear=makeGear(targetHud);hudGear.frame.Position=UDim2.fromOffset(61,2)end
             renderGear(hudGear,data.model,cfg.targetArmor==true,cfg.targetWeapon==true)
+            local scale=hudScale.Scale
+            local position=targetHud.AbsolutePosition
+            hudGear.scale.Scale=scale
+            hudGear.frame.Position=UDim2.fromOffset(position.X+61*scale,position.Y-20*scale)
+            hudGear.frame.GroupTransparency=1-targetAnim.alpha
         end
         function self:RenderEquipment(record,model,x,y,armor,weapon)
-            if not record.equipment then record.equipment=makeGear(overlay);record.objects[#record.objects+1]=record.equipment.frame end
+            if not record.equipment then record.equipment=makeGear(overlay,14,false);record.objects[#record.objects+1]=record.equipment.frame end
             local row=record.equipment;renderGear(row,model,armor,weapon)
             row.frame.Position=UDim2.fromOffset(x-row.frame.Size.X.Offset/2,y)
         end
@@ -28926,9 +28925,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             lastTargetData=data
         end
         targetHud.Visible=targetAnim.alpha>0.01 and lastTargetData~=nil
-        if not targetHud.Visible then if opts.NativeFace then self:RenderNativeFace(nil)end;return end
+        if not targetHud.Visible then if opts.NativeFace then self:RenderNativeFace(nil);self:HideNativeGear()end;return end
         local d=lastTargetData
-        self:RenderNativeGear(d,cfg)
         local ratio=d.ratio or 0
         local speed=cfg.targetSmooth
         targetAnim.health+=(ratio-targetAnim.health)*(1-math.exp(-speed*dt))
@@ -28936,6 +28934,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         targetAnim.hurt=math.max(0,targetAnim.hurt-dt*4)
         targetHud.GroupTransparency=1-targetAnim.alpha
         hudScale.Scale=cfg.hudScale*(cfg.targetAnimations and (0.88+0.12*targetAnim.alpha) or 1)
+        self:RenderNativeGear(d,cfg)
         targetHud.BackgroundTransparency=cfg.targetBackground
         targetName.Text=d.name or "Target"
         initials.Visible=false;initials.Text=""
@@ -29652,6 +29651,23 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     -- Lazily allocated, bounded to three rows, no per-message connections/tasks.
     local bindToasts={}
     local bindToastPool={}
+    local notificationSettings=nil
+    local notificationDrag=nil
+    track(UIS.InputChanged:Connect(function(input)
+        local active=notificationDrag
+        if not active then return end
+        if opts.IsMenuOpen and not opts.IsMenuOpen()then notificationDrag=nil;return end
+        if input.UserInputType~=Enum.UserInputType.MouseMovement and input~=active.input then return end
+        local delta=input.Position-active.start
+        local x=math.clamp(math.round(active.x+delta.X),-4000,4000)
+        local y=math.clamp(math.round(active.y+delta.Y),-4000,4000)
+        active.cfg.bindNotifyX=x;active.cfg.bindNotifyY=y
+        if opts.OnNotificationMoved then opts.OnNotificationMoved(x,y)end
+    end))
+    track(UIS.InputEnded:Connect(function(input)
+        if notificationDrag and(input==notificationDrag.input or input.UserInputType==Enum.UserInputType.MouseButton1)then notificationDrag=nil end
+    end))
+
     local bindSound=nil
     local bindAudioData={
         ["Soft Bell"]="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",
@@ -29688,6 +29704,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         return (tostring(value):gsub("&","&amp;"):gsub("<","&lt;"):gsub(">","&gt;"))
     end
     function self:ClearBindNotifications()
+        notificationDrag=nil
         table.clear(bindToasts)
         for _,item in ipairs(bindToastPool)do item.group.Visible=false end
         if bindSound then pcall(function()bindSound:Stop()end)end
@@ -29709,6 +29726,13 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             local knob=make("Frame",{Name="ToggleKnob",Size=UDim2.fromOffset(8,8),Position=UDim2.fromOffset(2,2),BorderSizePixel=0},accent);round(knob,4)
             local message=text(group,"",12);message.Position=UDim2.fromOffset(37,0);message.Size=UDim2.fromOffset(0,28);message.AutomaticSize=Enum.AutomaticSize.X;message.TextXAlignment=Enum.TextXAlignment.Left;message.TextStrokeTransparency=1;message.RichText=true;message.TextTruncate=Enum.TextTruncate.AtEnd
             item={group=group,border=border,message=message,accent=accent,knob=knob}
+            group.Active=true
+            local ownedItem=item
+            track(group.InputBegan:Connect(function(input)
+                if input.UserInputType~=Enum.UserInputType.MouseButton1 and input.UserInputType~=Enum.UserInputType.Touch then return end
+                if not notificationSettings or not notificationSettings.bindNotifications or(opts.IsMenuOpen and not opts.IsMenuOpen())then return end
+                notificationDrag={input=input,start=input.Position,x=notificationSettings.bindNotifyX or 0,y=notificationSettings.bindNotifyY or 0,cfg=notificationSettings,item=ownedItem}
+            end))
             bindToastPool[#bindToastPool+1]=item
         end
         item.name=name;item.started=now;item.duration=math.clamp(tonumber(cfg.bindNotifyDuration)or 2.5,0.5,6)
@@ -29726,6 +29750,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         end
     end
     function self:RenderBindNotifications(now,enabled,soundEnabled,settings)
+        notificationSettings=settings
+        if notificationDrag then for _,item in ipairs(bindToasts)do item.started=now-0.2 end end
         if not enabled then self:ClearBindNotifications();return end
         if not soundEnabled and bindSound then pcall(function()bindSound:Stop()end)end
         for i=#bindToasts,1,-1 do
