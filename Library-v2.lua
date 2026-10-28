@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 33
+			Library.MacrOSRevision = 34
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28577,8 +28577,8 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v11. Additive: existing BABFT/LIP APIs are unchanged.
-Library.UpgradeOverlayVersion = 11
+-- Optional combat overlay API v12. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 12
 function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
@@ -28664,7 +28664,17 @@ make("UIStroke",{Color=Color3.fromRGB(75,85,115),Transparency=0.2},radar)
 make("Frame",{Position=UDim2.new(0.5,0,0,10),Size=UDim2.new(0,1,1,-20),BackgroundTransparency=0.65,BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0},radar)
 make("Frame",{Position=UDim2.new(0,10,0.5,0),Size=UDim2.new(1,-20,0,1),BackgroundTransparency=0.65,BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0},radar)
 local radarCenter=text(radar,"▲",14);radarCenter.Position=UDim2.new(0.5,-8,0.5,-8);radarCenter.Size=UDim2.fromOffset(16,16)
-local watermark=text(overlay,"MacrOS",13);watermark.Position=UDim2.fromOffset(18,12);watermark.Size=UDim2.fromOffset(430,27);watermark.TextXAlignment=Enum.TextXAlignment.Left;watermark.Visible=false
+local watermark
+local watermarkBrand,watermarkStroke
+if opts.ModernWatermark then
+    watermark=make("Frame",{Name="MacrOSWatermark",Position=UDim2.fromOffset(18,12),Size=UDim2.fromOffset(0,30),AutomaticSize=Enum.AutomaticSize.X,BackgroundColor3=themeColor("Surface"),BackgroundTransparency=0.08,BorderSizePixel=0,Visible=false},overlay);round(watermark,8)
+    watermarkStroke=make("UIStroke",{Color=themeColor("Stroke"),Transparency=0.15},watermark)
+    make("UIPadding",{PaddingLeft=UDim.new(0,12),PaddingRight=UDim.new(0,12)},watermark)
+    make("UIListLayout",{FillDirection=Enum.FillDirection.Horizontal,VerticalAlignment=Enum.VerticalAlignment.Center,SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},watermark)
+    local brand=text(watermark,"MacrOS",13);brand.Name="Brand";brand.TextStrokeTransparency=1;brand.AutomaticSize=Enum.AutomaticSize.X;brand.Size=UDim2.fromOffset(0,30);brand.LayoutOrder=0;brand.TextColor3=themeColor("Accent");watermarkBrand=brand
+else
+watermark=text(overlay,"MacrOS",13);watermark.Position=UDim2.fromOffset(18,12);watermark.Size=UDim2.fromOffset(430,27);watermark.TextXAlignment=Enum.TextXAlignment.Left;watermark.Visible=false
+end
 local moduleList=text(overlay,"",13);moduleList.Position=UDim2.new(1,-240,0,265);moduleList.Size=UDim2.fromOffset(220,280);moduleList.TextXAlignment=Enum.TextXAlignment.Right;moduleList.TextYAlignment=Enum.TextYAlignment.Top;moduleList.Visible=false
 local crosshair=make("Frame",{BackgroundTransparency=1,Size=UDim2.fromOffset(0,0),Position=UDim2.fromScale(0.5,0.5),Visible=false},overlay)
 -- Extended crosshair primitives are constructed below.
@@ -28743,6 +28753,28 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             hpBack.Position=UDim2.fromOffset(14,88);hpBack.Size=UDim2.fromOffset(276,6)
         end
     end
+    local portraitCache={}
+    local portraitPending={}
+    local portraitRetry={}
+    local silhouetteHead=make("Frame",{AnchorPoint=Vector2.new(0.5,0),Position=UDim2.fromScale(0.5,0.15),Size=UDim2.fromScale(0.3,0.3),BorderSizePixel=0,BackgroundColor3=themeColor("Muted")},avatar);round(silhouetteHead,100)
+    local silhouetteBody=make("Frame",{Position=UDim2.fromScale(0.2,0.5),Size=UDim2.fromScale(0.6,0.35),BorderSizePixel=0,BackgroundColor3=themeColor("Muted")},avatar);round(silhouetteBody,8)
+    local function portraitImage(userId,mode)
+        if not userId then return nil end
+        local key=tostring(userId)..":"..mode
+        if not portraitCache[key]and not portraitPending[key]and os.clock()>=(portraitRetry[key]or 0)then
+            portraitPending[key]=true
+            task.spawn(function()
+                local ok,image,ready=pcall(function()
+                    return game:GetService("Players"):GetUserThumbnailAsync(userId,mode=="Avatar"and Enum.ThumbnailType.AvatarThumbnail or Enum.ThumbnailType.HeadShot,Enum.ThumbnailSize.Size150x150)
+                end)
+                portraitPending[key]=nil
+                if self.destroyed then return end
+                if ok and ready and type(image)=="string"then portraitCache[key]=image
+                else portraitRetry[key]=os.clock()+5 end
+            end)
+        end
+        return portraitCache[key]
+    end
     function self:RenderTargetHUD(data,cfg,dt)
         targetLayout(cfg.targetStyle)
         local desired=cfg.targetInfo and data~=nil
@@ -28768,9 +28800,12 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         hudScale.Scale=cfg.hudScale*(cfg.targetAnimations and (0.88+0.12*targetAnim.alpha) or 1)
         targetHud.BackgroundTransparency=cfg.targetBackground
         targetName.Text=d.name or "Target"
-        initials.Text=string.upper(string.sub(d.name or "?",1,(utf8.offset(d.name or "?",3)or #(d.name or "?")+1)-1))
-        targetAvatar.Visible=d.userId~=nil
-        targetAvatar.Image=d.userId and ("rbxthumb://type=AvatarHeadShot&id="..tostring(d.userId).."&w=150&h=150") or ""
+        initials.Visible=false;initials.Text=""
+        local portraitMode=cfg.targetPortrait or "Face"
+        avatar.Visible=portraitMode~="None"
+        local image=portraitMode~="None"and(portraitImage(d.userId,portraitMode)or(not d.userId and d.faceTexture))or nil
+        targetAvatar.Visible=image~=nil;targetAvatar.Image=image or ""
+        silhouetteHead.Visible=not image or not targetAvatar.IsLoaded;silhouetteBody.Visible=silhouetteHead.Visible
         targetAvatar.ImageColor3=Color3.new(1,1,1):Lerp(Color3.fromRGB(255,100,100),cfg.targetHurtTint and targetAnim.hurt*0.6 or 0)
         local color=cfg.targetStyle=="Delta 1.16" and Color3.fromRGB(218,46,99) or cfg.targetStyle=="Delta 1.21" and Color3.fromRGB(51,174,212) or cfg.enemyColor
         if cfg.targetCustomColor then color=cfg.targetColorHUD end
@@ -28909,7 +28944,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     -- Shared pooled overlay primitives: no runtime Instance creation in the game client.
     local readouts={}
     local readoutDefs: {{any}}={{"inventoryHUD","INVENTORY",18,160},{"statusHUD","STATUS",18,390},{"progressHUD","PROGRESSION",-265,350},{"sessionHUD","SESSION",-265,510},{"chargeHUD","ATTACK CHARGE",18,540},{"potionsHUD","POTION TIMERS",280,160},{"nearbyHUD","NEARBY PLAYERS",280,390}}
-    if opts.Compact then readoutDefs={{"potionsHUD","POTION TIMERS",280,160}}end
+    if opts.Compact then readoutDefs=opts.NoPotionReadout and {}or {{"potionsHUD","POTION TIMERS",280,160}}end
     for _,def in ipairs(readoutDefs)do
         local panel=make("Frame",{Visible=false,Size=UDim2.fromOffset(245,60),Position=UDim2.new(def[3]<0 and 1 or 0,def[3],0,def[4]),BackgroundColor3=Color3.fromRGB(16,18,25),BackgroundTransparency=0.12,BorderSizePixel=0},overlay);round(panel,8)
         local title=text(panel,def[2],11);title.Position=UDim2.fromOffset(12,7);title.Size=UDim2.fromOffset(220,20);title.TextXAlignment=Enum.TextXAlignment.Left
@@ -29029,25 +29064,27 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         for _,entry in ipairs(targetFX.dots)do entry.core.Visible=false;entry.glow.Visible=false end
     end
     function self:ClearTargetESP()
-        hideTargetFX();targetFX.alpha=0;targetFX.last=nil;targetFX.hp=nil;targetFX.hurt=0
+        hideTargetFX();targetFX.alpha=0;targetFX.last=nil;targetFX.position=nil;targetFX.hp=nil;targetFX.hurt=0
     end
     function self:RenderTargetESP(data,cfg,camera,dt)
-        hideTargetFX()
         if not cfg.targetESP then self:ClearTargetESP();return end
         dt=math.clamp(tonumber(dt)or 1/60,0,0.1)
         targetFX.phase+=dt*cfg.targetESPSpeed
         if data then
-            if not targetFX.last or targetFX.last.id~=data.id then targetFX.hurt=0 end
+            if not targetFX.last or targetFX.last.id~=data.id or not targetFX.position or(targetFX.position-data.position).Magnitude>data.height*6 then
+                targetFX.hurt=0;targetFX.position=data.position
+            else targetFX.position=targetFX.position:Lerp(data.position,1-math.exp(-(cfg.targetESPFollow or 20)*dt))end
             if targetFX.last and targetFX.last.id==data.id and type(data.hp)=="number"and type(targetFX.hp)=="number"and data.hp<targetFX.hp then targetFX.hurt=1 end
             targetFX.hp=data.hp;targetFX.last=data
         end
         targetFX.hurt=math.max(0,targetFX.hurt-dt*3)
         targetFX.alpha+=( (data and 1 or 0)-targetFX.alpha)*math.min(1,dt*12)
-        if targetFX.alpha<0.015 or not targetFX.last then return end
+        if targetFX.alpha<0.015 or not targetFX.last then hideTargetFX();return end
         local info=targetFX.last
-        local center=info.position
+        local center=targetFX.position or info.position
+        if cfg.targetESPStyle=="Shuriken"or cfg.targetESPStyle=="Reticle"then center+=Vector3.new(0,math.sin(targetFX.phase)*info.height*0.25,0)end
         local p,onScreen=camera:WorldToViewportPoint(center)
-        if p.Z<=0.1 or not onScreen then return end
+        if p.Z<=0.1 or not onScreen then hideTargetFX();return end
         local phase=targetFX.phase
         local color=cfg.targetESPColor
         if cfg.targetESPColorMode=="Rainbow"then color=Color3.fromHSV((phase*0.07)%1,0.65,1)
@@ -29092,7 +29129,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             local size=math.clamp(math.abs(top.Y-p.Y)*0.32,3,28)
             for ghost=1,3 do for tail=0,cfg.targetESPTrail-1 do
                 local t=phase+ghost*math.pi*2/3-tail*0.13
-                local point=center+Vector3.new(math.cos(t)*radius,math.sin(t*1.5+ghost)*info.height*0.32,math.sin(t)*radius)
+                local point=center+Vector3.new(math.cos(t)*radius,math.sin(t*1.5+ghost)*info.height*0.45,math.sin(t)*radius)
                 local strength=1-tail/cfg.targetESPTrail
                 dot(point,size*(0.25+strength*0.75),strength*strength)
             end end
@@ -29101,7 +29138,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                 local angle=link/14*math.pi*2+phase*(belt==1 and 0.35 or -0.35)
                 local radial=Vector3.new(math.cos(angle),0,math.sin(angle))
                 local tangent=Vector3.new(-math.sin(angle),0,math.cos(angle))
-                local base=center+radial*radius+Vector3.new(0,(belt==1 and 0.22 or -0.22)*info.height+math.sin(angle*2)*info.height*0.09,0)
+                local base=center+radial*radius+Vector3.new(0,(belt==1 and 0.3 or -0.3)*info.height+math.sin(angle*2)*info.height*0.09,0)
                 local axis=link%2==0 and Vector3.new(0,1,0)or radial
                 for segment=0,7 do
                     local a=segment/8*math.pi*2;local b=(segment+1)/8*math.pi*2
@@ -29140,6 +29177,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                 end end
             end
         end
+        for i,item in ipairs(targetFX.lines)do if i>countLine then item.core.Visible=false;item.glow.Visible=false end end
+        for i,item in ipairs(targetFX.dots)do if i>countDot then item.core.Visible=false;item.glow.Visible=false end end
     end
     local graph
     if not opts.Compact then
@@ -29243,6 +29282,61 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         if not cfg.ambience then return end
         ambienceEffect.TintColor=Color3.new(1,1,1):Lerp(cfg.ambienceColor,cfg.ambienceStrength)
         ambienceEffect.Brightness=cfg.ambienceBrightness;ambienceEffect.Contrast=cfg.ambienceContrast;ambienceEffect.Saturation=cfg.ambienceSaturation
+    end
+    function self:RenderArrow(record,x,y,angle,size,color,alpha,shape)
+        local root=record.arrow
+        root.Visible=true;root.Text="";root.Size=UDim2.fromOffset(size,size);root.Position=UDim2.fromOffset(x,y);root.Rotation=math.deg(angle)
+        record.arrowVectors=record.arrowVectors or {}
+        for _,node in ipairs(record.arrowVectors)do node.Visible=false end
+        local count=0
+        local function rect(px,py,w,h,rotation)
+            count+=1
+            local node=record.arrowVectors[count]
+            if not node then node=make("Frame",{AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0},root);record.arrowVectors[count]=node end
+            node.Visible=true;node.Position=UDim2.fromOffset(size*(0.5+px),size*(0.5+py));node.Size=UDim2.fromOffset(math.max(1,w*size),math.max(1,h*size));node.Rotation=rotation or 0;node.BackgroundColor3=color;node.BackgroundTransparency=alpha
+        end
+        local function segment(ax,ay,bx,by)
+            local dx,dy=bx-ax,by-ay
+            rect((ax+bx)/2,(ay+by)/2,math.sqrt(dx*dx+dy*dy),0.14,math.deg(math.atan2(dy,dx)))
+        end
+        if shape=="Chevron"then segment(-0.38,0.24,0,-0.32);segment(0,-0.32,0.38,0.24)
+        elseif shape=="Diamond"then rect(0,0,0.62,0.62,45)
+        else
+            local bottom=shape=="Arrow"and -0.02 or 0.4
+            for i=1,12 do local t=i/12;rect(0,-0.45+t*(bottom+0.45),0.88*t,(bottom+0.45)/12+0.02,0)end
+            if shape=="Arrow"then rect(0,0.2,0.18,0.5,0)end
+        end
+    end
+    local trajectoryLines={}
+    local landingDot=make("Frame",{Name="TrajectoryLanding",Visible=false,AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.fromOffset(10,10),BorderSizePixel=0},overlay);round(landingDot,100)
+    function self:RenderTrajectory(points,landing,color,camera)
+        for _,node in ipairs(trajectoryLines)do node.Visible=false end
+        landingDot.Visible=false
+        if not camera then return end
+        for i=2,math.min(#points,241)do
+            local a=camera:WorldToViewportPoint(points[i-1]);local b=camera:WorldToViewportPoint(points[i])
+            if a.Z>0.1 and b.Z>0.1 then
+                local node=trajectoryLines[i-1]
+                if not node then node=make("Frame",{Name="TrajectoryLine_"..(i-1),AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0},overlay);trajectoryLines[i-1]=node end
+                local delta=Vector2.new(b.X-a.X,b.Y-a.Y)
+                node.Visible=true;node.Position=UDim2.fromOffset((a.X+b.X)/2,(a.Y+b.Y)/2);node.Size=UDim2.fromOffset(delta.Magnitude,2);node.Rotation=math.deg(math.atan2(delta.Y,delta.X));node.BackgroundColor3=color;node.BackgroundTransparency=0.1
+            end
+        end
+        if landing then local p,visible=camera:WorldToViewportPoint(landing);landingDot.Visible=visible and p.Z>0.1;landingDot.Position=UDim2.fromOffset(p.X,p.Y);landingDot.BackgroundColor3=color end
+    end
+    local watermarkRows={}
+    function self:RenderWatermark(rows)
+        if not opts.ModernWatermark then watermark.Text="MacrOS  /  "..table.concat(rows,"  /  ");return end
+        watermark.BackgroundColor3=themeColor("Surface");watermarkBrand.TextColor3=themeColor("Accent");watermarkStroke.Color=themeColor("Stroke")
+        for i,value in ipairs(rows)do
+            local node=watermarkRows[i]
+            if not node then
+                node=text(watermark,"",12);node.TextStrokeTransparency=1;node.AutomaticSize=Enum.AutomaticSize.X;node.Size=UDim2.fromOffset(0,30);node.LayoutOrder=i+1
+                watermarkRows[i]=node
+            end
+            node.Visible=true;node.Text="  /  "..value;node.TextColor3=themeColor("Muted")
+        end
+        for i=#rows+1,#watermarkRows do watermarkRows[i].Visible=false end
     end
     function self:ConfigureRadar(cfg)
         local corner=radar:FindFirstChildOfClass("UICorner")
