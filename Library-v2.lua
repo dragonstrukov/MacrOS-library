@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 26
+			Library.MacrOSRevision = 29
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28541,8 +28541,8 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v4. Additive: existing BABFT/LIP APIs are unchanged.
-Library.UpgradeOverlayVersion = 4
+-- Optional combat overlay API v7. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 7
 function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
@@ -28558,6 +28558,8 @@ local function text(parent,value,size)
     return make("TextLabel",{BackgroundTransparency=1,BorderSizePixel=0,Text=value or "",TextColor3=Color3.fromRGB(235,238,249),TextSize=size or 13,
         Font=Enum.Font.GothamMedium,TextStrokeTransparency=0.55,RichText=false},parent)
 end
+local overlayFallback={Surface=Color3.fromRGB(20,20,20),Surface2=Color3.fromRGB(25,25,25),Stroke=Color3.fromRGB(40,40,40),Text=Color3.new(1,1,1),Muted=Color3.fromRGB(140,140,140),Accent=Color3.fromRGB(128,160,246),Success=Color3.fromRGB(150,220,170)}
+local function themeColor(key)return (Library.Theme and Library.Theme[key])or overlayFallback[key]end
 local overlay=make("ScreenGui",{Name="MacrOSUpgradeOverlays",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=1000,ZIndexBehavior=Enum.ZIndexBehavior.Sibling},opts.Parent or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"))
 local highlightFolder=make("Folder",{Name="MacrOSUpgradeHighlights"},opts.WorldParent or workspace)
 local markers={}
@@ -28590,18 +28592,20 @@ local function hideMarker(record)
     end
 end
 local dragged: {[GuiObject]: boolean}={}
+local hudLocked=false
+local hudGrid=1
 local function drag(frame)
     frame.Active=true
     local active,start,position
     track(frame.InputBegan:Connect(function(input)
-        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+        if not hudLocked and (input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch)then
             active=input;start=input.Position;position=frame.Position;dragged[frame]=true
         end
     end))
     track(UIS.InputChanged:Connect(function(input)
-        if active and (input==active or input.UserInputType==Enum.UserInputType.MouseMovement)then
+        if not hudLocked and active and (input==active or input.UserInputType==Enum.UserInputType.MouseMovement)then
             local delta=input.Position-start
-            frame.Position=UDim2.new(position.X.Scale,position.X.Offset+delta.X,position.Y.Scale,position.Y.Offset+delta.Y)
+            frame.Position=UDim2.new(position.X.Scale,math.round((position.X.Offset+delta.X)/hudGrid)*hudGrid,position.Y.Scale,math.round((position.Y.Offset+delta.Y)/hudGrid)*hudGrid)
         end
     end))
     track(UIS.InputEnded:Connect(function(input)if input==active then active=nil end end))
@@ -28642,9 +28646,15 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     local dotEdge=make("UIStroke",{Thickness=1,Color=Color3.new(0,0,0)},dot)
     local fovRing=make("Frame",{AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0.5,0.5),BackgroundTransparency=1,Visible=false},overlay);round(fovRing,10000)
     local fovStroke=make("UIStroke",{Thickness=1},fovRing)
-    local bindPanel=make("Frame",{Visible=false,Size=UDim2.fromOffset(240,45),Position=UDim2.new(0,18,0.5,40),BackgroundColor3=Color3.fromRGB(15,18,27),BorderSizePixel=0},overlay);round(bindPanel,10)
+    local bindPanel=make("Frame",{Name="KeybindOverlay",Visible=false,Size=UDim2.fromOffset(240,45),Position=UDim2.new(0,18,0.5,40),BackgroundColor3=Color3.fromRGB(15,18,27),BorderSizePixel=0},overlay);round(bindPanel,10)
     local bindScale=make("UIScale",{Scale=1},bindPanel)
     local bindTitle=text(bindPanel,"KEYBINDS",11);bindTitle.Position=UDim2.fromOffset(12,8);bindTitle.Size=UDim2.fromOffset(216,22);bindTitle.TextXAlignment=Enum.TextXAlignment.Left
+    bindTitle.Text="Keybinds";bindTitle.TextSize=13;bindTitle.TextStrokeTransparency=1;bindTitle.Font=Enum.Font.GothamBold
+    bindTitle.Position=UDim2.fromOffset(14,10);bindTitle.Size=UDim2.fromOffset(180,22)
+    local bindBorder=make("UIStroke",{Thickness=1,Transparency=0.2},bindPanel)
+    local bindCounter=text(bindPanel,"0",11);bindCounter.Name="KeybindCount";bindCounter.TextStrokeTransparency=1;bindCounter.Position=UDim2.new(1,-48,0,12);bindCounter.Size=UDim2.fromOffset(34,18)
+    local bindDivider=make("Frame",{Position=UDim2.fromOffset(14,40),Size=UDim2.new(1,-28,0,1),BorderSizePixel=0},bindPanel)
+    local bindEmpty=text(bindPanel,"Assign a key in module settings",11);bindEmpty.TextStrokeTransparency=1;bindEmpty.Position=UDim2.fromOffset(14,49);bindEmpty.Size=UDim2.new(1,-28,0,24);bindEmpty.TextXAlignment=Enum.TextXAlignment.Left
     local bindRows={}
     local damageFlash=make("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(230,45,65),BackgroundTransparency=1,BorderSizePixel=0,Visible=false,ZIndex=0},overlay)
     local compass=text(overlay,"",14);compass.AnchorPoint=Vector2.new(0.5,0);compass.Position=UDim2.new(0.5,0,0,12);compass.Size=UDim2.fromOffset(360,25);compass.Visible=false
@@ -28657,6 +28667,10 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     targetNumber.TextXAlignment=Enum.TextXAlignment.Right
     targetNumber.TextStrokeTransparency=1
     targetName.TextStrokeTransparency=1;targetDetails.TextStrokeTransparency=1
+    local targetStripe=make("Frame",{Position=UDim2.fromOffset(0,17),Size=UDim2.fromOffset(2,43),BorderSizePixel=0},targetHud)
+    local targetDistance=make("Frame",{Position=UDim2.fromOffset(232,55),Size=UDim2.fromOffset(58,24),BorderSizePixel=0},targetHud);round(targetDistance,6)
+    local targetDistanceText=text(targetDistance,"",11);targetDistanceText.Size=UDim2.fromScale(1,1);targetDistanceText.TextStrokeTransparency=1
+    targetFooter.TextStrokeTransparency=1
     local targetAnim={alpha=0,health=1,trail=1,previousHP=0,hurt=0,hasData=false}
     local lastTargetData: any=nil
     local lastTargetStyle=""
@@ -28666,22 +28680,29 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         if not dragged[targetHud]then targetHud.Position=style=="Delta 1.16" and UDim2.fromScale(0.5,0.72)or style=="Delta 1.21" and UDim2.fromScale(0.5,0.55)or UDim2.new(0.5,185,0.5,137)end
         local legacy=style=="MacrOS"
         local classic=style=="Delta 1.16"
-        targetHud.Size=legacy and UDim2.fromOffset(280,94) or UDim2.fromOffset(classic and 230 or 244,60)
+        targetHud.Size=legacy and UDim2.fromOffset(304,108) or UDim2.fromOffset(classic and 230 or 244,60)
         targetHud.BackgroundColor3=legacy and Color3.fromRGB(15,18,27) or Color3.fromRGB(16,17,21)
         targetBorder.Enabled=legacy
         targetCorner.CornerRadius=UDim.new(0,legacy and 12 or 7)
-        avatar.Size=UDim2.fromOffset(legacy and 55 or 44,legacy and 55 or 44)
-        avatar.Position=UDim2.fromOffset(legacy and 13 or 8,legacy and 13 or 8)
+        avatar.Size=UDim2.fromOffset(legacy and 48 or 44,legacy and 48 or 44)
+        avatar.Position=UDim2.fromOffset(legacy and 14 or 8,legacy and 14 or 8)
         avatar.BackgroundTransparency=legacy and 0 or 1
-        targetName.Position=UDim2.fromOffset(legacy and 80 or 61,legacy and 12 or 8)
-        targetName.Size=UDim2.fromOffset(legacy and 186 or (classic and 158 or 125),22)
+        targetName.Position=UDim2.fromOffset(legacy and 78 or 61,legacy and 12 or 8)
+        targetName.Size=UDim2.fromOffset(legacy and 210 or (classic and 158 or 125),22)
         targetName.TextSize=legacy and 14 or 13
-        hpBack.Position=UDim2.fromOffset(legacy and 80 or 61,legacy and 64 or 35)
+        hpBack.Position=UDim2.fromOffset(legacy and 78 or 61,legacy and 64 or 35)
         hpBack.Size=UDim2.fromOffset(legacy and 185 or (classic and 126 or 167),legacy and 7 or 8)
         targetNumber.Position=UDim2.fromOffset(classic and 190 or 189,classic and 29 or 8)
         targetNumber.Size=UDim2.fromOffset(classic and 31 or 45,22)
         targetNumber.TextSize=classic and 11 or 13
-        targetDetails.Visible=legacy;targetFooter.Visible=legacy;targetNumber.Visible=not legacy
+        targetDetails.Visible=false;targetFooter.Visible=legacy;targetNumber.Visible=true
+        targetStripe.Visible=legacy;targetDistance.Visible=legacy
+        targetNumber.TextXAlignment=legacy and Enum.TextXAlignment.Left or Enum.TextXAlignment.Right
+        if legacy then
+            targetNumber.Position=UDim2.fromOffset(78,55);targetNumber.Size=UDim2.fromOffset(145,24);targetNumber.TextSize=14
+            targetFooter.Position=UDim2.fromOffset(78,35);targetFooter.Size=UDim2.fromOffset(210,17);targetFooter.TextSize=11;targetFooter.TextTruncate=Enum.TextTruncate.AtEnd
+            hpBack.Position=UDim2.fromOffset(14,88);hpBack.Size=UDim2.fromOffset(276,6)
+        end
     end
     function self:RenderTargetHUD(data,cfg,dt)
         targetLayout(cfg.targetStyle)
@@ -28722,6 +28743,15 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         targetNumber.TextColor3=cfg.targetStyle=="Delta 1.21" and color or Color3.fromRGB(165,168,180)
         targetDetails.Text=string.format("%s HP   •   %.1f blocks",d.hp and (d.maxHP and string.format("%.0f / %.0f",d.hp,d.maxHP)or string.format("%.0f",d.hp)) or "?",d.distance or 0)
         targetFooter.Text=d.preview and "PREVIEW · drag to reposition" or (d.username and "@"..d.username or "CURRENT TARGET")
+        if cfg.targetStyle=="MacrOS"then
+            targetHud.BackgroundColor3=themeColor("Surface");targetBorder.Color=themeColor("Stroke");targetBorder.Transparency=0.15
+            avatar.BackgroundColor3=themeColor("Surface2");targetName.TextColor3=themeColor("Text");targetFooter.TextColor3=themeColor("Muted")
+            targetNumber.TextColor3=themeColor("Text");hpBack.BackgroundColor3=themeColor("Surface2")
+            if not cfg.targetCustomColor and not cfg.targetAccent then color=themeColor("Accent");hpFill.BackgroundColor3=color;hpTrail.BackgroundColor3=color:Lerp(Color3.new(1,1,1),0.35)end
+            targetStripe.BackgroundColor3=color;targetDistance.BackgroundColor3=themeColor("Surface2");targetDistanceText.TextColor3=themeColor("Muted")
+            targetDistanceText.Text=string.format("%.1f b",d.distance or 0)
+            targetNumber.Text=d.hp and (d.maxHP and string.format("%.0f / %.0f HP",d.hp,d.maxHP)or string.format("%.0f HP",d.hp))or "HP unavailable"
+        else targetName.TextColor3=Color3.fromRGB(235,238,249)end
         if d.preview and cfg.targetStyle~="MacrOS"then targetName.Text="Preview Player"end
     end
     local rotation=0
@@ -28780,25 +28810,39 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     function self:UpdateKeybinds(bindings,cfg)
         bindPanel.Visible=cfg.keybindOverlay;bindScale.Scale=cfg.keybindScale;bindPanel.BackgroundTransparency=cfg.keybindAlpha
         if not cfg.keybindOverlay then return end
-        local count=0
+        bindPanel.BackgroundColor3=themeColor("Surface");bindBorder.Color=themeColor("Stroke");bindDivider.BackgroundColor3=themeColor("Stroke")
+        bindTitle.TextColor3=themeColor("Text");bindCounter.TextColor3=themeColor("Muted");bindEmpty.TextColor3=themeColor("Muted")
+        local count,total=0,0
         for _,entry in ipairs(bindings)do
             local key=entry.handle:Get()
             local assigned=key~=nil and key~=Enum.KeyCode.Unknown
             local active=entry.key=="menu" and opts.IsMenuOpen and opts.IsMenuOpen() or cfg[entry.key]==true
             if (assigned or cfg.keybindEmpty)and (not cfg.keybindActiveOnly or active)then
+                total+=1
+                if count<(cfg.keybindLimit or 8)then
                 count+=1
                 if not bindRows[count]then
-                    local label=text(bindPanel,"",12);label.TextXAlignment=Enum.TextXAlignment.Left;label.TextTruncate=Enum.TextTruncate.AtEnd
-                    label.Position=UDim2.fromOffset(12,32+(count-1)*22);label.Size=UDim2.fromOffset(216,22);bindRows[count]=label
+                    local row=make("Frame",{Name="KeybindRow_"..count,BackgroundTransparency=1,Size=UDim2.new(1,-28,0,30)},bindPanel)
+                    local dot=make("Frame",{Position=UDim2.fromOffset(0,12),Size=UDim2.fromOffset(5,5),BorderSizePixel=0},row);round(dot,3)
+                    local name=text(row,"",12);name.Name="KeybindName";name.TextXAlignment=Enum.TextXAlignment.Left;name.TextTruncate=Enum.TextTruncate.AtEnd;name.TextStrokeTransparency=1
+                    name.Position=UDim2.fromOffset(14,0);name.Size=UDim2.new(1,-102,1,0)
+                    local chip=make("Frame",{Position=UDim2.new(1,-80,0,4),Size=UDim2.fromOffset(80,22),BorderSizePixel=0},row);round(chip,5)
+                    local keyLabel=text(chip,"",10);keyLabel.Name="KeybindKey";keyLabel.Size=UDim2.fromScale(1,1);keyLabel.TextStrokeTransparency=1;keyLabel.TextTruncate=Enum.TextTruncate.AtEnd
+                    bindRows[count]={row=row,dot=dot,name=name,chip=chip,key=keyLabel}
                 end
-                local label=bindRows[count];label.Visible=true
-                label.Text=entry.label.."   ["..(assigned and key.Name or "—").."]  "..(active and "ON" or "OFF")
-                label.TextColor3=active and cfg.enemyColor or Color3.fromRGB(150,157,176)
+                local view=bindRows[count];view.row.Visible=true;view.row.Position=UDim2.fromOffset(14,46+(count-1)*30)
+                view.name.Text=entry.label;view.name.TextColor3=active and themeColor("Text")or themeColor("Muted")
+                view.dot.BackgroundColor3=active and themeColor("Success")or themeColor("Stroke")
+                view.chip.BackgroundColor3=themeColor("Surface2");view.key.TextColor3=active and themeColor("Accent")or themeColor("Muted")
+                view.key.Text=assigned and key.Name or "Unbound"
+                end
             end
         end
-        for i=count+1,#bindRows do bindRows[i].Visible=false end
-        bindTitle.Text=count==0 and "KEYBINDS · no matching binds" or "KEYBINDS"
-        bindPanel.Size=UDim2.fromOffset(240,math.max(42,38+count*22))
+        for i=count+1,#bindRows do bindRows[i].row.Visible=false end
+        bindEmpty.Visible=count==0 or total>count;bindCounter.Text=tostring(total)
+        bindEmpty.Text=count==0 and "Assign a key in module settings"or ("+ "..(total-count).." more · adjust filters")
+        bindEmpty.Position=UDim2.fromOffset(14,46+count*30)
+        bindPanel.Size=UDim2.fromOffset(280,math.max(84,54+count*30+(total>count and 24 or 0)))
     end
     function self:UpdateTelemetry(data,cfg,dt)
         compass.Visible=cfg.compass;telemetry.Visible=cfg.coordinates or cfg.speedometer
@@ -28821,7 +28865,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     end
     -- Shared pooled overlay primitives: no runtime Instance creation in the game client.
     local readouts={}
-    local readoutDefs: {{any}}={{"inventoryHUD","INVENTORY",18,160},{"statusHUD","STATUS",18,390},{"progressHUD","PROGRESSION",-265,350},{"sessionHUD","SESSION",-265,510},{"chargeHUD","ATTACK CHARGE",18,540}}
+    local readoutDefs: {{any}}={{"inventoryHUD","INVENTORY",18,160},{"statusHUD","STATUS",18,390},{"progressHUD","PROGRESSION",-265,350},{"sessionHUD","SESSION",-265,510},{"chargeHUD","ATTACK CHARGE",18,540},{"potionsHUD","POTION TIMERS",280,160},{"nearbyHUD","NEARBY PLAYERS",280,390}}
     for _,def in ipairs(readoutDefs)do
         local panel=make("Frame",{Visible=false,Size=UDim2.fromOffset(245,60),Position=UDim2.new(def[3]<0 and 1 or 0,def[3],0,def[4]),BackgroundColor3=Color3.fromRGB(16,18,25),BackgroundTransparency=0.12,BorderSizePixel=0},overlay);round(panel,8)
         local title=text(panel,def[2],11);title.Position=UDim2.fromOffset(12,7);title.Size=UDim2.fromOffset(220,20);title.TextXAlignment=Enum.TextXAlignment.Left
@@ -28850,7 +28894,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         for key,view in pairs(readouts)do
             view.panel.Visible=cfg[key]==true
             if view.panel.Visible then
-                local rows=data[key] or {"Unavailable"}
+                local rows=data[key] or view.rows or {"Unavailable"}
                 view.title.TextColor3=cfg.enemyColor;view.content.Text=table.concat(rows,"\n")
                 view.panel.Size=UDim2.fromOffset(245,38+18*math.max(1,#rows));view.content.Size=UDim2.fromOffset(220,18*math.max(1,#rows))
             end
@@ -28870,7 +28914,213 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             end
         end
     end
+    local healthNumbers={}
+    local numberPool={}
+    local waypointPool={}
+    function self:SetHUDOptions(locked,grid)
+        hudLocked=locked==true;hudGrid=math.clamp(tonumber(grid)or 1,1,30)
+    end
+    local layoutObjects={targetInfo=targetHud,radar=radar,watermark=watermark,moduleList=moduleList,keybinds=bindPanel,compass=compass,telemetry=telemetry}
+    function self:GetLayout()
+        local result={}
+        for key,node in pairs(layoutObjects)do local p=node.Position;result[key]={p.X.Scale,p.X.Offset,p.Y.Scale,p.Y.Offset}end
+        for key,view in pairs(readouts)do local p=view.panel.Position;result[key]={p.X.Scale,p.X.Offset,p.Y.Scale,p.Y.Offset}end
+        return result
+    end
+    function self:SetLayout(layout)
+        local function apply(node,values)
+            if not node or type(values)~="table"then return end
+            for i=1,4 do local v=values[i];if type(v)~="number"or v~=v or math.abs(tonumber(v)or 0)>(i%2==1 and 2 or 10000)then return end end
+            node.Position=UDim2.new(values[1],values[2],values[3],values[4]);dragged[node]=true
+        end
+        for key,values in pairs(layout)do apply(layoutObjects[key]or(readouts[key]and readouts[key].panel),values)end
+    end
+    function self:PushHealthNumber(position,delta,now)
+        if type(delta)~="number"or delta~=delta or math.abs(delta)==math.huge or delta==0 then return end
+        if #healthNumbers>=24 then table.remove(healthNumbers,1)end
+        healthNumbers[#healthNumbers+1]={position=position,delta=delta,time=now}
+    end
+    function self:ClearHealthNumbers()
+        table.clear(healthNumbers);for _,node in ipairs(numberPool)do node.Visible=false end
+    end
+    function self:SetUtilityReadouts(potions,rows,nearby,nearbyRows)
+        for _,entry in ipairs({{readouts.potionsHUD,potions,rows},{readouts.nearbyHUD,nearby,nearbyRows}})do
+            local view=entry[1];view.rows=entry[3];view.panel.Visible=entry[2]==true
+            view.content.Text=table.concat(entry[3],"\n");view.panel.Size=UDim2.fromOffset(245,38+18*math.max(1,#entry[3]));view.content.Size=UDim2.fromOffset(220,18*math.max(1,#entry[3]))
+        end
+    end
+    function self:RenderNavigation(points,cfg,origin,camera,now)
+        for _,node in ipairs(waypointPool)do node.Visible=false end
+        if cfg.waypoints then
+            for i,point in ipairs(points)do
+                if i>24 then break end
+                local distance=(point.position-origin).Magnitude
+                local p,onScreen=camera:WorldToViewportPoint(point.position)
+                if onScreen and p.Z>0.1 and distance<=cfg.waypointRange then
+                    local node=waypointPool[i]
+                    if not node then node=text(overlay,"",12);node.Name="Waypoint_"..i;node.AnchorPoint=Vector2.new(0.5,1);node.Size=UDim2.fromOffset(240,38);node.TextTruncate=Enum.TextTruncate.AtEnd;waypointPool[i]=node end
+                    node.Visible=true;node.Position=UDim2.fromOffset(p.X,p.Y);node.TextColor3=cfg.enemyColor
+                    node.Text=string.format("%s  ·  %.0f studs\n◆",point.name,distance)
+                end
+            end
+        end
+        for _,node in ipairs(numberPool)do node.Visible=false end
+        if not cfg.damageNumbers then table.clear(healthNumbers);return end
+        for i=#healthNumbers,1,-1 do if now-healthNumbers[i].time>=1.25 then table.remove(healthNumbers,i)end end
+        for i,entry in ipairs(healthNumbers)do
+            local age=math.max(0,now-entry.time);local p,onScreen=camera:WorldToViewportPoint(entry.position)
+            if onScreen and p.Z>0.1 then
+                local node=numberPool[i]
+                if not node then node=text(overlay,"",18);node.Name="HealthNumber_"..i;node.Size=UDim2.fromOffset(120,28);node.AnchorPoint=Vector2.new(0.5,0.5);numberPool[i]=node end
+                node.Visible=true;node.Position=UDim2.fromOffset(p.X,p.Y-25-age*45)
+                node.Text=string.format("%+.1f",entry.delta);node.TextColor3=entry.delta>0 and Color3.fromRGB(100,235,160)or Color3.fromRGB(255,105,125)
+                node.TextTransparency=math.clamp((age-0.65)/0.6,0,1)
+            end
+        end
+    end
+    -- Target-only effects: bounded reusable primitives, no world Instances/assets.
+    local targetFX={lines={},dots={},alpha=0,phase=0,last=nil,hp=nil,hurt=0}
+    local function hideTargetFX()
+        for _,entry in ipairs(targetFX.lines)do entry.core.Visible=false;entry.glow.Visible=false end
+        for _,entry in ipairs(targetFX.dots)do entry.core.Visible=false;entry.glow.Visible=false end
+    end
+    function self:ClearTargetESP()
+        hideTargetFX();targetFX.alpha=0;targetFX.last=nil;targetFX.hp=nil;targetFX.hurt=0
+    end
+    function self:RenderTargetESP(data,cfg,camera,dt)
+        hideTargetFX()
+        if not cfg.targetESP then self:ClearTargetESP();return end
+        dt=math.clamp(tonumber(dt)or 1/60,0,0.1)
+        targetFX.phase+=dt*cfg.targetESPSpeed
+        if data then
+            if not targetFX.last or targetFX.last.id~=data.id then targetFX.hurt=0 end
+            if targetFX.last and targetFX.last.id==data.id and type(data.hp)=="number"and type(targetFX.hp)=="number"and data.hp<targetFX.hp then targetFX.hurt=1 end
+            targetFX.hp=data.hp;targetFX.last=data
+        end
+        targetFX.hurt=math.max(0,targetFX.hurt-dt*3)
+        targetFX.alpha+=( (data and 1 or 0)-targetFX.alpha)*math.min(1,dt*12)
+        if targetFX.alpha<0.015 or not targetFX.last then return end
+        local info=targetFX.last
+        local center=info.position
+        local p,onScreen=camera:WorldToViewportPoint(center)
+        if p.Z<=0.1 or not onScreen then return end
+        local phase=targetFX.phase
+        local color=cfg.targetESPColor
+        if cfg.targetESPColorMode=="Rainbow"then color=Color3.fromHSV((phase*0.07)%1,0.65,1)
+        elseif cfg.targetESPColorMode=="Health"and type(info.ratio)=="number"then color=Color3.fromHSV(math.clamp(info.ratio,0,1)*0.33,0.8,1)end
+        if cfg.targetESPHurt then color=color:Lerp(Color3.fromRGB(255,65,80),targetFX.hurt)end
+        local opacity=targetFX.alpha*(1-cfg.targetESPAlpha)
+        local radius=info.radius*cfg.targetESPSize
+        local countLine,countDot=0,0
+        local function line(a,b,fade,width)
+            if a.Z<=0.1 or b.Z<=0.1 then return end
+            countLine+=1;if countLine>256 then return end
+            local item=targetFX.lines[countLine]
+            if not item then
+                item={core=make("Frame",{Name="TargetESP_Line_"..countLine,AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0},overlay),glow=make("Frame",{Name="TargetESP_GlowLine_"..countLine,AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0},overlay)}
+                targetFX.lines[countLine]=item
+            end
+            local delta=Vector2.new(b.X-a.X,b.Y-a.Y)
+            local position=UDim2.fromOffset((a.X+b.X)/2,(a.Y+b.Y)/2)
+            local rotation=math.deg(math.atan2(delta.Y,delta.X))
+            for _,node in ipairs({item.glow,item.core})do node.Position=position;node.Rotation=rotation;node.BackgroundColor3=color end
+            item.core.Visible=true;item.core.Size=UDim2.fromOffset(delta.Magnitude,width);item.core.BackgroundTransparency=1-opacity*fade
+            item.glow.Visible=cfg.targetESPGlow;item.glow.Size=UDim2.fromOffset(delta.Magnitude+2,width*3);item.glow.BackgroundTransparency=1-opacity*fade*0.18
+        end
+        local function worldLine(a,b,fade,width)line(camera:WorldToViewportPoint(a),camera:WorldToViewportPoint(b),fade,width)end
+        local function dot(point,size,fade)
+            local v=camera:WorldToViewportPoint(point);if v.Z<=0.1 then return end
+            countDot+=1;if countDot>64 then return end
+            local item=targetFX.dots[countDot]
+            if not item then
+                item={core=make("Frame",{Name="TargetESP_Dot_"..countDot,AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0},overlay),glow=make("Frame",{Name="TargetESP_GlowDot_"..countDot,AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0},overlay)}
+                round(item.core,1000);round(item.glow,1000);targetFX.dots[countDot]=item
+            end
+            for _,node in ipairs({item.glow,item.core})do node.Position=UDim2.fromOffset(v.X,v.Y);node.BackgroundColor3=color end
+            item.core.BackgroundColor3=cfg.targetESPGlow and color:Lerp(Color3.new(1,1,1),0.7)or color
+            item.core.Visible=true;item.core.Size=UDim2.fromOffset(size,size);item.core.BackgroundTransparency=1-opacity*fade
+            item.glow.Visible=cfg.targetESPGlow;item.glow.Size=UDim2.fromOffset(size*2.5,size*2.5);item.glow.BackgroundTransparency=1-opacity*fade*0.22
+        end
+        local width=cfg.targetESPThickness
+        local mode=cfg.targetESPStyle
+        if mode=="Ghosts"then
+            local top=camera:WorldToViewportPoint(center+Vector3.new(0,radius,0))
+            local size=math.clamp(math.abs(top.Y-p.Y)*0.32,3,28)
+            for ghost=1,3 do for tail=0,cfg.targetESPTrail-1 do
+                local t=phase+ghost*math.pi*2/3-tail*0.13
+                local point=center+Vector3.new(math.cos(t)*radius,math.sin(t*1.5+ghost)*info.height*0.32,math.sin(t)*radius)
+                local strength=1-tail/cfg.targetESPTrail
+                dot(point,size*(0.25+strength*0.75),strength*strength)
+            end end
+        elseif mode=="Chains"then
+            for belt=1,2 do for link=0,13 do
+                local angle=link/14*math.pi*2+phase*(belt==1 and 0.35 or -0.35)
+                local radial=Vector3.new(math.cos(angle),0,math.sin(angle))
+                local tangent=Vector3.new(-math.sin(angle),0,math.cos(angle))
+                local base=center+radial*radius+Vector3.new(0,(belt==1 and 0.22 or -0.22)*info.height+math.sin(angle*2)*info.height*0.09,0)
+                local axis=link%2==0 and Vector3.new(0,1,0)or radial
+                for segment=0,7 do
+                    local a=segment/8*math.pi*2;local b=(segment+1)/8*math.pi*2
+                    worldLine(base+tangent*(math.cos(a)*radius*0.23)+axis*(math.sin(a)*radius*0.12),base+tangent*(math.cos(b)*radius*0.23)+axis*(math.sin(b)*radius*0.12),0.95,width)
+                end
+            end end
+        elseif mode=="Halo"then
+            local base=center+Vector3.new(0,math.sin(phase)*info.height*0.45,0)
+            for i=0,47 do
+                local a=i/48*math.pi*2;local b=(i+1)/48*math.pi*2
+                worldLine(base+Vector3.new(math.cos(a)*radius,0,math.sin(a)*radius),base+Vector3.new(math.cos(b)*radius,0,math.sin(b)*radius),1,width*2)
+            end
+        else
+            -- Billboard geometry keeps the shuriken readable from any camera angle.
+            local top=camera:WorldToViewportPoint(center+Vector3.new(0,radius,0))
+            local size=math.clamp(math.abs(top.Y-p.Y),8,140)
+            if mode=="Shuriken"then
+                for blade=0,3 do
+                    local a=phase+blade*math.pi/2
+                    local function screen(angle,r)return Vector3.new(p.X+math.cos(angle)*size*r,p.Y+math.sin(angle)*size*r,p.Z)end
+                    line(screen(a,1),screen(a+0.55,0.28),1,width)
+                    line(screen(a+0.55,0.28),screen(a+math.pi/2,1),1,width)
+                    line(screen(a,1),screen(a+1.1,0.19),0.45,width)
+                end
+            else
+                for quadrant=0,3 do for segment=0,7 do
+                    local a=phase+quadrant*math.pi/2+segment/8*math.pi*0.32
+                    local b=a+math.pi*0.32/8
+                    line(Vector3.new(p.X+math.cos(a)*size,p.Y+math.sin(a)*size,p.Z),Vector3.new(p.X+math.cos(b)*size,p.Y+math.sin(b)*size,p.Z),1,width)
+                end end
+            end
+        end
+    end
+    local aimGuide=make("Frame",{Name="AimFOVGuide",AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0.5,0.5),BackgroundTransparency=1,Visible=false},overlay);round(aimGuide,10000)
+    local aimGuideStroke=make("UIStroke",{Thickness=1.5,Transparency=0.4},aimGuide)
+    local graph=make("Frame",{Name="SpeedGraph",Visible=false,Position=UDim2.new(0,280,1,-145),Size=UDim2.fromOffset(260,112),BorderSizePixel=0,BackgroundTransparency=0.1},overlay);round(graph,10);drag(graph)
+    local graphBorder=make("UIStroke",{Thickness=1},graph)
+    local graphTitle=text(graph,"Speed history",12);graphTitle.Position=UDim2.fromOffset(12,8);graphTitle.Size=UDim2.fromOffset(236,20);graphTitle.TextXAlignment=Enum.TextXAlignment.Left;graphTitle.TextStrokeTransparency=1
+    local graphValue=text(graph,"",10);graphValue.Position=UDim2.fromOffset(12,86);graphValue.Size=UDim2.fromOffset(236,18);graphValue.TextXAlignment=Enum.TextXAlignment.Left;graphValue.TextStrokeTransparency=1
+    local graphLines={}
+    layoutObjects.speedGraph=graph
+    function self:RenderUtilityVisuals(samples,cfg,camera)
+        aimGuide.Visible=cfg.aimCircle and not cfg.freecam
+        if aimGuide.Visible then
+            local radius=camera.ViewportSize.Y*0.5*math.tan(math.rad(cfg.aimFov/2))/math.tan(math.rad(camera.FieldOfView/2))
+            aimGuide.Size=UDim2.fromOffset(radius*2,radius*2);aimGuideStroke.Color=themeColor("Accent")
+        end
+        graph.Visible=cfg.speedGraph==true
+        for _,line in pairs(graphLines)do line.Visible=false end
+        if not graph.Visible then return end
+        graph.BackgroundColor3=themeColor("Surface");graphBorder.Color=themeColor("Stroke");graphTitle.TextColor3=themeColor("Text");graphValue.TextColor3=themeColor("Muted")
+        local peak=0;for _,v in ipairs(samples)do peak=math.max(peak,v)end
+        local maxSpeed=math.max(1,peak)
+        graphValue.Text=string.format("%.1f b/s   /   peak %.1f   /   %d samples",samples[#samples]or 0,peak,#samples)
+        for i=2,#samples do
+            local line=graphLines[i]
+            if not line then line=make("Frame",{Name="SpeedGraphLine_"..i,AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0},graph);graphLines[i]=line end
+            local ax=12+(i-2)/59*236;local bx=12+(i-1)/59*236;local ay=80-samples[i-1]/maxSpeed*43;local by=80-samples[i]/maxSpeed*43
+            local d=Vector2.new(bx-ax,by-ay);line.Position=UDim2.fromOffset((ax+bx)/2,(ay+by)/2);line.Size=UDim2.fromOffset(d.Magnitude,2);line.Rotation=math.deg(math.atan2(d.Y,d.X));line.BackgroundColor3=themeColor("Accent");line.Visible=true
+        end
+    end
     function self:ResetPositions()
+        graph.Position=UDim2.new(0,280,1,-145)
         resetBasePositions()
         for _,view in pairs(readouts)do view.panel.Position=view.position end
     end
