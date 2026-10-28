@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 36
+			Library.MacrOSRevision = 37
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28577,8 +28577,8 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v14. Additive: existing BABFT/LIP APIs are unchanged.
-Library.UpgradeOverlayVersion = 14
+-- Optional combat overlay API v15. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 15
 function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
@@ -29309,6 +29309,11 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     end
     local trajectoryLines={}
     local landingDot=make("Frame",{Name="TrajectoryLanding",Visible=false,AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.fromOffset(10,10),BorderSizePixel=0},overlay);round(landingDot,100)
+    local trajectoryBeams={}
+    local trajectoryAttachments={}
+    local trajectoryHolder=nil
+    local trajectoryBeamColor=nil
+    local trajectoryColorSequence=nil
     local trajectoryDisplay={}
     local trajectoryDisplayKey=nil
     local flightLabel=text(overlay,"",12);flightLabel.Name="TrajectoryFlightTime";flightLabel.AnchorPoint=Vector2.new(0.5,1);flightLabel.Size=UDim2.fromOffset(120,24);flightLabel.Visible=false
@@ -29317,19 +29322,46 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         landingDot.Visible=false;flightLabel.Visible=false
         if not camera or #points<2 then
             for _,node in pairs(trajectoryLines)do node.Visible=false end
+            for _,beam in ipairs(trajectoryBeams)do beam.Enabled=false end
             table.clear(trajectoryDisplay);trajectoryDisplayKey=nil
             return
         end
         local count=math.min(#points,241)
-        local reset=trajectoryDisplayKey~=options.key or not trajectoryDisplay[1]or(trajectoryDisplay[1]-points[1]).Magnitude>48
+        local reset=trajectoryDisplayKey~=options.key or not trajectoryDisplay[1]or(trajectoryDisplay[1]-points[1]).Magnitude>48 or(options.depthTest and landing~=nil and count<#trajectoryDisplay)
         trajectoryDisplayKey=options.key
         local dt=math.clamp(tonumber(options.dt)or 1/60,0,0.1)
         local alpha=options.smooth and(1-math.exp(-math.clamp(tonumber(options.follow)or 22,8,40)*dt))or 1
         for i=1,count do
             local target=points[i]
-            trajectoryDisplay[i]=(reset or i==1 or not trajectoryDisplay[i])and target or trajectoryDisplay[i]:Lerp(target,alpha)
+            trajectoryDisplay[i]=(reset or i==1 or(options.depthTest and landing~=nil and i==count)or not trajectoryDisplay[i])and target or trajectoryDisplay[i]:Lerp(target,alpha)
         end
         for i=#trajectoryDisplay,count+1,-1 do trajectoryDisplay[i]=nil end
+        if options.depthTest then
+            -- World-space Beams are depth-tested by Roblox, unlike ScreenGui lines.
+            for _,node in pairs(trajectoryLines)do node.Visible=false end
+            if not trajectoryHolder then
+                trajectoryHolder=make("Part",{Name="TrajectoryGeometry",Size=Vector3.new(0.1,0.1,0.1),CFrame=CFrame.new(),Anchored=true,Transparency=1,CanCollide=false,CanTouch=false,CanQuery=false,CastShadow=false},highlightFolder)
+            end
+            if trajectoryBeamColor~=color then trajectoryBeamColor=color;trajectoryColorSequence=ColorSequence.new(color)end
+            for i=1,count do
+                local attachment=trajectoryAttachments[i]
+                if not attachment then attachment=make("Attachment",{Name="TrajectoryPoint_"..i},trajectoryHolder);trajectoryAttachments[i]=attachment end
+                attachment.Position=trajectoryDisplay[i]
+            end
+            local scale=2*math.tan(math.rad(camera.FieldOfView or 70)/2)*2/math.max(1,camera.ViewportSize.Y)
+            for i=1,count-1 do
+                local beam=trajectoryBeams[i]
+                if not beam then
+                    beam=make("Beam",{Name="TrajectoryBeam_"..i,Attachment0=trajectoryAttachments[i],Attachment1=trajectoryAttachments[i+1],FaceCamera=true,Segments=1,LightEmission=1,LightInfluence=0,Transparency=NumberSequence.new(0.1)},trajectoryHolder)
+                    trajectoryBeams[i]=beam
+                end
+                beam.Enabled=true;beam.Color=trajectoryColorSequence
+                beam.Width0=math.clamp((trajectoryDisplay[i]-camera.CFrame.Position).Magnitude*scale,0.025,0.5)
+                beam.Width1=math.clamp((trajectoryDisplay[i+1]-camera.CFrame.Position).Magnitude*scale,0.025,0.5)
+            end
+            for i=count,#trajectoryBeams do trajectoryBeams[i].Enabled=false end
+        else
+            for _,beam in ipairs(trajectoryBeams)do beam.Enabled=false end
         -- Only hide unused segments; do not toggle the entire pool off/on each frame.
         for i,node in pairs(trajectoryLines)do if i>=count then node.Visible=false end end
         for i=2,count do
@@ -29341,12 +29373,28 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                 node.Visible=true;node.Position=UDim2.fromOffset((a.X+b.X)/2,(a.Y+b.Y)/2);node.Size=UDim2.fromOffset(delta.Magnitude,2);node.Rotation=math.deg(math.atan2(delta.Y,delta.X));node.BackgroundColor3=color;node.BackgroundTransparency=0.1
             elseif node then node.Visible=false end
         end
+        end
         if landing then
-            local p,visible=camera:WorldToViewportPoint(trajectoryDisplay[count])
-            landingDot.Visible=visible and p.Z>0.1;landingDot.Position=UDim2.fromOffset(p.X,p.Y);landingDot.BackgroundColor3=color
+            local endpoint=trajectoryDisplay[count]
+            local p,visible=camera:WorldToViewportPoint(endpoint)
+            landingDot.Visible=visible and p.Z>0.1 and(not options.visibleAt or options.visibleAt(endpoint))
+            landingDot.Position=UDim2.fromOffset(p.X,p.Y);landingDot.BackgroundColor3=color
             local seconds=options.seconds
-            if options.showTime and landingDot.Visible and type(seconds)=="number"and seconds==seconds and seconds>=0 and seconds<math.huge then
-                flightLabel.Visible=true;flightLabel.Position=UDim2.fromOffset(p.X,p.Y-10);flightLabel.TextColor3=color;flightLabel.Text=string.format("~ %.2f s",seconds)
+            if options.showTime and type(seconds)=="number"and seconds==seconds and seconds>=0 and seconds<math.huge then
+                -- Arc-length midpoint, not the landing point and not a fixed HUD corner.
+                local length=0
+                for i=2,count do length+=(trajectoryDisplay[i]-trajectoryDisplay[i-1]).Magnitude end
+                local remaining=length*0.5
+                local midpoint=trajectoryDisplay[1]
+                for i=2,count do
+                    local a,b=trajectoryDisplay[i-1],trajectoryDisplay[i]
+                    local segment=(b-a).Magnitude
+                    if segment>0 and remaining<=segment then midpoint=a+(b-a)*(remaining/segment);break end
+                    remaining-=segment
+                end
+                local mid,shown=camera:WorldToViewportPoint(midpoint)
+                flightLabel.Visible=shown and mid.Z>0.1 and(not options.visibleAt or options.visibleAt(midpoint))
+                flightLabel.Position=UDim2.fromOffset(mid.X,mid.Y-10);flightLabel.TextColor3=color;flightLabel.Text=string.format("~ %.2f s",seconds)
             end
         end
     end
