@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 34
+			Library.MacrOSRevision = 35
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28577,8 +28577,8 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v12. Additive: existing BABFT/LIP APIs are unchanged.
-Library.UpgradeOverlayVersion = 12
+-- Optional combat overlay API v13. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 13
 function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
@@ -29385,6 +29385,67 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             end
         end
     end
+    -- Delta-inspired compact bind feedback, not a copy of another client's UI.
+    -- Lazily allocated, bounded to three rows, no per-message connections/tasks.
+    local bindToasts={}
+    local bindToastPool={}
+    local bindSound=nil
+    local function escapeRich(value)
+        return (tostring(value):gsub("&","&amp;"):gsub("<","&lt;"):gsub(">","&gt;"))
+    end
+    function self:ClearBindNotifications()
+        table.clear(bindToasts)
+        for _,item in ipairs(bindToastPool)do item.group.Visible=false end
+        if bindSound then pcall(function()bindSound:Stop()end)end
+    end
+    function self:PushBindNotification(name,enabled,cfg,now)
+        if self.destroyed or not cfg.bindNotifications then return end
+        local item=nil
+        -- Rapid changes to the same module replace its previous message.
+        for i,old in ipairs(bindToasts)do if old.name==name then item=old;table.remove(bindToasts,i);break end end
+        if not item then
+            for _,candidate in ipairs(bindToastPool)do if not table.find(bindToasts,candidate)then item=candidate;break end end
+        end
+        if not item and #bindToastPool>=3 then item=table.remove(bindToasts)end
+        if not item then
+            local group=make("CanvasGroup",{Name="BindNotification",AnchorPoint=Vector2.new(0.5,1),Size=UDim2.fromOffset(310,38),BackgroundColor3=themeColor("Surface"),BackgroundTransparency=0.08,BorderSizePixel=0,Visible=false,ZIndex=120},overlay);round(group,8)
+            local border=make("UIStroke",{Color=themeColor("Stroke"),Transparency=0.25,Thickness=1},group)
+            local accent=make("Frame",{Position=UDim2.fromOffset(0,8),Size=UDim2.fromOffset(3,22),BorderSizePixel=0},group);round(accent,2)
+            local message=text(group,"",13);message.Position=UDim2.fromOffset(15,0);message.Size=UDim2.new(1,-28,1,-2);message.TextXAlignment=Enum.TextXAlignment.Left;message.TextStrokeTransparency=1;message.RichText=true;message.TextTruncate=Enum.TextTruncate.AtEnd
+            local progress=make("Frame",{AnchorPoint=Vector2.new(0,1),Position=UDim2.new(0,8,1,0),Size=UDim2.new(1,-16,0,2),BorderSizePixel=0,BackgroundTransparency=0.3},group)
+            item={group=group,border=border,message=message,accent=accent,progress=progress}
+            bindToastPool[#bindToastPool+1]=item
+        end
+        item.name=name;item.started=now;item.duration=math.clamp(tonumber(cfg.bindNotifyDuration)or 2.5,0.5,6)
+        local color=enabled and Color3.fromRGB(116,224,167)or Color3.fromRGB(246,125,137)
+        item.accent.BackgroundColor3=color;item.progress.BackgroundColor3=color
+        item.message.Text=escapeRich(name)..' is <font color="'..(enabled and '#74E0A7'or '#F67D89')..'">'..(enabled and 'enabled'or 'disabled')..'</font>'
+        item.group.GroupTransparency=1;item.group.Visible=true
+        table.insert(bindToasts,1,item)
+        if cfg.bindNotifySound then
+            if not bindSound then bindSound=make("Sound",{Name="MacrOSBindSound",SoundId="rbxasset://sounds/electronicpingshort.wav",Volume=0.35},overlay)end
+            bindSound.Volume=math.clamp(tonumber(cfg.bindNotifyVolume)or 0.35,0,1)
+            bindSound.PlaybackSpeed=enabled and 1.12 or 0.92
+            pcall(function()bindSound:Stop();bindSound:Play()end)
+        end
+    end
+    function self:RenderBindNotifications(now,enabled,soundEnabled)
+        if not enabled then self:ClearBindNotifications();return end
+        if not soundEnabled and bindSound then pcall(function()bindSound:Stop()end)end
+        for i=#bindToasts,1,-1 do
+            local item=bindToasts[i]
+            if now-item.started>=item.duration then item.group.Visible=false;table.remove(bindToasts,i)end
+        end
+        for i,item in ipairs(bindToasts)do
+            local age=math.max(0,now-item.started)
+            local fade=math.min(math.clamp(age/0.14,0,1),math.clamp((item.duration-age)/0.22,0,1))
+            local ease=1-(1-fade)^3
+            item.group.Position=UDim2.new(0.5,0,1,-84-(i-1)*44+12*(1-ease))
+            item.group.GroupTransparency=1-fade;item.group.BackgroundColor3=themeColor("Surface")
+            item.border.Color=themeColor("Stroke");item.message.TextColor3=themeColor("Text")
+            item.progress.Size=UDim2.new(math.max(0,1-age/item.duration),-16*math.max(0,1-age/item.duration),0,2)
+        end
+    end
     function self:ResetPositions()
         if keysPanel then keysPanel.Position=UDim2.new(0,18,1,-255);jumpPanel.Position=UDim2.new(0,300,1,-260)end
         if graph then graph.Position=UDim2.new(0,280,1,-145)end
@@ -29393,6 +29454,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     end
     function self:Destroy()
         if self.destroyed then return end;self.destroyed=true
+        self:ClearBindNotifications()
         for _,connection in ipairs(connections)do connection:Disconnect()end
         for id in pairs(markers)do clearMarker(id)end
         for effect,parent in pairs(heldPostEffects)do pcall(function()if effect.Parent==highlightFolder then effect.Parent=parent end end)end
