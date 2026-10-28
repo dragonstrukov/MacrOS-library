@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 40
+			Library.MacrOSRevision = 41
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28577,8 +28577,8 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v18. Additive: existing BABFT/LIP APIs are unchanged.
-Library.UpgradeOverlayVersion = 18
+-- Optional combat overlay API v19. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 19
 function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
@@ -28872,7 +28872,6 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                 local show=(i<=4 and armor)or(i==5 and weapon)
                 slot.frame.Visible=show;slot.icon.Visible=false
                 if show then
-                    slot.frame.Position=UDim2.fromOffset(index*(row.size+2),0);index+=1
                     local name=({"Armor_feet","Armor_legs","Armor_chest","Armor_head","HeldItem"})[i]
                     local source=model and model:FindFirstChild(name)
                     local held=i==5 and model and model:GetAttribute("HeldItem")
@@ -28882,11 +28881,14 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                         slot.icon.Image=image;slot.icon.Visible=true
                         if slot.view.count>0 then clearView(slot.view)end;slot.view.viewport.Visible=false
                     else
-                        snapshot(slot.view,source and {source}or {},root and root.CFrame,source,false)
+                        local available=snapshot(slot.view,source and {source}or {},root and root.CFrame,source,false)
+                        if i<=4 and not available then show=false;slot.frame.Visible=false end
                     end
+                    if show then slot.frame.Position=UDim2.fromOffset(index*(row.size+2),0);index+=1 end
                 else if slot.view.count>0 then clearView(slot.view)end;slot.view.viewport.Visible=false end
             end
             row.frame.Size=UDim2.fromOffset(math.max(0,index*(row.size+2)-2),row.size)
+            row.frame.Visible=index>0
         end
         function self:HideNativeGear()
             if hudGear then hudGear.frame.Visible=false end
@@ -28902,7 +28904,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             local scale=hudScale.Scale
             local position=targetHud.AbsolutePosition
             hudGear.scale.Scale=scale
-            hudGear.frame.Position=UDim2.fromOffset(position.X+61*scale,position.Y-20*scale)
+            local bounds=targetHud.AbsoluteSize
+            hudGear.frame.Position=UDim2.fromOffset(position.X+bounds.X-(hudGear.frame.Size.X.Offset+8)*scale,position.Y+bounds.Y+4*scale)
             hudGear.frame.GroupTransparency=1-targetAnim.alpha
         end
         function self:RenderEquipment(record,model,x,y,armor,weapon)
