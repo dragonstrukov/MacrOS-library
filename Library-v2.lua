@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 29
+			Library.MacrOSRevision = 31
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28541,8 +28541,8 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v7. Additive: existing BABFT/LIP APIs are unchanged.
-Library.UpgradeOverlayVersion = 7
+-- Optional combat overlay API v9. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 9
 function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
@@ -29119,7 +29119,77 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             local d=Vector2.new(bx-ax,by-ay);line.Position=UDim2.fromOffset((ax+bx)/2,(ay+by)/2);line.Size=UDim2.fromOffset(d.Magnitude,2);line.Rotation=math.deg(math.atan2(d.Y,d.X));line.BackgroundColor3=themeColor("Accent");line.Visible=true
         end
     end
+    -- Local 3D cone; all geometry belongs to the library, never the game client.
+    local hatParts={}
+    local hatShown=false
+    local function hatWedge(index,a,b,c)
+        local ab,ac,bc=b-a,c-a,c-b
+        local ab2,ac2,bc2=ab:Dot(ab),ac:Dot(ac),bc:Dot(bc)
+        if ab2>ac2 and ab2>bc2 then c,a=a,c elseif ac2>bc2 and ac2>ab2 then a,b=b,a end
+        ab,ac,bc=b-a,c-a,c-b
+        local right=ac:Cross(ab).Unit;local back=bc.Unit;local up=back:Cross(right).Unit
+        local h=math.abs(ab:Dot(up))
+        for j=1,2 do
+            local slot=index*2+j;local part=hatParts[slot]
+            if not part then
+                part=make("WedgePart",{Name="ChinaHat_"..slot,Anchored=true,CanCollide=false,CanTouch=false,CanQuery=false,CastShadow=false},highlightFolder);hatParts[slot]=part
+            end
+            part.Size=Vector3.new(0.015,h,math.max(0.001,math.abs((j==1 and ab or ac):Dot(back))))
+            part.CFrame=j==1 and CFrame.fromMatrix((a+b)/2,right,up,back)or CFrame.fromMatrix((a+c)/2,-right,up,-back)
+        end
+    end
+    function self:RenderChinaHat(base,cfg,now)
+        if not cfg.chinaHat or not base then
+            if hatShown then for _,part in ipairs(hatParts)do part.LocalTransparencyModifier=1 end end
+            hatShown=false;return
+        end
+        hatShown=true
+        local radius,height=cfg.hatRadius,cfg.hatHeight
+        local apex=base+Vector3.new(0,height,0)
+        for i=0,31 do
+            local a=i/32*math.pi*2;local b=(i+1)/32*math.pi*2
+            hatWedge(i,apex,base+Vector3.new(math.cos(a)*radius,0,math.sin(a)*radius),base+Vector3.new(math.cos(b)*radius,0,math.sin(b)*radius))
+        end
+        for i,part in ipairs(hatParts)do
+            part.LocalTransparencyModifier=0;part.Transparency=cfg.hatAlpha;part.Material=cfg.hatNeon and Enum.Material.Neon or Enum.Material.SmoothPlastic
+            part.Color=cfg.hatRainbow and Color3.fromHSV((now*0.1+i/64)%1,0.65,1)or cfg.hatColor
+        end
+    end
+    local keysPanel=make("Frame",{Name="Keystrokes",Visible=false,Position=UDim2.new(0,18,1,-255),Size=UDim2.fromOffset(166,160),BorderSizePixel=0,BackgroundTransparency=0.1},overlay);round(keysPanel,10);drag(keysPanel)
+    local keysBorder=make("UIStroke",{Thickness=1},keysPanel)
+    local keyViews={}
+    for _,def in ipairs({{"W",62,10,42},{"A",14,44,42},{"S",62,44,42},{"D",110,44,42},{"SPACE",14,78,90},{"SHIFT",110,78,42},{"LMB",14,112,66},{"RMB",86,112,66}})do
+        local node=make("Frame",{Position=UDim2.fromOffset(def[2],def[3]),Size=UDim2.fromOffset(def[4],28),BorderSizePixel=0},keysPanel);round(node,5)
+        local label=text(node,def[1],10);label.TextStrokeTransparency=1;label.Size=UDim2.fromScale(1,1)
+        keyViews[def[1]]={node=node,label=label}
+    end
+    local jumpPanel=make("Frame",{Name="JumpStats",Visible=false,Position=UDim2.new(0,300,1,-260),Size=UDim2.fromOffset(250,100),BorderSizePixel=0,BackgroundTransparency=0.1},overlay);round(jumpPanel,10);drag(jumpPanel)
+    local jumpBorder=make("UIStroke",{Thickness=1},jumpPanel)
+    local jumpTitle=text(jumpPanel,"Jump stats",12);jumpTitle.TextStrokeTransparency=1;jumpTitle.TextXAlignment=Enum.TextXAlignment.Left;jumpTitle.Position=UDim2.fromOffset(12,8);jumpTitle.Size=UDim2.fromOffset(226,20)
+    local jumpText=text(jumpPanel,"",11);jumpText.TextStrokeTransparency=1;jumpText.TextXAlignment=Enum.TextXAlignment.Left;jumpText.Position=UDim2.fromOffset(12,32);jumpText.Size=UDim2.fromOffset(226,58)
+    layoutObjects.keystrokes=keysPanel;layoutObjects.jumpStats=jumpPanel
+    function self:RenderPlayerUtilities(keys,jump,cfg)
+        keysPanel.Visible=cfg.keystrokes==true;jumpPanel.Visible=cfg.jumpStats==true
+        keysPanel.BackgroundColor3=themeColor("Surface");keysBorder.Color=themeColor("Stroke")
+        for name,view in pairs(keyViews)do
+            view.node.BackgroundColor3=keys[name]and themeColor("Accent")or themeColor("Surface2")
+            view.label.TextColor3=keys[name]and themeColor("Text")or themeColor("Muted")
+        end
+        jumpPanel.BackgroundColor3=themeColor("Surface");jumpBorder.Color=themeColor("Stroke");jumpTitle.TextColor3=themeColor("Text");jumpText.TextColor3=themeColor("Muted")
+        jumpText.Text=jump and string.format("%s  ·  %.2f s\nDistance %.2f b\nPeak height %.2f b",jump.flying and "Airborne"or "Last jump",jump.time,jump.distance,jump.height)or "Waiting for a native jump\nRequires MovementController"
+    end
+    local heldPostEffects={}
+    function self:RememberPostEffect(effect,parent)heldPostEffects[effect]=parent end
+    function self:ForgetPostEffect(effect)heldPostEffects[effect]=nil end
+    local ambienceEffect=make("ColorCorrectionEffect",{Name="MacrOSUpgradeAmbience",Enabled=false},game:GetService("Lighting"))
+    function self:SetAmbience(cfg)
+        ambienceEffect.Enabled=cfg.ambience==true
+        if not cfg.ambience then return end
+        ambienceEffect.TintColor=Color3.new(1,1,1):Lerp(cfg.ambienceColor,cfg.ambienceStrength)
+        ambienceEffect.Brightness=cfg.ambienceBrightness;ambienceEffect.Contrast=cfg.ambienceContrast;ambienceEffect.Saturation=cfg.ambienceSaturation
+    end
     function self:ResetPositions()
+        keysPanel.Position=UDim2.new(0,18,1,-255);jumpPanel.Position=UDim2.new(0,300,1,-260)
         graph.Position=UDim2.new(0,280,1,-145)
         resetBasePositions()
         for _,view in pairs(readouts)do view.panel.Position=view.position end
@@ -29128,7 +29198,9 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         if self.destroyed then return end;self.destroyed=true
         for _,connection in ipairs(connections)do connection:Disconnect()end
         for id in pairs(markers)do clearMarker(id)end
-        overlay:Destroy();highlightFolder:Destroy()
+        for effect,parent in pairs(heldPostEffects)do pcall(function()if effect.Parent==highlightFolder then effect.Parent=parent end end)end
+        table.clear(heldPostEffects)
+        ambienceEffect:Destroy();overlay:Destroy();highlightFolder:Destroy()
     end
     return self
 end
