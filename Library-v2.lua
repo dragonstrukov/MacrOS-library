@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 24
+			Library.MacrOSRevision = 25
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28541,4 +28541,218 @@ local Library = (function()
 
 	return Library
 end)()
+-- Optional combat overlay API v3. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 3
+function Library:CreateCombatOverlay(opts)
+    opts=opts or {}
+    local UIS=game:GetService("UserInputService")
+    local connections={}
+    local function track(connection)connections[#connections+1]=connection;return connection end
+local function make(class,props,parent)
+    local obj=Instance.new(class)
+    for key,value in pairs(props or {})do obj[key]=value end
+    obj.Parent=parent;return obj
+end
+local function round(parent,radius)make("UICorner",{CornerRadius=UDim.new(0,radius or 10)},parent)end
+local function text(parent,value,size)
+    return make("TextLabel",{BackgroundTransparency=1,BorderSizePixel=0,Text=value or "",TextColor3=Color3.fromRGB(235,238,249),TextSize=size or 13,
+        Font=Enum.Font.GothamMedium,TextStrokeTransparency=0.55,RichText=false},parent)
+end
+local overlay=make("ScreenGui",{Name="MacrOSUpgradeOverlays",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=1000,ZIndexBehavior=Enum.ZIndexBehavior.Sibling},opts.Parent or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"))
+local highlightFolder=make("Folder",{Name="MacrOSUpgradeHighlights"},opts.WorldParent or workspace)
+local markers={}
+local function clearMarker(id)
+    local record=markers[id];if not record then return end
+    for _,obj in pairs(record.objects)do obj:Destroy()end
+    markers[id]=nil
+end
+local function getMarker(other)
+    local record=markers[other.UserId]
+    if record then return record end
+    record={objects={}}
+    local function own(obj)record.objects[#record.objects+1]=obj;return obj end
+    record.box=own(make("Frame",{BackgroundTransparency=1,BorderSizePixel=0,Visible=false},overlay))
+    record.stroke=make("UIStroke",{Thickness=1.3},record.box)
+    record.name=own(text(overlay,"",13));record.name.Size=UDim2.fromOffset(230,19)
+    record.info=own(text(overlay,"",11));record.info.Size=UDim2.fromOffset(240,19)
+    record.health=own(make("Frame",{BorderSizePixel=0,BackgroundColor3=Color3.fromRGB(20,24,32)},overlay))
+    record.fill=make("Frame",{BorderSizePixel=0,AnchorPoint=Vector2.new(0,1),Position=UDim2.fromScale(0,1),BackgroundColor3=Color3.fromRGB(100,230,170)},record.health)
+    record.highlight=own(make("Highlight",{Enabled=false,FillTransparency=0.83,OutlineTransparency=0,DepthMode=Enum.HighlightDepthMode.AlwaysOnTop},highlightFolder))
+    record.arrow=own(text(overlay,"▲",23));record.arrow.Size=UDim2.fromOffset(30,30);record.arrow.AnchorPoint=Vector2.new(0.5,0.5)
+    record.arrowDistance=own(text(overlay,"",11));record.arrowDistance.Size=UDim2.fromOffset(80,18);record.arrowDistance.AnchorPoint=Vector2.new(0.5,0.5)
+    record.tracer=own(make("Frame",{AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0},overlay))
+    record.dot=own(make("Frame",{Size=UDim2.fromOffset(5,5),AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0,Visible=false},overlay));round(record.dot,3)
+    markers[other.UserId]=record;return record
+end
+local function hideMarker(record)
+    for _,obj in ipairs(record.objects)do
+        if obj:IsA("GuiObject")then obj.Visible=false elseif obj:IsA("Highlight")then obj.Enabled=false end
+    end
+end
+local function drag(frame)
+    frame.Active=true
+    local active,start,position
+    track(frame.InputBegan:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+            active=input;start=input.Position;position=frame.Position
+        end
+    end))
+    track(UIS.InputChanged:Connect(function(input)
+        if active and (input==active or input.UserInputType==Enum.UserInputType.MouseMovement)then
+            local delta=input.Position-start
+            frame.Position=UDim2.new(position.X.Scale,position.X.Offset+delta.X,position.Y.Scale,position.Y.Offset+delta.Y)
+        end
+    end))
+    track(UIS.InputEnded:Connect(function(input)if input==active then active=nil end end))
+end
+local targetHud=make("Frame",{Name="TargetInfo",Visible=false,Size=UDim2.fromOffset(280,94),Position=UDim2.new(0.5,45,0.5,90),BackgroundColor3=Color3.fromRGB(15,18,27),BackgroundTransparency=0.08,BorderSizePixel=0},overlay)
+round(targetHud,12);make("UIStroke",{Color=Color3.fromRGB(65,72,102),Transparency=0.2},targetHud)
+local hudScale=make("UIScale",{Scale=1},targetHud)
+local avatar=make("Frame",{Size=UDim2.fromOffset(55,55),Position=UDim2.fromOffset(13,13),BackgroundColor3=Color3.fromRGB(45,52,79),BorderSizePixel=0},targetHud);round(avatar,10)
+local initials=text(avatar,"?",23);initials.Size=UDim2.fromScale(1,1)
+local targetAvatar=make("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image="",ZIndex=2},avatar);round(targetAvatar,10)
+local targetName=text(targetHud,"Target",14);targetName.Position=UDim2.fromOffset(80,12);targetName.Size=UDim2.fromOffset(186,22);targetName.TextXAlignment=Enum.TextXAlignment.Left;targetName.TextTruncate=Enum.TextTruncate.AtEnd
+local targetDetails=text(targetHud,"",11);targetDetails.Position=UDim2.fromOffset(80,37);targetDetails.Size=UDim2.fromOffset(186,19);targetDetails.TextXAlignment=Enum.TextXAlignment.Left
+local hpBack=make("Frame",{Position=UDim2.fromOffset(80,64),Size=UDim2.fromOffset(185,7),BackgroundColor3=Color3.fromRGB(33,39,53),BorderSizePixel=0,ClipsDescendants=true},targetHud);round(hpBack,4)
+local hpTrail=make("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(217,91,111),BorderSizePixel=0},hpBack);round(hpTrail,4)
+local hpFill=make("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=opts.Accent or Color3.fromRGB(150,170,255),BorderSizePixel=0},hpBack);round(hpFill,4)
+local targetFooter=text(targetHud,"TARGET INFO",9);targetFooter.Position=UDim2.fromOffset(13,76);targetFooter.Size=UDim2.fromOffset(254,13);targetFooter.TextXAlignment=Enum.TextXAlignment.Left
+local radar=make("Frame",{Visible=false,Size=UDim2.fromOffset(160,160),Position=UDim2.new(1,-180,0,85),BackgroundColor3=Color3.fromRGB(15,18,27),BackgroundTransparency=0.12,BorderSizePixel=0,ClipsDescendants=true},overlay);round(radar,80)
+make("UIStroke",{Color=Color3.fromRGB(75,85,115),Transparency=0.2},radar)
+make("Frame",{Position=UDim2.new(0.5,0,0,10),Size=UDim2.new(0,1,1,-20),BackgroundTransparency=0.65,BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0},radar)
+make("Frame",{Position=UDim2.new(0,10,0.5,0),Size=UDim2.new(1,-20,0,1),BackgroundTransparency=0.65,BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0},radar)
+local radarCenter=text(radar,"▲",14);radarCenter.Position=UDim2.new(0.5,-8,0.5,-8);radarCenter.Size=UDim2.fromOffset(16,16)
+local watermark=text(overlay,"MacrOS",13);watermark.Position=UDim2.fromOffset(18,12);watermark.Size=UDim2.fromOffset(430,27);watermark.TextXAlignment=Enum.TextXAlignment.Left;watermark.Visible=false
+local moduleList=text(overlay,"",13);moduleList.Position=UDim2.new(1,-240,0,265);moduleList.Size=UDim2.fromOffset(220,280);moduleList.TextXAlignment=Enum.TextXAlignment.Right;moduleList.TextYAlignment=Enum.TextYAlignment.Top;moduleList.Visible=false
+local crosshair=make("Frame",{BackgroundTransparency=1,Size=UDim2.fromOffset(0,0),Position=UDim2.fromScale(0.5,0.5),Visible=false},overlay)
+-- Extended crosshair primitives are constructed below.
+drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
+    local lines={}
+    for i=1,8 do
+        local node=make("Frame",{AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0,Visible=false},crosshair)
+        lines[i]={node=node,outline=make("UIStroke",{Thickness=1,Color=Color3.new(0,0,0)},node)}
+    end
+    local ring=make("Frame",{AnchorPoint=Vector2.new(0.5,0.5),BackgroundTransparency=1,Visible=false},crosshair);round(ring,10000)
+    local ringOutline=make("Frame",{AnchorPoint=Vector2.new(0.5,0.5),BackgroundTransparency=1,Visible=false,ZIndex=0},crosshair);round(ringOutline,10000)
+    local ringEdge=make("UIStroke",{Thickness=2},ring)
+    local ringOuter=make("UIStroke",{Thickness=4,Color=Color3.new(0,0,0)},ringOutline)
+    local dot=make("Frame",{AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0,Visible=false},crosshair);round(dot,10000)
+    local dotEdge=make("UIStroke",{Thickness=1,Color=Color3.new(0,0,0)},dot)
+    local fovRing=make("Frame",{AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0.5,0.5),BackgroundTransparency=1,Visible=false},overlay);round(fovRing,10000)
+    local fovStroke=make("UIStroke",{Thickness=1},fovRing)
+    local bindPanel=make("Frame",{Visible=false,Size=UDim2.fromOffset(240,45),Position=UDim2.new(0,18,0.5,40),BackgroundColor3=Color3.fromRGB(15,18,27),BorderSizePixel=0},overlay);round(bindPanel,10)
+    local bindScale=make("UIScale",{Scale=1},bindPanel)
+    local bindTitle=text(bindPanel,"KEYBINDS",11);bindTitle.Position=UDim2.fromOffset(12,8);bindTitle.Size=UDim2.fromOffset(216,22);bindTitle.TextXAlignment=Enum.TextXAlignment.Left
+    local bindRows={}
+    local damageFlash=make("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(230,45,65),BackgroundTransparency=1,BorderSizePixel=0,Visible=false,ZIndex=0},overlay)
+    local compass=text(overlay,"",14);compass.AnchorPoint=Vector2.new(0.5,0);compass.Position=UDim2.new(0.5,0,0,12);compass.Size=UDim2.fromOffset(360,25);compass.Visible=false
+    local telemetry=text(overlay,"",12);telemetry.Position=UDim2.new(0,18,1,-65);telemetry.Size=UDim2.fromOffset(420,50);telemetry.TextXAlignment=Enum.TextXAlignment.Left;telemetry.Visible=false
+    drag(bindPanel);drag(compass);drag(telemetry)
+    local self={overlay=overlay,highlightFolder=highlightFolder,markers=markers,targetHud=targetHud,hudScale=hudScale,initials=initials,
+        targetAvatar=targetAvatar,targetName=targetName,targetDetails=targetDetails,hpBack=hpBack,hpTrail=hpTrail,hpFill=hpFill,targetFooter=targetFooter,
+        radar=radar,watermark=watermark,moduleList=moduleList,crosshair=crosshair}
+    local rotation=0
+    function self:GetMarker(other)return getMarker(other)end
+    function self:ClearMarker(id)clearMarker(id)end
+    function self:HideMarker(record)hideMarker(record)end
+    function self:RenderCrosshair(cfg,dt,camera,shot,state)
+        crosshair.Visible=cfg.crosshair and not (cfg.crossHideZoom and cfg.zoom)
+        crosshair.Position=UDim2.new(0.5,cfg.crossOffsetX,0.5,cfg.crossOffsetY)
+        if cfg.crossSpin then rotation=(rotation+dt*cfg.crossSpinSpeed)%360 else rotation=0 end
+        crosshair.Rotation=cfg.crossRotation+rotation
+        local length,thickness=cfg.crosshairSize,cfg.crossThickness
+        local gap=cfg.crossGap
+        if cfg.crossDynamic then
+            local motion=state and state.motion
+            gap+=shot*6+(typeof(motion)=="Vector3" and math.min(motion.Magnitude*8,15) or 0)
+        end
+        for _,entry in ipairs(lines)do entry.node.Visible=false end
+        ring.Visible=false;ringOutline.Visible=false
+        local shape=cfg.crossShape
+        local function line(i,x,y,w,h,angle)
+            local node,outline=lines[i].node,lines[i].outline
+            node.Visible=true;node.Position=UDim2.fromOffset(x,y);node.Size=UDim2.fromOffset(w,h);node.Rotation=angle or 0
+            node.BackgroundColor3=cfg.crossColor;node.BackgroundTransparency=cfg.crossAlpha
+            outline.Enabled=cfg.crossOutline;outline.Transparency=cfg.crossAlpha
+        end
+        if shape=="Plus" or shape=="X" or shape=="T"then
+            local d=gap+length/2
+            line(1,-d,0,length,thickness);line(2,d,0,length,thickness);line(3,0,d,thickness,length)
+            if shape~="T"then line(4,0,-d,thickness,length)end
+            if shape=="X"then crosshair.Rotation+=45 end
+        elseif shape=="Circle" or shape=="Circle + Dot"then
+            ring.Visible=true;ring.Size=UDim2.fromOffset(length*2,length*2)
+            ringEdge.Thickness=thickness;ringEdge.Color=cfg.crossColor;ringEdge.Transparency=cfg.crossAlpha
+            ringOutline.Visible=cfg.crossOutline;ringOutline.Size=ring.Size;ringOuter.Thickness=thickness+2;ringOuter.Transparency=cfg.crossAlpha
+        elseif shape=="Brackets"then
+            local n=0
+            for _,x in ipairs({-1,1})do for _,y in ipairs({-1,1})do
+                n+=1;line(n,x*(gap+length/2),y*(gap+length),length,thickness)
+                n+=1;line(n,x*(gap+length),y*(gap+length/2),thickness,length)
+            end end
+        elseif shape=="Diamond"then
+            local d=length/math.sqrt(2)
+            line(1,-d/2,-d/2,length,thickness,-45);line(2,d/2,-d/2,length,thickness,45)
+            line(3,-d/2,d/2,length,thickness,45);line(4,d/2,d/2,length,thickness,-45)
+        end
+        dot.Visible=cfg.crossDot or shape=="Dot" or shape=="Circle + Dot"
+        dot.Size=UDim2.fromOffset(cfg.crossDotSize,cfg.crossDotSize);dot.BackgroundColor3=cfg.crossColor;dot.BackgroundTransparency=cfg.crossAlpha
+        dotEdge.Enabled=cfg.crossOutline;dotEdge.Transparency=cfg.crossAlpha
+        fovRing.Visible=cfg.fovCircle and cfg.fov<179 and not cfg.freecam
+        if fovRing.Visible then
+            local radius=math.tan(math.rad(cfg.fov/2))/math.tan(math.rad(camera.FieldOfView/2))*camera.ViewportSize.Y/2
+            fovRing.Size=UDim2.fromOffset(radius*2,radius*2);fovStroke.Color=cfg.enemyColor;fovStroke.Transparency=cfg.fovCircleAlpha
+        end
+    end
+    function self:UpdateKeybinds(bindings,cfg)
+        bindPanel.Visible=cfg.keybindOverlay;bindScale.Scale=cfg.keybindScale;bindPanel.BackgroundTransparency=cfg.keybindAlpha
+        if not cfg.keybindOverlay then return end
+        local count=0
+        for _,entry in ipairs(bindings)do
+            local key=entry.handle:Get()
+            local assigned=key~=nil and key~=Enum.KeyCode.Unknown
+            local active=entry.key=="menu" and opts.IsMenuOpen and opts.IsMenuOpen() or cfg[entry.key]==true
+            if (assigned or cfg.keybindEmpty)and (not cfg.keybindActiveOnly or active)then
+                count+=1
+                if not bindRows[count]then
+                    local label=text(bindPanel,"",12);label.TextXAlignment=Enum.TextXAlignment.Left;label.TextTruncate=Enum.TextTruncate.AtEnd
+                    label.Position=UDim2.fromOffset(12,32+(count-1)*22);label.Size=UDim2.fromOffset(216,22);bindRows[count]=label
+                end
+                local label=bindRows[count];label.Visible=true
+                label.Text=entry.label.."   ["..(assigned and key.Name or "—").."]  "..(active and "ON" or "OFF")
+                label.TextColor3=active and cfg.enemyColor or Color3.fromRGB(150,157,176)
+            end
+        end
+        for i=count+1,#bindRows do bindRows[i].Visible=false end
+        bindTitle.Text=count==0 and "KEYBINDS · no matching binds" or "KEYBINDS"
+        bindPanel.Size=UDim2.fromOffset(240,math.max(42,38+count*22))
+    end
+    function self:UpdateTelemetry(data,cfg,dt)
+        compass.Visible=cfg.compass;telemetry.Visible=cfg.coordinates or cfg.speedometer
+        if cfg.compass then
+            local yaw=(math.deg(math.atan2(data.look.X,-data.look.Z))+360)%360
+            local names={"N","NE","E","SE","S","SW","W","NW"}
+            compass.Text=string.format("%s   /   %.0f°",names[(math.floor((yaw+22.5)/45)%8)+1],yaw)
+        end
+        local rows={}
+        if cfg.coordinates and data.position then rows[#rows+1]=string.format("XYZ   %.1f  /  %.1f  /  %.1f",data.position.X,data.position.Y,data.position.Z)end
+        if cfg.speedometer then rows[#rows+1]=string.format("Speed   %.1f blocks/s",data.speed or 0)end
+        telemetry.Text=table.concat(rows,"\n")
+        damageFlash.Visible=cfg.hurtIndicator and (data.hurt or 0)>0
+        damageFlash.BackgroundTransparency=1-math.clamp(data.hurt or 0,0,1)*0.22
+    end
+    function self:ResetPositions()
+        targetHud.Position=UDim2.new(0.5,45,0.5,90);radar.Position=UDim2.new(1,-180,0,85)
+        watermark.Position=UDim2.fromOffset(18,12);moduleList.Position=UDim2.new(1,-240,0,265)
+        bindPanel.Position=UDim2.new(0,18,0.5,40);compass.Position=UDim2.new(0.5,0,0,12);telemetry.Position=UDim2.new(0,18,1,-65)
+    end
+    function self:Destroy()
+        if self.destroyed then return end;self.destroyed=true
+        for _,connection in ipairs(connections)do connection:Disconnect()end
+        for id in pairs(markers)do clearMarker(id)end
+        overlay:Destroy();highlightFolder:Destroy()
+    end
+    return self
+end
+
 return Library
