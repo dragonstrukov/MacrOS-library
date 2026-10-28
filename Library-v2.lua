@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 38
+			Library.MacrOSRevision = 39
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28577,8 +28577,8 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v16. Additive: existing BABFT/LIP APIs are unchanged.
-Library.UpgradeOverlayVersion = 16
+-- Optional combat overlay API v17. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 17
 function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
@@ -28664,10 +28664,15 @@ make("UIStroke",{Color=Color3.fromRGB(75,85,115),Transparency=0.2},radar)
 make("Frame",{Position=UDim2.new(0.5,0,0,10),Size=UDim2.new(0,1,1,-20),BackgroundTransparency=0.65,BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0},radar)
 make("Frame",{Position=UDim2.new(0,10,0.5,0),Size=UDim2.new(1,-20,0,1),BackgroundTransparency=0.65,BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0},radar)
 local radarCenter=text(radar,"▲",14);radarCenter.Position=UDim2.new(0.5,-8,0.5,-8);radarCenter.Size=UDim2.fromOffset(16,16)
+local function safeTop()
+    local top=84
+    pcall(function()local inset=game:GetService("GuiService"):GetGuiInset();top=math.max(top,inset.Y+12)end)
+    return top
+end
 local watermark
 local watermarkPills={}
 if opts.ModernWatermark then
-    watermark=make("Frame",{Name="MacrOSWatermark",Position=UDim2.fromOffset(18,12),Size=UDim2.fromOffset(0,0),AutomaticSize=Enum.AutomaticSize.XY,BackgroundTransparency=1,BorderSizePixel=0,Visible=false},overlay)
+    watermark=make("Frame",{Name="MacrOSWatermark",Position=UDim2.fromOffset(18,safeTop()),Size=UDim2.fromOffset(0,0),AutomaticSize=Enum.AutomaticSize.XY,BackgroundTransparency=1,BorderSizePixel=0,Visible=false},overlay)
     make("UIListLayout",{FillDirection=Enum.FillDirection.Vertical,SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,4)},watermark)
     for i=1,2 do
         local pill=make("Frame",{Name="WatermarkRow"..i,LayoutOrder=i,Size=UDim2.fromOffset(0,24),AutomaticSize=Enum.AutomaticSize.X,BackgroundColor3=Color3.fromRGB(26,28,36),BackgroundTransparency=0.08,BorderSizePixel=0},watermark);round(pill,7)
@@ -28781,6 +28786,132 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         end
         return portraitCache[key]
     end
+    -- Native face/equipment snapshots. Only visual parts are cloned into owned
+    -- ViewportFrames; scripts, joints, emitters and gameplay state are excluded.
+    do
+        local icons={}
+        local nativeFace=nil
+        local hudGear=nil
+        local gearLayout=nil
+        local function makeView(parent,name)
+            local viewport=make("ViewportFrame",{Name=name,Size=UDim2.fromScale(1,1),BackgroundTransparency=1,BorderSizePixel=0,Ambient=Color3.fromRGB(225,225,225),LightColor=Color3.new(1,1,1),LightDirection=Vector3.new(-1,-1,-2),Visible=false},parent)
+            local camera=make("Camera",{FieldOfView=24},viewport);viewport.CurrentCamera=camera
+            local model=make("Model",{Name="VisualSnapshot"},viewport)
+            return {viewport=viewport,camera=camera,model=model,signature={},nextRead=0,count=0}
+        end
+        local function clearView(view)
+            view.model:ClearAllChildren();view.signature={};view.count=0;view.nextRead=0;view.key=nil;view.viewport.Visible=false
+        end
+        local function visualChild(node)
+            return node:IsA("Decal")or node:IsA("Texture")or node:IsA("SpecialMesh")or node:IsA("SurfaceAppearance")
+        end
+        local function snapshot(view,sources,base,key,face)
+            if not base or #sources==0 then if view.count>0 then clearView(view)end;view.viewport.Visible=false;return false end
+            view.viewport.Visible=true
+            local now=os.clock()
+            if view.key==key and now<view.nextRead then return view.count>0 end
+            view.nextRead=now+0.35;view.key=key
+            local parts,signature={},{}
+            local function collect(node)
+                if not node:IsA("BasePart")then return end
+                parts[#parts+1]=node
+                signature[#signature+1]=node;signature[#signature+1]=node.Size;signature[#signature+1]=node.Color;signature[#signature+1]=node.Material
+                for _,child in ipairs(node:GetDescendants())do
+                    if visualChild(child)then
+                        signature[#signature+1]=child
+                        if child:IsA("Decal")or child:IsA("Texture")then signature[#signature+1]=child.Texture;signature[#signature+1]=child.Color3 end
+                    end
+                end
+            end
+            for _,source in ipairs(sources)do collect(source);for _,node in ipairs(source:GetDescendants())do collect(node)end end
+            local same=#signature==#view.signature
+            if same then for i,value in ipairs(signature)do if view.signature[i]~=value then same=false;break end end end
+            if same then return view.count>0 end
+            view.model:ClearAllChildren();view.signature=signature;view.count=0
+            for _,source in ipairs(parts)do
+                local ok,part=pcall(function()return source:Clone()end)
+                if ok and part then
+                    -- Sanitize while unparented: never execute copied scripts.
+                    for _,child in ipairs(part:GetDescendants())do if not visualChild(child)then child:Destroy()end end
+                    part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.LocalTransparencyModifier=0
+                    part.Transparency=face and source==sources[1]and 0 or source.Transparency
+                    part.CFrame=base:ToObjectSpace(source.CFrame);part.Parent=view.model;view.count+=1
+                end
+            end
+            if view.count==0 then view.viewport.Visible=false;return false end
+            local center,size=view.model:GetBoundingBox()
+            local distance=math.max(size.X,size.Y)*0.55/math.tan(math.rad(view.camera.FieldOfView/2))+size.Z/2
+            local direction=face and Vector3.new(0,0,-1)or Vector3.new(0.15,0.08,-1).Unit
+            view.camera.CFrame=CFrame.lookAt(center.Position+direction*math.max(distance,0.1),center.Position)
+            return true
+        end
+        function self:SetItemIcons(value)icons=type(value)=="table"and value or {}end
+        function self:RenderNativeFace(model)
+            if not model then if nativeFace and(nativeFace.count>0 or nativeFace.key)then clearView(nativeFace)end;return false end
+            if not nativeFace then nativeFace=makeView(avatar,"NativeFace");nativeFace.viewport.ZIndex=3 end
+            local head=model:FindFirstChild("Head")
+            if not head or not head:IsA("BasePart")then clearView(nativeFace);return false end
+            local sources={head};local helmet=model:FindFirstChild("Armor_head")
+            if helmet then sources[#sources+1]=helmet end
+            return snapshot(nativeFace,sources,head.CFrame,model,true)
+        end
+        local function makeGear(parent)
+            local row={frame=make("Frame",{Name="EquipmentRow",Size=UDim2.fromOffset(118,24),BackgroundTransparency=1,BorderSizePixel=0},parent),slots={}}
+            for i=1,5 do
+                local frame=make("Frame",{Name=({"Boots","Leggings","Chestplate","Helmet","HeldItem"})[i],Position=UDim2.fromOffset((i-1)*24,0),Size=UDim2.fromOffset(22,22),BackgroundColor3=Color3.fromRGB(24,26,34),BackgroundTransparency=0.15,BorderSizePixel=0},row.frame);round(frame,3)
+                local view=makeView(frame,"EquipmentView")
+                local icon=make("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image="",Visible=false,ResampleMode=Enum.ResamplerMode.Pixelated},frame)
+                row.slots[i]={frame=frame,view=view,icon=icon}
+            end
+            return row
+        end
+        local function renderGear(row,model,armor,weapon)
+            row.frame.Visible=armor or weapon
+            local root=model and(model:FindFirstChild("Torso")or model:FindFirstChild("HumanoidRootPart"))
+            local index=0
+            for i,slot in ipairs(row.slots)do
+                local show=(i<=4 and armor)or(i==5 and weapon)
+                slot.frame.Visible=show;slot.icon.Visible=false
+                if show then
+                    slot.frame.Position=UDim2.fromOffset(index*24,0);index+=1
+                    local name=({"Armor_feet","Armor_legs","Armor_chest","Armor_head","HeldItem"})[i]
+                    local source=model and model:FindFirstChild(name)
+                    local held=i==5 and model and model:GetAttribute("HeldItem")
+                    if i==5 and held==""then source=nil end
+                    local image=i==5 and type(held)=="string"and icons[held]
+                    if type(image)=="string"and image~=""then
+                        slot.icon.Image=image;slot.icon.Visible=true
+                        if slot.view.count>0 then clearView(slot.view)end;slot.view.viewport.Visible=false
+                    else
+                        snapshot(slot.view,source and {source}or {},root and root.CFrame,source,false)
+                    end
+                else if slot.view.count>0 then clearView(slot.view)end;slot.view.viewport.Visible=false end
+            end
+            row.frame.Size=UDim2.fromOffset(math.max(0,index*24-2),22)
+        end
+        function self:RenderNativeGear(data,cfg)
+            if not opts.NativeFace then return end
+            local enabled=cfg.targetArmor==true or cfg.targetWeapon==true
+            local baseHeight=cfg.targetStyle=="MacrOS"and 108 or 60
+            if gearLayout~=enabled or(enabled and targetHud.Size.Y.Offset==baseHeight)then
+                gearLayout=enabled;lastTargetStyle="";targetLayout(cfg.targetStyle)
+                if enabled then
+                    targetHud.Size=UDim2.fromOffset(targetHud.Size.X.Offset,targetHud.Size.Y.Offset+26)
+                    for _,node in ipairs({avatar,targetName,hpBack,targetNumber,targetDetails,targetFooter,targetStripe,targetDistance})do
+                        local p=node.Position;node.Position=UDim2.new(p.X.Scale,p.X.Offset,p.Y.Scale,p.Y.Offset+26)
+                    end
+                end
+            end
+            if not enabled then if hudGear then hudGear.frame.Visible=false end;return end
+            if not hudGear then hudGear=makeGear(targetHud);hudGear.frame.Position=UDim2.fromOffset(61,2)end
+            renderGear(hudGear,data.model,cfg.targetArmor==true,cfg.targetWeapon==true)
+        end
+        function self:RenderEquipment(record,model,x,y,armor,weapon)
+            if not record.equipment then record.equipment=makeGear(overlay);record.objects[#record.objects+1]=record.equipment.frame end
+            local row=record.equipment;renderGear(row,model,armor,weapon)
+            row.frame.Position=UDim2.fromOffset(x-row.frame.Size.X.Offset/2,y)
+        end
+    end
     function self:RenderTargetHUD(data,cfg,dt)
         targetLayout(cfg.targetStyle)
         local desired=cfg.targetInfo and data~=nil
@@ -28795,8 +28926,9 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             lastTargetData=data
         end
         targetHud.Visible=targetAnim.alpha>0.01 and lastTargetData~=nil
-        if not targetHud.Visible then return end
+        if not targetHud.Visible then if opts.NativeFace then self:RenderNativeFace(nil)end;return end
         local d=lastTargetData
+        self:RenderNativeGear(d,cfg)
         local ratio=d.ratio or 0
         local speed=cfg.targetSmooth
         targetAnim.health+=(ratio-targetAnim.health)*(1-math.exp(-speed*dt))
@@ -28809,9 +28941,12 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         initials.Visible=false;initials.Text=""
         local portraitMode=cfg.targetPortrait or "Face"
         avatar.Visible=portraitMode~="None"
-        local image=portraitMode~="None"and(portraitImage(d.userId,portraitMode)or(not d.userId and d.faceTexture))or nil
+        local native=opts.NativeFace and portraitMode=="Face"
+        local nativeReady=false
+        if opts.NativeFace then nativeReady=self:RenderNativeFace(native and d.model or nil)end
+        local image=not native and portraitMode~="None"and(portraitImage(d.userId,portraitMode)or(not d.userId and d.faceTexture))or nil
         targetAvatar.Visible=image~=nil;targetAvatar.Image=image or ""
-        silhouetteHead.Visible=not image or not targetAvatar.IsLoaded;silhouetteBody.Visible=silhouetteHead.Visible
+        silhouetteHead.Visible=not nativeReady and(not image or not targetAvatar.IsLoaded);silhouetteBody.Visible=silhouetteHead.Visible
         targetAvatar.ImageColor3=Color3.new(1,1,1):Lerp(Color3.fromRGB(255,100,100),cfg.targetHurtTint and targetAnim.hurt*0.6 or 0)
         local color=cfg.targetStyle=="Delta 1.16" and Color3.fromRGB(218,46,99) or cfg.targetStyle=="Delta 1.21" and Color3.fromRGB(51,174,212) or cfg.enemyColor
         if cfg.targetCustomColor then color=cfg.targetColorHUD end
@@ -28963,7 +29098,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     end
     local function resetBasePositions()
         dragged[targetHud]=nil;lastTargetStyle="";radar.Position=UDim2.new(1,-180,0,85)
-        watermark.Position=UDim2.fromOffset(18,12);moduleList.Position=UDim2.new(1,-240,0,265)
+        watermark.Position=UDim2.fromOffset(18,opts.ModernWatermark and safeTop()or 12);moduleList.Position=UDim2.new(1,-240,0,265)
         if bindPanel then bindPanel.Position=UDim2.new(0,18,0.5,40);compass.Position=UDim2.new(0.5,0,0,12);telemetry.Position=UDim2.new(0,18,1,-65)end
     end
     -- Shared pooled overlay primitives: no runtime Instance creation in the game client.
@@ -29035,7 +29170,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         local function apply(node,values)
             if not node or type(values)~="table"then return end
             for i=1,4 do local v=values[i];if type(v)~="number"or v~=v or math.abs(tonumber(v)or 0)>(i%2==1 and 2 or 10000)then return end end
-            node.Position=UDim2.new(values[1],values[2],values[3],values[4]);dragged[node]=true
+            local y=values[4];if node==watermark and opts.ModernWatermark and values[3]==0 then y=math.max(y,safeTop())end
+            node.Position=UDim2.new(values[1],values[2],values[3],y);dragged[node]=true
         end
         for key,values in pairs(layout)do apply(layoutObjects[key]or(readouts[key]and readouts[key].panel),values)end
     end
@@ -29578,7 +29714,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         item.name=name;item.started=now;item.duration=math.clamp(tonumber(cfg.bindNotifyDuration)or 2.5,0.5,6)
         local color=enabled and Color3.fromRGB(116,224,167)or Color3.fromRGB(246,125,137)
         item.accent.BackgroundColor3=color;item.knob.BackgroundColor3=color;item.knob.Position=UDim2.fromOffset(enabled and 9 or 2,2)
-        local english=cfg.bindNotifyLanguage=="English"
+        local english=cfg.bindNotifyLanguage~="Русский"
         item.message.Text=escapeRich(name)..(english and " is "or " — ")..'<font color="'..(enabled and '#74E0A7'or '#F67D89')..'">'..(english and(enabled and "enabled"or "disabled")or(enabled and "активирован"or "деактивирован"))..'</font>' 
         item.group.GroupTransparency=1;item.group.Visible=true
         table.insert(bindToasts,1,item)
@@ -29589,7 +29725,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             pcall(function()bindSound:Stop();bindSound:Play()end)
         end
     end
-    function self:RenderBindNotifications(now,enabled,soundEnabled)
+    function self:RenderBindNotifications(now,enabled,soundEnabled,settings)
         if not enabled then self:ClearBindNotifications();return end
         if not soundEnabled and bindSound then pcall(function()bindSound:Stop()end)end
         for i=#bindToasts,1,-1 do
@@ -29600,7 +29736,14 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             local age=math.max(0,now-item.started)
             local fade=math.min(math.clamp(age/0.14,0,1),math.clamp((item.duration-age)/0.22,0,1))
             local ease=1-(1-fade)^3
-            item.group.Position=UDim2.new(0.5,0,1,-84-(i-1)*34+12*(1-ease))
+            local cfg=settings or {}
+            local place=cfg.bindNotifyPosition or "Bottom Center"
+            local top=place:find("Top",1,true)~=nil
+            local left=place:find("Left",1,true)~=nil;local right=place:find("Right",1,true)~=nil
+            local x=left and 0 or right and 1 or 0.5
+            local margin=left and 18 or right and -18 or 0
+            item.group.AnchorPoint=Vector2.new(x,top and 0 or 1)
+            item.group.Position=UDim2.new(x,margin+(tonumber(cfg.bindNotifyX)or 0),top and 0 or 1,(top and safeTop()+(i-1)*34 or -84-(i-1)*34)+(tonumber(cfg.bindNotifyY)or 0)+12*(1-ease))
             item.group.GroupTransparency=1-fade;item.group.BackgroundColor3=Color3.fromRGB(25,27,34)
             item.border.Color=Color3.fromRGB(53,57,72);item.message.TextColor3=Color3.fromRGB(220,224,235)
         end
