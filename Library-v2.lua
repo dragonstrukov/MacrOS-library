@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 42
+			Library.MacrOSRevision = 43
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28583,8 +28583,8 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v20. Additive: existing BABFT/LIP APIs are unchanged.
-Library.UpgradeOverlayVersion = 20
+-- Optional combat overlay API v21. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 21
 function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
@@ -28897,13 +28897,18 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             row.frame.Visible=index>0
         end
         function self:HideNativeGear()
-            if hudGear then hudGear.frame.Visible=false end
+            if hudGear then hudGear.frame.Visible=false;hudGear.anchor.Visible=false end
         end
         function self:RenderNativeGear(data,cfg)
             if not opts.NativeFace then return end
             if not(cfg.targetArmor==true or cfg.targetWeapon==true)then self:HideNativeGear();return end
             if not hudGear then
-                hudGear=makeGear(overlay,16,true)
+                -- Unscaled screen-space anchor; scaling belongs only to its zero-offset child.
+                -- Applying UIScale directly to a screen-positioned row also transforms its offset.
+                local anchor=make("Frame",{Name="TargetEquipmentAnchor",Size=UDim2.fromOffset(0,0),BackgroundTransparency=1,BorderSizePixel=0,ClipsDescendants=false},overlay)
+                hudGear=makeGear(anchor,16,true);hudGear.anchor=anchor
+                hudGear.frame.AnchorPoint=Vector2.new(1,0)
+                hudGear.frame.Position=UDim2.fromOffset(0,0)
                 hudGear.scale=make("UIScale",{Scale=1},hudGear.frame)
             end
             renderGear(hudGear,data.model,cfg.targetArmor==true,cfg.targetWeapon==true)
@@ -28911,7 +28916,9 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             local position=targetHud.AbsolutePosition
             hudGear.scale.Scale=scale
             local bounds=targetHud.AbsoluteSize
-            hudGear.frame.Position=UDim2.fromOffset(position.X+bounds.X-(hudGear.frame.Size.X.Offset+8)*scale,position.Y+bounds.Y+4*scale)
+            local origin=overlay.AbsolutePosition
+            hudGear.anchor.Position=UDim2.fromOffset(position.X+bounds.X-origin.X,position.Y+bounds.Y-origin.Y+4)
+            hudGear.anchor.Visible=hudGear.frame.Visible
             hudGear.frame.GroupTransparency=1-targetAnim.alpha
         end
         function self:RenderEquipment(record,model,x,y,armor,weapon)
