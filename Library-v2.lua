@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 37
+			Library.MacrOSRevision = 38
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28577,8 +28577,8 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v15. Additive: existing BABFT/LIP APIs are unchanged.
-Library.UpgradeOverlayVersion = 15
+-- Optional combat overlay API v16. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 16
 function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
@@ -28665,16 +28665,22 @@ make("Frame",{Position=UDim2.new(0.5,0,0,10),Size=UDim2.new(0,1,1,-20),Backgroun
 make("Frame",{Position=UDim2.new(0,10,0.5,0),Size=UDim2.new(1,-20,0,1),BackgroundTransparency=0.65,BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0},radar)
 local radarCenter=text(radar,"▲",14);radarCenter.Position=UDim2.new(0.5,-8,0.5,-8);radarCenter.Size=UDim2.fromOffset(16,16)
 local watermark
-local watermarkBrand,watermarkStroke
+local watermarkPills={}
 if opts.ModernWatermark then
-    watermark=make("Frame",{Name="MacrOSWatermark",Position=UDim2.fromOffset(18,12),Size=UDim2.fromOffset(0,30),AutomaticSize=Enum.AutomaticSize.X,BackgroundColor3=themeColor("Surface"),BackgroundTransparency=0.08,BorderSizePixel=0,Visible=false},overlay);round(watermark,8)
-    watermarkStroke=make("UIStroke",{Color=themeColor("Stroke"),Transparency=0.15},watermark)
-    make("UIPadding",{PaddingLeft=UDim.new(0,12),PaddingRight=UDim.new(0,12)},watermark)
-    make("UIListLayout",{FillDirection=Enum.FillDirection.Horizontal,VerticalAlignment=Enum.VerticalAlignment.Center,SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},watermark)
-    local brand=text(watermark,"MacrOS",13);brand.Name="Brand";brand.TextStrokeTransparency=1;brand.AutomaticSize=Enum.AutomaticSize.X;brand.Size=UDim2.fromOffset(0,30);brand.LayoutOrder=0;brand.TextColor3=themeColor("Accent");watermarkBrand=brand
+    watermark=make("Frame",{Name="MacrOSWatermark",Position=UDim2.fromOffset(18,12),Size=UDim2.fromOffset(0,0),AutomaticSize=Enum.AutomaticSize.XY,BackgroundTransparency=1,BorderSizePixel=0,Visible=false},overlay)
+    make("UIListLayout",{FillDirection=Enum.FillDirection.Vertical,SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,4)},watermark)
+    for i=1,2 do
+        local pill=make("Frame",{Name="WatermarkRow"..i,LayoutOrder=i,Size=UDim2.fromOffset(0,24),AutomaticSize=Enum.AutomaticSize.X,BackgroundColor3=Color3.fromRGB(26,28,36),BackgroundTransparency=0.08,BorderSizePixel=0},watermark);round(pill,7)
+        make("UIStroke",{Color=Color3.fromRGB(61,66,85),Transparency=0.65,Thickness=1},pill)
+        make("UIPadding",{PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8)},pill)
+        make("UIListLayout",{FillDirection=Enum.FillDirection.Horizontal,VerticalAlignment=Enum.VerticalAlignment.Center,SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,10)},pill)
+        watermarkPills[i]=pill
+    end
+    local brand=text(watermarkPills[1],"M",13);brand.Name="Brand";brand.TextStrokeTransparency=1;brand.Size=UDim2.fromOffset(16,24);brand.LayoutOrder=0;brand.TextColor3=Color3.fromRGB(135,164,240)
 else
-watermark=text(overlay,"MacrOS",13);watermark.Position=UDim2.fromOffset(18,12);watermark.Size=UDim2.fromOffset(430,27);watermark.TextXAlignment=Enum.TextXAlignment.Left;watermark.Visible=false
+    watermark=text(overlay,"MacrOS",13);watermark.Position=UDim2.fromOffset(18,12);watermark.Size=UDim2.fromOffset(430,27);watermark.TextXAlignment=Enum.TextXAlignment.Left;watermark.Visible=false
 end
+
 local moduleList=text(overlay,"",13);moduleList.Position=UDim2.new(1,-240,0,265);moduleList.Size=UDim2.fromOffset(220,280);moduleList.TextXAlignment=Enum.TextXAlignment.Right;moduleList.TextYAlignment=Enum.TextYAlignment.Top;moduleList.Visible=false
 local crosshair=make("Frame",{BackgroundTransparency=1,Size=UDim2.fromOffset(0,0),Position=UDim2.fromScale(0.5,0.5),Visible=false},overlay)
 -- Extended crosshair primitives are constructed below.
@@ -28829,6 +28835,25 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         if d.preview and cfg.targetStyle~="MacrOS"then targetName.Text="Preview Player"end
     end
     local rotation=0
+    function self:RenderBox3D(record,feet,width,height,camera,color,thickness)
+        local points={};local half=width/2
+        for _,x in ipairs({-half,half})do for _,y in ipairs({0,height})do for _,z in ipairs({-half,half})do
+            points[#points+1]=camera:WorldToViewportPoint(feet+Vector3.new(x,y,z))
+        end end end
+        record.edges3D=record.edges3D or {}
+        local edges={{1,2},{1,3},{1,5},{2,4},{2,6},{3,4},{3,7},{4,8},{5,6},{5,7},{6,8},{7,8}}
+        for i,edge in ipairs(edges)do
+            local node=record.edges3D[i]
+            if not node then node=make("Frame",{Name="ESP3DEdge"..i,AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0,Visible=false},overlay);record.edges3D[i]=node;record.objects[#record.objects+1]=node end
+            local a,b=points[edge[1]],points[edge[2]]
+            node.Visible=a.Z>0.05 and b.Z>0.05
+            if node.Visible then
+                local dx,dy=b.X-a.X,b.Y-a.Y
+                node.Position=UDim2.fromOffset((a.X+b.X)/2,(a.Y+b.Y)/2);node.Size=UDim2.fromOffset(math.sqrt(dx*dx+dy*dy),thickness)
+                node.Rotation=math.deg(math.atan2(dy,dx));node.BackgroundColor3=color
+            end
+        end
+    end
     function self:GetMarker(other)return getMarker(other)end
     function self:ClearMarker(id)clearMarker(id)end
     function self:HideMarker(record)hideMarker(record)end
@@ -29399,18 +29424,46 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         end
     end
     local watermarkRows={}
+    -- Tiny vector icons: independent of external fonts and icon downloads.
+    local function watermarkIcon(parent,key)
+        local icon=make("Frame",{Name="MetricIcon",Size=UDim2.fromOffset(12,12),Position=UDim2.fromOffset(0,6),BackgroundTransparency=1},parent)
+        local blue=Color3.fromRGB(135,164,240)
+        local function line(x,y,w,h,rotation)
+            return make("Frame",{Position=UDim2.fromOffset(x,y),Size=UDim2.fromOffset(w,h),Rotation=rotation or 0,BorderSizePixel=0,BackgroundColor3=blue},icon)
+        end
+        local function outline(x,y,w,h,radius)
+            local n=make("Frame",{Position=UDim2.fromOffset(x,y),Size=UDim2.fromOffset(w,h),BackgroundTransparency=1,BorderSizePixel=0},icon)
+            round(n,radius);make("UIStroke",{Color=blue,Thickness=1,Transparency=0.1},n);return n
+        end
+        if key=="Username"or key=="Players"then outline(4,0,4,4,3);outline(1,7,10,4,3)
+        elseif key=="FPS"then outline(0,1,12,8,2);line(5,10,2,2);line(3,11,6,1)
+        elseif key=="Ping"then line(1,8,2,4);line(5,5,2,7);line(9,1,2,11)
+        elseif key=="Elapsed"or key=="Time"then outline(1,1,10,10,6);line(6,3,1,4);line(6,6,3,1)
+        elseif key=="Coordinates"then outline(2,2,8,8,3);line(5,0,1,3);line(5,9,1,3);line(0,5,3,1);line(9,5,3,1)
+        elseif key=="TPS"then line(1,3,3,1);line(4,2,1,7);line(4,8,4,1);line(8,5,1,4);line(8,5,4,1)
+        else line(1,7,7,1,-35);line(5,3,5,1);line(9,3,1,5)end
+        return icon
+    end
     function self:RenderWatermark(rows)
-        if not opts.ModernWatermark then watermark.Text="MacrOS  /  "..table.concat(rows,"  /  ");return end
-        watermark.BackgroundColor3=themeColor("Surface");watermarkBrand.TextColor3=themeColor("Accent");watermarkStroke.Color=themeColor("Stroke")
+        if not opts.ModernWatermark then
+            local values={};for _,row in ipairs(rows)do values[#values+1]=type(row)=="table"and row.text or row end
+            watermark.Text="MacrOS  /  "..table.concat(values,"  /  ");return
+        end
+        local second=false
         for i,value in ipairs(rows)do
+            local item=type(value)=="table"and value or {key="Game",text=tostring(value),row=1}
+            local row=item.row==2 and 2 or 1;if row==2 then second=true end
             local node=watermarkRows[i]
             if not node then
-                node=text(watermark,"",12);node.TextStrokeTransparency=1;node.AutomaticSize=Enum.AutomaticSize.X;node.Size=UDim2.fromOffset(0,30);node.LayoutOrder=i+1
-                watermarkRows[i]=node
+                local frame=make("Frame",{Name="WatermarkMetric",Size=UDim2.fromOffset(14,24),AutomaticSize=Enum.AutomaticSize.X,BackgroundTransparency=1,BorderSizePixel=0},watermarkPills[row])
+                local label=text(frame,"",11);label.Position=UDim2.fromOffset(17,0);label.Size=UDim2.fromOffset(0,24);label.AutomaticSize=Enum.AutomaticSize.X;label.TextStrokeTransparency=1;label.TextColor3=Color3.fromRGB(209,214,230)
+                node={frame=frame,label=label};watermarkRows[i]=node
             end
-            node.Visible=true;node.Text="  /  "..value;node.TextColor3=themeColor("Muted")
+            if node.key~=item.key then if node.icon then node.icon:Destroy()end;node.icon=watermarkIcon(node.frame,item.key);node.key=item.key end
+            node.frame.Parent=watermarkPills[row];node.frame.LayoutOrder=i;node.frame.Visible=true;node.label.Text=item.text
         end
-        for i=#rows+1,#watermarkRows do watermarkRows[i].Visible=false end
+        watermarkPills[2].Visible=second
+        for i=#rows+1,#watermarkRows do watermarkRows[i].frame.Visible=false end
     end
     function self:ConfigureRadar(cfg)
         local corner=radar:FindFirstChildOfClass("UICorner")
@@ -29464,6 +29517,37 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     local bindToasts={}
     local bindToastPool={}
     local bindSound=nil
+    local bindAudioData={
+        ["Soft Bell"]="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",
+        ["Glass"]="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",
+        ["Soft Click"]="UklGRpgGAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YXQGAAAAADIAtABPAcYB8gHHAVYBswDo/+r+sf1K/PD6Bvr/+Sn7iP29AB4E7AaQCNEI1gcJBtsDkwE3/6f80/nx9pD0dfNX9ID3mvyyAnwIwAy9Dl4OJgzhCEQFpgH//Rr68fXx8fvuJu5F8ID1Ff2DBf0MARLNE4wSGg+RCssFHAFj/F/3JvJg7T7qDuqn7ez0qv7fCGIRjxbGF38V6BBTC6QFHACA+pD0hu5Q6V/mIudV7If1DAFDDNEUQRlUGewVfhBtCoYE5v5D+XDzyu1Y6XvnXelU75X4TwM7DVYUgxfKFiQT8A1dCAMD4P2r+E7zRO6Y6o/pHOxX8kv7JwXUDZ4TtxVeFJkQrQuUBroBBv01+Evz2e7o65/rue4X9ab9ngYdDrcS5xMWEk0OsAkMBaQAUvze92Tzhe9E7aXtL/GU96r/vQcgDq0RGxL0DzsM8ge8A7v/v/ui95TzRPCn7p7vffPO+VwBjgjqDYoQWxD8DWIKbwadAvf+Sft+99vzE/EO8ITxnvXH+8QCGwmFDVkPrQ4tDL4IHwWoAVP+7fpw9zX08PF08VXzk/eB/ecDawn7DCEOFQ2ICkwH/gPaAMv9pvp296D01vLV8g31W/n//ssEhwlUDOkMlgsMCQcGBQMrAFv9c/qN9xn1wvMv9Kr29vpDAHYFeQmaC7YLMQq3B+sEMQKZ/wD9Ufq09571s/R+9Sz4ZPxTAe8FRwnRCo0K6QiHBvUDfAEe/7j8P/rp9y72pfXA9o/5pv0yAjwG+AgBCnEJvQd6BSAD4gC4/oD8PPoq+MX2lfby99T6v/7kAmQGkggvCWUIrAaNBGkCYABj/lb8RPp2+GL3gfcU+fv7sf9tA2oGHAhdCGoHtwW+A8wB8/8e/jj8WfrM+AP4Z/gj+gP9fADTA1YGmgeRB4EG3AQKA0YBl//m/Sb8d/op+ab4Rfke++79JQEYBCwGEQfMBqwFGQRtAtQASv+6/R78nvqM+Uj5GvoF/Lv+rwFBBPAFgwYRBukEbQPmAXMACv+Y/R/8zfrz+en55PrY/G7/GwJSBKcF9gVhBTkE1gJyASEA1v5//Sj8A/te+of6ovuW/QUAbQJPBFQFagW9BJsDUgIPAd3/q/5u/Tn8P/vL+iD7U/xA/oQAqAI7BPoE4gQlBA4D3wG6AKP/if5l/VD8f/s5+7P79/zW/u4AzwIZBJwEYASbA5ECfAFyAHP/bv5i/Wz8w/um+z/8jf1Z/0IB5ALtAzwE5QMdAyMCJgE2AEv/Wv5l/Y78CvwS/MT8Ff7J/4QB6QK4A90DcQOrAsMB3QACACv/S/5t/bT8U/x7/EH9kP4oALQB4gJ+A4ADBgNGAm8BngDY/xD/Qv56/d38nPzg/LX9/f54ANYB0QJAAyYDpALrASYBaQC0//v+Pv6L/Qr95vxC/R/+Xf+5AOsBtwIAA9ACSgKbAecAOwCW/+v+Pf6g/Tn9L/2e/YD+sP/sAPUBlwLAAn8C+QFVAbEAFQB9/9/+Qf64/Wn9d/31/dj+9/8UAfUBcgKAAjMCrwEYAYMA9v9p/9f+SP7T/Zr9vf1H/if/MgAwAe0BSQJCAu4BbgHiAFsA2/9Z/9L+Uv7w/cz9AP6S/m3/YwBDAd8BHwIHAq4BNAG0ADkAxP9M/9D+Xv4O/v79Qf7Y/qr/iwBOAcwB9AHOAXMBAQGMAB0Asf9C/9H+bf4u/i/+fv4X/9//qwBSAbUByAGZAT8B1ABqAAUAov87/9X+fv5P/l/+t/5P/woAwgBQAZsBnQFlAQwBqQBKAPL/mv9A/+n+pv6K/qf+Af+M/ywAvwAoAVYBSwEVAckAeQAsAOX/nf9U/w//3v7R/vT+R/++/z8AsAD7ABYBBAHTAJQAUwAXAN7/pP9q/zX/E/8R/zb/gP/i/0cAnADPANsAxgCcAGkANwAIANz/rv+B/1r/RP9J/23/rP/7/0cAhACkAKgAkwBwAEgAIgD//93/uv+Y/33/cf96/5r/zf8IAEAAaQB9AHoAaABMAC8AEwD6/+H/x/+w/57/mf+j/77/5f8PADUATwBZAFQARAAwABwACQD4/+f/1v/H/73/vP/F/9r/9f8QACcANQA5ADMAKAAbAA4AAwD5/+//5f/d/9j/2v/h/+7//f8LABcAHAAdABkAEgAMAAUAAAD8//j/9P/y//H/8//2//v/AAAEAAYABgAFAAMAAgAAAA==",
+    }
+    local bindAudioCache={}
+    local function bindAudio(style)
+        if not bindAudioData[style]then style="Soft Bell"end
+        if bindAudioCache[style]then return bindAudioCache[style]end
+        local asset={id="rbxasset://sounds/electronicpingshort.wav",pitch=style=="Glass"and 1.5 or style=="Soft Click"and 2 or 1}
+        local register=getcustomasset or getsynasset
+        if type(writefile)=="function"and type(makefolder)=="function"and type(register)=="function"then
+            local ok,id=pcall(function()
+                for _,path in ipairs({"MacrOS","MacrOS/UI","MacrOS/UI/sounds"})do pcall(makefolder,path)end
+                local alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+                local bytes={};local buffer,bits=0,0
+                for c in bindAudioData[style]:gmatch(".")do
+                    local at=alphabet:find(c,1,true)
+                    if at then
+                        buffer=buffer*64+at-1;bits+=6
+                        if bits>=8 then bits-=8;bytes[#bytes+1]=string.char(math.floor(buffer/2^bits));buffer=buffer%2^bits end
+                    end
+                end
+                local path="MacrOS/UI/sounds/"..style:gsub(" ","_"):lower().."_v25.wav"
+                writefile(path,table.concat(bytes));return register(path)
+            end)
+            if ok and type(id)=="string"and id~=""then asset={id=id,pitch=1}end
+        end
+        bindAudioCache[style]=asset;return asset
+    end
+
     local function escapeRich(value)
         return (tostring(value):gsub("&","&amp;"):gsub("<","&lt;"):gsub(">","&gt;"))
     end
@@ -29482,24 +29566,26 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         end
         if not item and #bindToastPool>=3 then item=table.remove(bindToasts)end
         if not item then
-            local group=make("CanvasGroup",{Name="BindNotification",AnchorPoint=Vector2.new(0.5,1),Size=UDim2.fromOffset(310,38),BackgroundColor3=themeColor("Surface"),BackgroundTransparency=0.08,BorderSizePixel=0,Visible=false,ZIndex=120},overlay);round(group,8)
+            local group=make("CanvasGroup",{Name="BindNotification",AnchorPoint=Vector2.new(0.5,1),Size=UDim2.fromOffset(0,28),AutomaticSize=Enum.AutomaticSize.X,BackgroundColor3=Color3.fromRGB(25,27,34),BackgroundTransparency=0.06,BorderSizePixel=0,Visible=false,ZIndex=120},overlay);round(group,8)
+            make("UIPadding",{PaddingRight=UDim.new(0,10)},group)
             local border=make("UIStroke",{Color=themeColor("Stroke"),Transparency=0.25,Thickness=1},group)
-            local accent=make("Frame",{Position=UDim2.fromOffset(0,8),Size=UDim2.fromOffset(3,22),BorderSizePixel=0},group);round(accent,2)
-            local message=text(group,"",13);message.Position=UDim2.fromOffset(15,0);message.Size=UDim2.new(1,-28,1,-2);message.TextXAlignment=Enum.TextXAlignment.Left;message.TextStrokeTransparency=1;message.RichText=true;message.TextTruncate=Enum.TextTruncate.AtEnd
-            local progress=make("Frame",{AnchorPoint=Vector2.new(0,1),Position=UDim2.new(0,8,1,0),Size=UDim2.new(1,-16,0,2),BorderSizePixel=0,BackgroundTransparency=0.3},group)
-            item={group=group,border=border,message=message,accent=accent,progress=progress}
+            local accent=make("Frame",{Name="ToggleTrack",Position=UDim2.fromOffset(9,8),Size=UDim2.fromOffset(19,12),BackgroundTransparency=0.65,BorderSizePixel=0},group);round(accent,6)
+            local knob=make("Frame",{Name="ToggleKnob",Size=UDim2.fromOffset(8,8),Position=UDim2.fromOffset(2,2),BorderSizePixel=0},accent);round(knob,4)
+            local message=text(group,"",12);message.Position=UDim2.fromOffset(37,0);message.Size=UDim2.fromOffset(0,28);message.AutomaticSize=Enum.AutomaticSize.X;message.TextXAlignment=Enum.TextXAlignment.Left;message.TextStrokeTransparency=1;message.RichText=true;message.TextTruncate=Enum.TextTruncate.AtEnd
+            item={group=group,border=border,message=message,accent=accent,knob=knob}
             bindToastPool[#bindToastPool+1]=item
         end
         item.name=name;item.started=now;item.duration=math.clamp(tonumber(cfg.bindNotifyDuration)or 2.5,0.5,6)
         local color=enabled and Color3.fromRGB(116,224,167)or Color3.fromRGB(246,125,137)
-        item.accent.BackgroundColor3=color;item.progress.BackgroundColor3=color
-        item.message.Text=escapeRich(name)..' is <font color="'..(enabled and '#74E0A7'or '#F67D89')..'">'..(enabled and 'enabled'or 'disabled')..'</font>'
+        item.accent.BackgroundColor3=color;item.knob.BackgroundColor3=color;item.knob.Position=UDim2.fromOffset(enabled and 9 or 2,2)
+        local english=cfg.bindNotifyLanguage=="English"
+        item.message.Text=escapeRich(name)..(english and " is "or " — ")..'<font color="'..(enabled and '#74E0A7'or '#F67D89')..'">'..(english and(enabled and "enabled"or "disabled")or(enabled and "активирован"or "деактивирован"))..'</font>' 
         item.group.GroupTransparency=1;item.group.Visible=true
         table.insert(bindToasts,1,item)
         if cfg.bindNotifySound then
             if not bindSound then bindSound=make("Sound",{Name="MacrOSBindSound",SoundId="rbxasset://sounds/electronicpingshort.wav",Volume=0.35},overlay)end
             bindSound.Volume=math.clamp(tonumber(cfg.bindNotifyVolume)or 0.35,0,1)
-            bindSound.PlaybackSpeed=enabled and 1.12 or 0.92
+            local audio=bindAudio(cfg.bindNotifyTone);bindSound.SoundId=audio.id;bindSound.PlaybackSpeed=audio.pitch
             pcall(function()bindSound:Stop();bindSound:Play()end)
         end
     end
@@ -29514,10 +29600,9 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             local age=math.max(0,now-item.started)
             local fade=math.min(math.clamp(age/0.14,0,1),math.clamp((item.duration-age)/0.22,0,1))
             local ease=1-(1-fade)^3
-            item.group.Position=UDim2.new(0.5,0,1,-84-(i-1)*44+12*(1-ease))
-            item.group.GroupTransparency=1-fade;item.group.BackgroundColor3=themeColor("Surface")
-            item.border.Color=themeColor("Stroke");item.message.TextColor3=themeColor("Text")
-            item.progress.Size=UDim2.new(math.max(0,1-age/item.duration),-16*math.max(0,1-age/item.duration),0,2)
+            item.group.Position=UDim2.new(0.5,0,1,-84-(i-1)*34+12*(1-ease))
+            item.group.GroupTransparency=1-fade;item.group.BackgroundColor3=Color3.fromRGB(25,27,34)
+            item.border.Color=Color3.fromRGB(53,57,72);item.message.TextColor3=Color3.fromRGB(220,224,235)
         end
     end
     function self:ResetPositions()
