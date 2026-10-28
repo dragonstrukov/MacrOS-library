@@ -24116,7 +24116,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 35
+			Library.MacrOSRevision = 36
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28577,8 +28577,8 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v13. Additive: existing BABFT/LIP APIs are unchanged.
-Library.UpgradeOverlayVersion = 13
+-- Optional combat overlay API v14. Additive: existing BABFT/LIP APIs are unchanged.
+Library.UpgradeOverlayVersion = 14
 function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
@@ -29309,20 +29309,46 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     end
     local trajectoryLines={}
     local landingDot=make("Frame",{Name="TrajectoryLanding",Visible=false,AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.fromOffset(10,10),BorderSizePixel=0},overlay);round(landingDot,100)
-    function self:RenderTrajectory(points,landing,color,camera)
-        for _,node in ipairs(trajectoryLines)do node.Visible=false end
-        landingDot.Visible=false
-        if not camera then return end
-        for i=2,math.min(#points,241)do
-            local a=camera:WorldToViewportPoint(points[i-1]);local b=camera:WorldToViewportPoint(points[i])
+    local trajectoryDisplay={}
+    local trajectoryDisplayKey=nil
+    local flightLabel=text(overlay,"",12);flightLabel.Name="TrajectoryFlightTime";flightLabel.AnchorPoint=Vector2.new(0.5,1);flightLabel.Size=UDim2.fromOffset(120,24);flightLabel.Visible=false
+    function self:RenderTrajectory(points,landing,color,camera,options)
+        options=options or {}
+        landingDot.Visible=false;flightLabel.Visible=false
+        if not camera or #points<2 then
+            for _,node in pairs(trajectoryLines)do node.Visible=false end
+            table.clear(trajectoryDisplay);trajectoryDisplayKey=nil
+            return
+        end
+        local count=math.min(#points,241)
+        local reset=trajectoryDisplayKey~=options.key or not trajectoryDisplay[1]or(trajectoryDisplay[1]-points[1]).Magnitude>48
+        trajectoryDisplayKey=options.key
+        local dt=math.clamp(tonumber(options.dt)or 1/60,0,0.1)
+        local alpha=options.smooth and(1-math.exp(-math.clamp(tonumber(options.follow)or 22,8,40)*dt))or 1
+        for i=1,count do
+            local target=points[i]
+            trajectoryDisplay[i]=(reset or i==1 or not trajectoryDisplay[i])and target or trajectoryDisplay[i]:Lerp(target,alpha)
+        end
+        for i=#trajectoryDisplay,count+1,-1 do trajectoryDisplay[i]=nil end
+        -- Only hide unused segments; do not toggle the entire pool off/on each frame.
+        for i,node in pairs(trajectoryLines)do if i>=count then node.Visible=false end end
+        for i=2,count do
+            local a=camera:WorldToViewportPoint(trajectoryDisplay[i-1]);local b=camera:WorldToViewportPoint(trajectoryDisplay[i])
+            local node=trajectoryLines[i-1]
             if a.Z>0.1 and b.Z>0.1 then
-                local node=trajectoryLines[i-1]
                 if not node then node=make("Frame",{Name="TrajectoryLine_"..(i-1),AnchorPoint=Vector2.new(0.5,0.5),BorderSizePixel=0},overlay);trajectoryLines[i-1]=node end
                 local delta=Vector2.new(b.X-a.X,b.Y-a.Y)
                 node.Visible=true;node.Position=UDim2.fromOffset((a.X+b.X)/2,(a.Y+b.Y)/2);node.Size=UDim2.fromOffset(delta.Magnitude,2);node.Rotation=math.deg(math.atan2(delta.Y,delta.X));node.BackgroundColor3=color;node.BackgroundTransparency=0.1
+            elseif node then node.Visible=false end
+        end
+        if landing then
+            local p,visible=camera:WorldToViewportPoint(trajectoryDisplay[count])
+            landingDot.Visible=visible and p.Z>0.1;landingDot.Position=UDim2.fromOffset(p.X,p.Y);landingDot.BackgroundColor3=color
+            local seconds=options.seconds
+            if options.showTime and landingDot.Visible and type(seconds)=="number"and seconds==seconds and seconds>=0 and seconds<math.huge then
+                flightLabel.Visible=true;flightLabel.Position=UDim2.fromOffset(p.X,p.Y-10);flightLabel.TextColor3=color;flightLabel.Text=string.format("~ %.2f s",seconds)
             end
         end
-        if landing then local p,visible=camera:WorldToViewportPoint(landing);landingDot.Visible=visible and p.Z>0.1;landingDot.Position=UDim2.fromOffset(p.X,p.Y);landingDot.BackgroundColor3=color end
     end
     local watermarkRows={}
     function self:RenderWatermark(rows)
