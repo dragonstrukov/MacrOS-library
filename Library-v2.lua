@@ -24125,7 +24125,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 47
+			Library.MacrOSRevision = 48
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -29523,33 +29523,37 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                 end
             end
             color=saved
-        else
+        elseif mode=="Shuriken"then
             -- Billboard geometry keeps the shuriken readable from any camera angle.
             local top=camera:WorldToViewportPoint(center+Vector3.new(0,radius,0))
             local size=math.clamp(math.abs(top.Y-p.Y),8,140)
-            if mode=="Shuriken"then
-                local blades=SHURIKEN_BLADES[shape]
-                local step=math.pi*2/(blades or 4)
-                for blade=0,(blades or 4)-1 do
-                    local a=phase+blade*step
-                    local arm=size*(blades and 1 or shapeRadius(shape,a))
-                    local function screen(angle,r)return Vector3.new(p.X+math.cos(angle)*arm*r,p.Y+math.sin(angle)*arm*r,p.Z)end
-                    line(screen(a,1),screen(a+0.55,0.28),1,width)
-                    line(screen(a+0.55,0.28),screen(a+step,1),1,width)
-                    line(screen(a,1),screen(a+1.1,0.19),0.45,width)
-                end
-            else
-                local span=RETICLE_SPAN[shape] or math.pi*0.32
-                local fold=RETICLE_SPAN[shape] and 1 or nil
-                for quadrant=0,3 do for segment=0,7 do
-                    local a=phase+quadrant*math.pi/2+segment/8*span
-                    local b=a+span/8
-                    local ra=size*(fold or shapeRadius(shape,a))
-                    local rb=size*(fold or shapeRadius(shape,b))
-                    line(Vector3.new(p.X+math.cos(a)*ra,p.Y+math.sin(a)*ra,p.Z),Vector3.new(p.X+math.cos(b)*rb,p.Y+math.sin(b)*rb,p.Z),1,width)
-                end end
+            local blades=SHURIKEN_BLADES[shape] or 4
+            local step=math.pi*2/blades
+            for blade=0,blades-1 do
+                local a=phase+blade*step
+                local arm=size*(SHURIKEN_BLADES[shape] and 1 or shapeRadius(shape,a))
+                local function screen(angle,r)return Vector3.new(p.X+math.cos(angle)*arm*r,p.Y+math.sin(angle)*arm*r,p.Z)end
+                line(screen(a,1),screen(a+0.55,0.28),1,width)
+                line(screen(a+0.55,0.28),screen(a+step,1),1,width)
+                line(screen(a,1),screen(a+1.1,0.19),0.45,width)
             end
+        elseif mode=="Reticle"then
+            local top=camera:WorldToViewportPoint(center+Vector3.new(0,radius,0))
+            local size=math.clamp(math.abs(top.Y-p.Y),8,140)
+            local span=RETICLE_SPAN[shape] or math.pi*0.32
+            local fold=RETICLE_SPAN[shape] and 1 or nil
+            for quadrant=0,3 do for segment=0,7 do
+                local a=phase+quadrant*math.pi/2+segment/8*span
+                local b=a+span/8
+                local ra=size*(fold or shapeRadius(shape,a))
+                local rb=size*(fold or shapeRadius(shape,b))
+                line(Vector3.new(p.X+math.cos(a)*ra,p.Y+math.sin(a)*ra,p.Z),Vector3.new(p.X+math.cos(b)*rb,p.Y+math.sin(b)*rb,p.Z),1,width)
+            end end
         end
+        -- An unknown style draws nothing on purpose: an old library used to fall
+        -- through to the reticle arcs here, which looked like "Swords became a
+        -- circle". Now a stale library shows an empty Target ESP instead, and the
+        -- client prints which revision it found.
         for i,item in ipairs(targetFX.lines)do if i>countLine then item.core.Visible=false;item.glow.Visible=false end end
         for i,item in ipairs(targetFX.dots)do if i>countDot then item.core.Visible=false;item.glow.Visible=false end end
     end
