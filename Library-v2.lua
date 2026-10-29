@@ -28583,8 +28583,10 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v21. Additive: existing BABFT/LIP APIs are unchanged.
+-- Optional combat overlay API v21, library rev44 (gear sized in real pixels).
+-- Additive: existing BABFT/LIP APIs are unchanged.
 Library.UpgradeOverlayVersion = 21
+Library.UpgradeOverlayRevision = 44
 function Library.CreateCombatOverlay(_library,opts)
     opts=opts or {}
     local UIS=game:GetService("UserInputService")
@@ -28870,6 +28872,16 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             end
             return row
         end
+        -- Icon size is applied as real pixels. A nested UIScale scaled the row
+        -- about its top-left corner, so the row drifted under the card instead of
+        -- hanging off its right/bottom edge; explicit sizes keep geometry exact.
+        local function setGearSize(row,size)
+            size=math.max(6,math.floor(size+0.5))
+            if row.size==size then return false end
+            row.size=size
+            for _,slot in ipairs(row.slots)do slot.frame.Size=UDim2.fromOffset(size,size)end
+            return true
+        end
         local function renderGear(row,model,armor,weapon)
             row.frame.Visible=armor or weapon
             local root=model and(model:FindFirstChild("Torso")or model:FindFirstChild("HumanoidRootPart"))
@@ -28903,21 +28915,24 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             if not opts.NativeFace then return end
             if not(cfg.targetArmor==true or cfg.targetWeapon==true)then self:HideNativeGear();return end
             if not hudGear then
-                -- Unscaled screen-space anchor; scaling belongs only to its zero-offset child.
-                -- Applying UIScale directly to a screen-positioned row also transforms its offset.
+                -- Screen-space anchor, pinned to the card's bottom-right corner. The
+                -- row itself is right-anchored at (1,0) with zero local offset, and its
+                -- icons are sized in pixels, so nothing is transformed by UIScale.
                 local anchor=make("Frame",{Name="TargetEquipmentAnchor",Size=UDim2.fromOffset(0,0),BackgroundTransparency=1,BorderSizePixel=0,ClipsDescendants=false},overlay)
                 hudGear=makeGear(anchor,16,true);hudGear.anchor=anchor
                 hudGear.frame.AnchorPoint=Vector2.new(1,0)
                 hudGear.frame.Position=UDim2.fromOffset(0,0)
-                hudGear.scale=make("UIScale",{Scale=1},hudGear.frame)
             end
+            local scale=hudScale.Scale or 1
+            setGearSize(hudGear,16*scale)
             renderGear(hudGear,data.model,cfg.targetArmor==true,cfg.targetWeapon==true)
-            local scale=hudScale.Scale
             local position=targetHud.AbsolutePosition
-            hudGear.scale.Scale=scale
             local bounds=targetHud.AbsoluteSize
             local origin=overlay.AbsolutePosition
-            hudGear.anchor.Position=UDim2.fromOffset(position.X+bounds.X-origin.X,position.Y+bounds.Y-origin.Y+4)
+            -- Right edge exactly on the card's right border line, whole row below the
+            -- card. The gap grows with HUD scale so it never visually touches the edge.
+            local gap=math.max(4,math.floor(4*scale+0.5))
+            hudGear.anchor.Position=UDim2.fromOffset(position.X+bounds.X-origin.X,position.Y+bounds.Y-origin.Y+gap)
             hudGear.anchor.Visible=hudGear.frame.Visible
             hudGear.frame.GroupTransparency=1-targetAnim.alpha
         end
