@@ -3792,6 +3792,15 @@ local Library = (function()
 		task.defer(fitChip, true)
 		local handle = finishElement(self, opts, self_, frame, "Dropdown")
 		handle._valueLabel = valueLabel
+		-- SetTitle(text): rename the row at runtime. The Target ESP shape row
+		-- uses it to follow the chosen effect ("Chains Style" and so on).
+		function handle:SetTitle(text)
+			if titleLabel then
+				titleLabel.Text = tostring(text)
+			end
+			handle._searchName = tostring(text)
+			handle._searchKey = string.lower(handle._searchName)
+		end
 		return handle
 	end
 
@@ -24116,7 +24125,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 43
+			Library.MacrOSRevision = 47
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -28931,10 +28940,28 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             local origin=overlay.AbsolutePosition
             -- Right edge exactly on the card's right border line, whole row below the
             -- card. The gap grows with HUD scale so it never visually touches the edge.
+            -- The card's UIStroke sits half a pixel outside AbsoluteSize, so the line
+            -- itself is at right+0.5; using it as the row's right edge puts the row on
+            -- the line instead of just past it.
             local gap=math.max(4,math.floor(4*scale+0.5))
-            hudGear.anchor.Position=UDim2.fromOffset(position.X+bounds.X-origin.X,position.Y+bounds.Y-origin.Y+gap)
+            local lineX=position.X+bounds.X-origin.X
+            hudGear.anchor.Position=UDim2.fromOffset(lineX,position.Y+bounds.Y-origin.Y+gap)
+            -- Exposed for the revision self-check below: right edges must be equal.
+            rawset(hudGear,"lineX",lineX)
             hudGear.anchor.Visible=hudGear.frame.Visible
             hudGear.frame.GroupTransparency=1-targetAnim.alpha
+        end
+        -- Debug helper: where the Target Info gear row sits relative to the card.
+        function self:GetTargetGearLayout()
+            if not hudGear then return nil end
+            local position=targetHud.AbsolutePosition
+            local bounds=targetHud.AbsoluteSize
+            local row=hudGear.frame
+            return {
+                cardRight=position.X+bounds.X,cardBottom=position.Y+bounds.Y,
+                rowRight=row.AbsolutePosition.X+row.AbsoluteSize.X,rowTop=row.AbsolutePosition.Y,
+                visible=row.Visible==true,icons=row.Size.X.Offset>0,
+            }
         end
         function self:RenderEquipment(record,model,x,y,armor,weapon)
             if not record.equipment then record.equipment=makeGear(overlay,14,false);record.objects[#record.objects+1]=record.equipment.frame end
@@ -29250,6 +29277,48 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     end
     -- Target-only effects: bounded reusable primitives, no world Instances/assets.
     local targetFX={lines={},dots={},alpha=0,phase=0,last=nil,hp=nil,hurt=0}
+    -- Shape of the effect. The old ring is a plain circle; every other name bends
+    -- the same outline into another figure. All styles (ring, halo, chains,
+    -- ghosts, shuriken, reticle) read this one radial function, so one shape
+    -- works with every "thing" and the client only has to pass a name.
+    local function shapeRadius(shape,angle)
+        local tau=math.pi*2
+        local a=angle%tau
+        local function polygon(sides,rotation)
+            local step=tau/sides
+            local within=(a+rotation)%step
+            return math.cos(math.pi/sides)/math.cos(within-math.pi/sides)
+        end
+        if shape=="Square"then return polygon(4,math.pi/4)
+        elseif shape=="Diamond"then return polygon(4,0)
+        elseif shape=="Triangle"then return polygon(3,math.pi/2)
+        elseif shape=="Pentagon"then return polygon(5,math.pi/2)
+        elseif shape=="Hexagon"then return polygon(6,0)
+        elseif shape=="Octagon"then return polygon(8,math.pi/8)
+        elseif shape=="Star5"then return 0.62+0.38*math.cos(5*a)
+        elseif shape=="Star8"then return 0.66+0.34*math.cos(8*a)
+        elseif shape=="Cross"then return 0.55+0.45*math.abs(math.cos(2*a))^0.6
+        elseif shape=="Flower"then return 0.72+0.28*math.cos(6*a)
+        elseif shape=="Spiral"then return 0.55+0.45*((a/math.pi)%1)
+        elseif shape=="Wave"then return 0.8+0.2*math.sin(3*a)
+        elseif shape=="Zigzag"then local tooth=(a/math.pi*2)%1;return 0.62+0.38*math.abs(tooth*2-1)
+        elseif shape=="Crown"then local spike=math.cos(6*a);return 0.86+0.24*(spike>0 and spike*spike*spike or 0)
+        end
+        return 1
+    end
+    -- The second Target ESP dropdown belongs to one effect at a time, so two
+    -- effects need controls a plain outline cannot express: a shuriken asks
+    -- how many blades, a reticle asks how long its arcs are. Names that are
+    -- not in these tables are old profiles; they keep the circle behaviour.
+    local SHURIKEN_BLADES={Classic=4,Tri=3,Hex=6,Octa=8,Star=5}
+    local RETICLE_SPAN={Classic=0.32,Long=0.55,Short=0.16,Ring=math.pi*0.5}
+    -- The newer effects count things instead of bending an outline, so each
+    -- keeps its own small table. A name that is not here falls back to the
+    -- default count and the effect still draws.
+    local SWORD_COUNT={["4 Swords"]=4,["6 Swords"]=6,["8 Swords"]=8,["12 Swords"]=12}
+    local BOLT_COUNT={["2 Bolts"]=2,["3 Bolts"]=3,["5 Bolts"]=5}
+    local ORBIT_COUNT={["2 Orbs"]=2,["3 Orbs"]=3,["5 Orbs"]=5}
+    local CRYSTAL_COUNT={["8 Crystals"]=8,["12 Crystals"]=12,["18 Crystals"]=18}
     local function hideTargetFX()
         for _,entry in ipairs(targetFX.lines)do entry.core.Visible=false;entry.glow.Visible=false end
         for _,entry in ipairs(targetFX.dots)do entry.core.Visible=false;entry.glow.Visible=false end
@@ -29315,12 +29384,15 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         end
         local width=cfg.targetESPThickness
         local mode=cfg.targetESPStyle
+        local shape=(type(cfg.targetESPShapeByStyle)=="table"and cfg.targetESPShapeByStyle[mode])or cfg.targetESPShape or "Circle"
+        local function shaped(angle,r) return r*shapeRadius(shape,angle) end
         if mode=="Ghosts"then
             local top=camera:WorldToViewportPoint(center+Vector3.new(0,radius,0))
             local size=math.clamp(math.abs(top.Y-p.Y)*0.32,3,28)
             for ghost=1,3 do for tail=0,cfg.targetESPTrail-1 do
                 local t=phase+ghost*math.pi*2/3-tail*0.13
-                local point=center+Vector3.new(math.cos(t)*radius,math.sin(t*1.5+ghost)*info.height*0.45,math.sin(t)*radius)
+                local reach=shaped(t,radius)
+                local point=center+Vector3.new(math.cos(t)*reach,math.sin(t*1.5+ghost)*info.height*0.45,math.sin(t)*reach)
                 local strength=1-tail/cfg.targetESPTrail
                 dot(point,size*(0.25+strength*0.75),strength*strength)
             end end
@@ -29329,7 +29401,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                 local angle=link/14*math.pi*2+phase*(belt==1 and 0.35 or -0.35)
                 local radial=Vector3.new(math.cos(angle),0,math.sin(angle))
                 local tangent=Vector3.new(-math.sin(angle),0,math.cos(angle))
-                local base=center+radial*radius+Vector3.new(0,(belt==1 and 0.3 or -0.3)*info.height+math.sin(angle*2)*info.height*0.09,0)
+                local base=center+radial*shaped(angle,radius)+Vector3.new(0,(belt==1 and 0.3 or -0.3)*info.height+math.sin(angle*2)*info.height*0.09,0)
                 local axis=link%2==0 and Vector3.new(0,1,0)or radial
                 for segment=0,7 do
                     local a=segment/8*math.pi*2;local b=(segment+1)/8*math.pi*2
@@ -29340,31 +29412,141 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             local base=center+Vector3.new(0,0.08,0)
             for i=0,63 do
                 local a=i/64*math.pi*2+phase;local b=(i+1)/64*math.pi*2+phase
-                worldLine(base+Vector3.new(math.cos(a)*radius,0,math.sin(a)*radius),base+Vector3.new(math.cos(b)*radius,0,math.sin(b)*radius),0.65+0.35*math.cos(a-phase)^2,width)
+                local ra,rb=shaped(a,radius),shaped(b,radius)
+                worldLine(base+Vector3.new(math.cos(a)*ra,0,math.sin(a)*ra),base+Vector3.new(math.cos(b)*rb,0,math.sin(b)*rb),0.65+0.35*math.cos(a-phase)^2,width)
             end
         elseif mode=="Halo"then
             local base=center+Vector3.new(0,math.sin(phase)*info.height*0.45,0)
             for i=0,47 do
                 local a=i/48*math.pi*2;local b=(i+1)/48*math.pi*2
-                worldLine(base+Vector3.new(math.cos(a)*radius,0,math.sin(a)*radius),base+Vector3.new(math.cos(b)*radius,0,math.sin(b)*radius),1,width*2)
+                local ra,rb=shaped(a,radius),shaped(b,radius)
+                worldLine(base+Vector3.new(math.cos(a)*ra,0,math.sin(a)*ra),base+Vector3.new(math.cos(b)*rb,0,math.sin(b)*rb),1,width*2)
             end
+        elseif mode=="Swords"then
+            -- Flying swords: each blade orbits the target and bobs a little. A
+            -- blade is four thick strokes, so a dozen swords stay cheap.
+            local blades=SWORD_COUNT[shape] or 8
+            for i=0,blades-1 do
+                local a=phase*1.7+i*math.pi*2/blades
+                local radial=Vector3.new(math.cos(a),0,math.sin(a))
+                local tangent=Vector3.new(-math.sin(a),0,math.cos(a))
+                local base=center+radial*radius+Vector3.new(0,math.sin(phase*2.1+i*0.8)*info.height*0.12,0)
+                local up=Vector3.new(0,info.height*0.5,0)
+                worldLine(base-up*0.35,base+up,1,width*1.8)
+                worldLine(base+up*0.12-tangent*(radius*0.5),base+up*0.12+tangent*(radius*0.5),1,width)
+                dot(base+up,math.max(2,width*1.4),1)
+            end
+        elseif mode=="Lightning"then
+            -- Bolts strike down onto the target. The jagged path is re-rolled
+            -- eight times a second, so they crackle instead of standing still.
+            local bolts=BOLT_COUNT[shape] or 3
+            local seed=math.floor(phase*8)
+            local function noise(n)return (math.sin(n*12.9898)*43758.5453)%1-0.5 end
+            for b=1,bolts do
+                local a=(b-0.5)/bolts*math.pi*2+phase*0.4
+                local sky=center+Vector3.new(math.cos(a)*radius*0.7,info.height*3,math.sin(a)*radius*0.7)
+                local hit=center+Vector3.new(math.cos(a)*radius*0.55,info.height*(0.15+0.3*((b*37)%10)/10),math.sin(a)*radius*0.55)
+                local previous=sky
+                for s=1,6 do
+                    local t=s/6
+                    local point=sky:Lerp(hit,t)+Vector3.new(
+                        noise(seed*7+s*3+b*11)*radius*0.9*(1-t),
+                        noise(seed*5+s*7+b*3)*radius*0.3*(1-t),
+                        noise(seed*3+s*11+b*5)*radius*0.9*(1-t))
+                    worldLine(previous,point,0.7+0.3*math.sin(phase*18+s),width*(1.5-0.16*s))
+                    previous=point
+                end
+                dot(hit,math.max(2,width*1.8),1)
+            end
+        elseif mode=="Orbits"then
+            -- Ghost orbits: a glowing head with a fading tail. The tail is
+            -- computed from the phase, so nothing has to be remembered per target.
+            local orbs=ORBIT_COUNT[shape] or 3
+            for o=0,orbs-1 do
+                local base=phase*1.5+o*math.pi*2/orbs
+                local lift=math.sin(phase*2.5+o)*info.height*0.18
+                local r=radius*(0.95+0.1*math.sin(phase*2+o))
+                for t=0,10 do
+                    local a=base-t*0.24
+                    local fade=1-t/11
+                    dot(center+Vector3.new(math.cos(a)*r,lift*fade,math.sin(a)*r),math.max(1.5,width*2.4*fade),fade*fade)
+                end
+            end
+        elseif mode=="Crystals"then
+            -- Crystal spikes at golden-ratio heights, all pointing at the target.
+            local count=CRYSTAL_COUNT[shape] or 12
+            for i=0,count-1 do
+                local a=phase*0.8+i*math.pi*2/count
+                local h=(i*0.618)%1
+                local base=center+Vector3.new(math.cos(a)*radius,info.height*(0.1+h*0.85),math.sin(a)*radius)
+                local inward=(center-base).Unit
+                local tip=base+inward*radius*0.4
+                local side=Vector3.new(-math.sin(a),0,math.cos(a))*radius*0.13
+                local top=base+Vector3.new(0,radius*0.16,0)
+                local bottom=base-Vector3.new(0,radius*0.16,0)
+                worldLine(top,tip,1,width*1.3)
+                worldLine(tip,bottom,1,width*1.3)
+                worldLine(bottom,top+side,0.5,width)
+                worldLine(bottom,top-side,0.5,width)
+                dot(tip,math.max(2,width*1.4),1)
+            end
+        elseif mode=="Chevrons"then
+            -- The mark from the screenshot: four thick chevrons above, right,
+            -- below and left of the target, points facing away from it and the
+            -- open ends facing in. They sit on the screen, so they stay around
+            -- the body while the camera turns.
+            local top=camera:WorldToViewportPoint(center+Vector3.new(0,radius,0))
+            local size=math.clamp(math.abs(top.Y-p.Y),10,220)
+            local soft=shape=="Soft"
+            local wide=shape=="Wide"
+            -- Arms stop short of 45 degrees so neighbouring chevrons keep a gap
+            -- instead of melting into one closed diamond.
+            local spread=wide and 0.75 or (soft and 0.52 or 0.62)
+            local reach=wide and 1.05 or 0.95
+            local inner=wide and 0.55 or (soft and 0.66 or 0.62)
+            local thick=width*(soft and 1.8 or 2.8)
+            local rings=(shape=="Double")and 2 or 1
+            local spin=(shape=="Double")and phase*0.4 or 0
+            -- The screenshot mark is white; the softer looks keep the theme.
+            local saved=color
+            if not soft then color=color:Lerp(Color3.new(1,1,1),0.78)end
+            for ring=1,rings do
+                local scale=ring==1 and 1 or 0.62
+                local turn=ring==1 and 1 or -1
+                for k=0,3 do
+                    local a=k*math.pi/2+spin*turn
+                    local apex=Vector3.new(p.X+math.cos(a)*size*reach*scale,p.Y+math.sin(a)*size*reach*scale,p.Z)
+                    local left=Vector3.new(p.X+math.cos(a-spread)*size*inner*scale,p.Y+math.sin(a-spread)*size*inner*scale,p.Z)
+                    local right=Vector3.new(p.X+math.cos(a+spread)*size*inner*scale,p.Y+math.sin(a+spread)*size*inner*scale,p.Z)
+                    line(apex,left,1,thick)
+                    line(apex,right,1,thick)
+                end
+            end
+            color=saved
         else
             -- Billboard geometry keeps the shuriken readable from any camera angle.
             local top=camera:WorldToViewportPoint(center+Vector3.new(0,radius,0))
             local size=math.clamp(math.abs(top.Y-p.Y),8,140)
             if mode=="Shuriken"then
-                for blade=0,3 do
-                    local a=phase+blade*math.pi/2
-                    local function screen(angle,r)return Vector3.new(p.X+math.cos(angle)*size*r,p.Y+math.sin(angle)*size*r,p.Z)end
+                local blades=SHURIKEN_BLADES[shape]
+                local step=math.pi*2/(blades or 4)
+                for blade=0,(blades or 4)-1 do
+                    local a=phase+blade*step
+                    local arm=size*(blades and 1 or shapeRadius(shape,a))
+                    local function screen(angle,r)return Vector3.new(p.X+math.cos(angle)*arm*r,p.Y+math.sin(angle)*arm*r,p.Z)end
                     line(screen(a,1),screen(a+0.55,0.28),1,width)
-                    line(screen(a+0.55,0.28),screen(a+math.pi/2,1),1,width)
+                    line(screen(a+0.55,0.28),screen(a+step,1),1,width)
                     line(screen(a,1),screen(a+1.1,0.19),0.45,width)
                 end
             else
+                local span=RETICLE_SPAN[shape] or math.pi*0.32
+                local fold=RETICLE_SPAN[shape] and 1 or nil
                 for quadrant=0,3 do for segment=0,7 do
-                    local a=phase+quadrant*math.pi/2+segment/8*math.pi*0.32
-                    local b=a+math.pi*0.32/8
-                    line(Vector3.new(p.X+math.cos(a)*size,p.Y+math.sin(a)*size,p.Z),Vector3.new(p.X+math.cos(b)*size,p.Y+math.sin(b)*size,p.Z),1,width)
+                    local a=phase+quadrant*math.pi/2+segment/8*span
+                    local b=a+span/8
+                    local ra=size*(fold or shapeRadius(shape,a))
+                    local rb=size*(fold or shapeRadius(shape,b))
+                    line(Vector3.new(p.X+math.cos(a)*ra,p.Y+math.sin(a)*ra,p.Z),Vector3.new(p.X+math.cos(b)*rb,p.Y+math.sin(b)*rb,p.Z),1,width)
                 end end
             end
         end
