@@ -247,6 +247,7 @@ local Library = (function()
 	end
 
 	Library.ThemePresets = {
+		MacrOS = preset({ 21, 17, 19 }, { 28, 22, 24 }, { 37, 28, 29 }, { 57, 41, 39 }, { 65, 46, 43 }, { 128, 79, 62 }, { 226, 143, 92 }, { 48, 28, 23 }, { 244, 233, 224 }, { 180, 155, 145 }),
 		-- Colours here must not be pure white, pure black or any other colour the
 		-- library hard-codes, or those objects would get bound to the theme.
 		Midnight = preset(
@@ -3106,6 +3107,9 @@ local Library = (function()
 				fullText = detail and tostring(detail.Title or value)
 					or (value ~= nil and tostring(value) or (opts.NoneText or "None"))
 			end
+			if self_._displayOverride ~= nil then
+				fullText = tostring(self_._displayOverride)
+			end
 			valueLabel.Text = trimmed()
 			-- A picked value reads in full colour; "None" stays muted.
 			local picked = #options > 0 and (if multi then #value > 0 else value ~= nil)
@@ -3652,6 +3656,13 @@ local Library = (function()
 
 		function self_:Get()
 			return currentValue()
+		end
+
+		-- Read-only summary without inventing a selection or invoking callbacks.
+		function self_:SetDisplayOverride(text)
+			self_._displayOverride = text
+			renderValue(false)
+			fitChip(true)
 		end
 
 		local function sameValue(a, b)
@@ -5584,7 +5595,7 @@ local Library = (function()
 			BackgroundTransparency = 1,
 			Text = "",
 			AutoButtonColor = false,
-			Modal = true,
+			Modal = false,
 			Active = false,
 			Parent = root,
 		})
@@ -5689,7 +5700,7 @@ local Library = (function()
 		local logo = create("ImageLabel", {
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 14, 0.5, 0),
-			Size = UDim2.fromOffset(32, 32),
+			Size = UDim2.fromOffset(40, 40),
 			BackgroundTransparency = 1,
 			Image = "",
 			ImageColor3 = Theme.Accent,
@@ -5700,8 +5711,8 @@ local Library = (function()
 		local subtitle = opts.Version or opts.Subtitle
 		self.HeaderLogo = logo
 		self.HeaderTitle = label({
-			Position = UDim2.new(0, 56, 0.5, subtitle and -15 or -9),
-			Size = UDim2.new(1, -68, 0, 18),
+			Position = UDim2.new(0, 62, 0.5, subtitle and -15 or -9),
+			Size = UDim2.new(1, -74, 0, 18),
 			Text = self.Title,
 			TextSize = 14,
 			FontFace = Fonts.Bold,
@@ -5709,8 +5720,8 @@ local Library = (function()
 		})
 		if subtitle then
 			self.HeaderSub = label({
-				Position = UDim2.new(0, 56, 0.5, 3),
-				Size = UDim2.new(1, -68, 0, 14),
+				Position = UDim2.new(0, 62, 0.5, 3),
+				Size = UDim2.new(1, -74, 0, 14),
 				Text = tostring(subtitle),
 				TextSize = 12,
 				FontFace = Fonts.Regular,
@@ -7908,47 +7919,14 @@ local Library = (function()
 	end
 
 	-- Nearest centre that keeps the whole window inside the viewport.
+	-- Do not compete with Roblox's camera controller for MouseBehavior.
+	-- Pointer ownership here only tracks window dragging, not the OS cursor.
 	function Library:ReleasePointer()
 		self._pointerOwner = nil
-		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-		UserInputService.MouseIconEnabled = true
 	end
 	function Library:_installCursorLease()
-		if self._cursorLeaseInstalled then
-			return
-		end
-		self._cursorLeaseInstalled = true
-		local holding = false
-		RunService:BindToRenderStep("MacrOSCursorLease", Enum.RenderPriority.Last.Value + 1, function()
-			local visible = false
-			for _, w in ipairs(Library.Windows) do
-				local active = not w._destroyed and w.Open and not w.Minimized and w.Root and w.Root.Parent and w.Root.Visible and w.Gui and w.Gui.Parent and w.Gui.Enabled
-				if w._cursorGate then
-					w._cursorGate.Modal = active
-					w._cursorGate.Visible = active
-				end
-				if active then
-					visible = true
-				end
-			end
-			if visible then
-                -- Open UI owns the cursor, including during RMB presses.
-                -- Run after camera updates so camera lock cannot pin UI input.
-				if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
-					UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-				end
-                if not UserInputService.MouseIconEnabled then
-					UserInputService.MouseIconEnabled = true
-                end
-			elseif holding then
-				Library:ReleasePointer()
-			end
-			holding = visible
-			if #Library.Windows == 0 then
-				RunService:UnbindFromRenderStep("MacrOSCursorLease")
-				Library._cursorLeaseInstalled = false
-			end
-		end)
+		-- The old render-step lease and modal gate forced the mouse free every
+		-- frame, preventing camera rotation. GUI controls handle their own input.
 	end
 	function Window:Center()
 		if self._destroyed then
@@ -12002,6 +11980,7 @@ local Library = (function()
 	end
 
 	local PRESET_ORDER = {
+		"MacrOS",
 		"Midnight",
 		"Nebula",
 		"Synthwave",
@@ -24125,7 +24104,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 48
+			Library.MacrOSRevision = 49
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
