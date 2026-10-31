@@ -160,19 +160,19 @@ local Library = (function()
 	end
 
 	Library.Theme = {
-		Background = Color3.fromRGB(15, 15, 15),
-		Surface = Color3.fromRGB(20, 20, 20),
-		Surface2 = Color3.fromRGB(25, 25, 25),
-		Surface3 = Color3.fromRGB(50, 50, 50),
-		Stroke = Color3.fromRGB(40, 40, 40),
-		StrokeHover = Color3.fromRGB(70, 70, 70),
-		Accent = Color3.fromRGB(128, 160, 246),
-		AccentDark = Color3.fromRGB(12, 12, 12),
-		Text = Color3.fromRGB(255, 255, 255),
-		Muted = Color3.fromRGB(140, 140, 140),
+		Background = Color3.fromRGB(18, 13, 15),
+		Surface = Color3.fromRGB(24, 18, 20),
+		Surface2 = Color3.fromRGB(31, 23, 26),
+		Surface3 = Color3.fromRGB(52, 36, 38),
+		Stroke = Color3.fromRGB(58, 42, 44),
+		StrokeHover = Color3.fromRGB(112, 74, 63),
+		Accent = Color3.fromRGB(240, 158, 92),
+		AccentDark = Color3.fromRGB(40, 22, 14),
+		Text = Color3.fromRGB(246, 237, 229),
+		Muted = Color3.fromRGB(176, 150, 142),
 		Warning = Color3.fromRGB(240, 176, 108),
-		Success = Color3.fromRGB(150, 220, 170),
-		Error = Color3.fromRGB(240, 120, 120),
+		Success = Color3.fromRGB(168, 214, 160),
+		Error = Color3.fromRGB(238, 122, 118),
 	}
 
 	-- Order decides which key wins when two theme colors are identical.
@@ -247,7 +247,7 @@ local Library = (function()
 	end
 
 	Library.ThemePresets = {
-		MacrOS = preset({ 21, 17, 19 }, { 28, 22, 24 }, { 37, 28, 29 }, { 57, 41, 39 }, { 65, 46, 43 }, { 128, 79, 62 }, { 226, 143, 92 }, { 48, 28, 23 }, { 244, 233, 224 }, { 180, 155, 145 }),
+		MacrOS = preset({ 18, 13, 15 }, { 24, 18, 20 }, { 31, 23, 26 }, { 52, 36, 38 }, { 58, 42, 44 }, { 112, 74, 63 }, { 240, 158, 92 }, { 40, 22, 14 }, { 246, 237, 229 }, { 176, 150, 142 }),
 		-- Colours here must not be pure white, pure black or any other colour the
 		-- library hard-codes, or those objects would get bound to the theme.
 		Midnight = preset(
@@ -577,7 +577,7 @@ local Library = (function()
 		),
 	}
 
-	Library.ThemeName = "Midnight"
+	Library.ThemeName = "MacrOS"
 
 	pcall(function()
 		if type(makefolder) == "function" then
@@ -830,17 +830,17 @@ local Library = (function()
 	end
 	Library.Touch = TOUCH
 
-	local SIDEBAR_WIDTH = 188
+	local SIDEBAR_WIDTH = 224
 	-- Icons-only rail for phones and narrow windows.
-	local COMPACT_WIDTH = 64
-	local HEADER_HEIGHT = 62
-	local TAB_TILE_HEIGHT = 34
-	local CARD_HEIGHT = TOUCH and 54 or 48
-	local CARD_HEIGHT_DESC = TOUCH and 70 or 64
+	local COMPACT_WIDTH = 68
+	local HEADER_HEIGHT = 92
+	local TAB_TILE_HEIGHT = 38
+	local CARD_HEIGHT = TOUCH and 58 or 54
+	local CARD_HEIGHT_DESC = TOUCH and 74 or 70
 	local DROPDOWN_OPTION_HEIGHT = TOUCH and 40 or 34
 	local CHIP_HEIGHT = TOUCH and 34 or 28
 	local PROFILE_HEIGHT = 64
-	local SEARCH_WIDTH = 176
+	local SEARCH_WIDTH = 184
 	local STACK_BELOW = 440
 
 	-- Elements read their geometry from one of these. Cards stand alone on a tab,
@@ -852,11 +852,11 @@ local Library = (function()
 			DescHeight = CARD_HEIGHT_DESC,
 			Chip = CHIP_HEIGHT,
 			Option = DROPDOWN_OPTION_HEIGHT,
-			TextSize = 14,
-			DescSize = 13,
-			TitleHeight = 18,
-			DescGap = 20,
-			DescLine = 17,
+			TextSize = 15,
+			DescSize = 12,
+			TitleHeight = 19,
+			DescGap = 21,
+			DescLine = 16,
 			Slider = CARD_HEIGHT_DESC,
 		},
 		Row = {
@@ -1524,10 +1524,17 @@ local Library = (function()
 		end
 		local frame = create(className, props)
 		frame:SetAttribute("NoDrag", true)
-		corner(frame)
+		corner(frame, UDim.new(0, 10))
 		local frameStroke = stroke(frame, Theme.Stroke, compact and 1 or 0)
 		if compact then
 			frameStroke:SetAttribute("Hidden", true)
+		end
+		if not compact then
+			-- A single lit pixel along the top edge: a card reads as a raised
+			-- surface instead of a rectangle of a slightly different grey.
+			local top = edgeHighlight(frame)
+			bindColors(top, { BackgroundColor3 = Theme.Text })
+			top.BackgroundTransparency = 0.93
 		end
 		return frame, frameStroke
 	end
@@ -1538,15 +1545,15 @@ local Library = (function()
 		if desc then
 			local top = math.floor((metrics.DescHeight - (metrics.DescGap + metrics.DescLine)) / 2)
 			title = label({
-				Position = UDim2.fromOffset(14, top),
-				Size = UDim2.new(1, -(14 + rightReserve), 0, metrics.TitleHeight),
+				Position = UDim2.fromOffset(16, top),
+				Size = UDim2.new(1, -(16 + rightReserve), 0, metrics.TitleHeight),
 				Text = name,
 				TextSize = metrics.TextSize,
 				Parent = parent,
 			})
 			descLabel = label({
-				Position = UDim2.fromOffset(14, top + metrics.DescGap),
-				Size = UDim2.new(1, -(14 + rightReserve), 0, metrics.DescLine),
+				Position = UDim2.fromOffset(16, top + metrics.DescGap),
+				Size = UDim2.new(1, -(16 + rightReserve), 0, metrics.DescLine),
 				Text = desc,
 				TextSize = metrics.DescSize,
 				FontFace = Fonts.Regular,
@@ -1555,8 +1562,8 @@ local Library = (function()
 			})
 		else
 			title = label({
-				Position = UDim2.fromOffset(14, 0),
-				Size = UDim2.new(1, -(14 + rightReserve), 1, 0),
+				Position = UDim2.fromOffset(16, 0),
+				Size = UDim2.new(1, -(16 + rightReserve), 1, 0),
 				Text = name,
 				TextSize = metrics.TextSize,
 				Parent = parent,
@@ -1880,12 +1887,23 @@ local Library = (function()
 			LayoutOrder = self:_nextOrder(),
 			Parent = self.List,
 		})
+		local tick = create("Frame", {
+			Position = UDim2.fromOffset(inset, 10),
+			Size = UDim2.fromOffset(3, 12),
+			BackgroundColor3 = Theme.Accent,
+			BackgroundTransparency = 0.15,
+			BorderSizePixel = 0,
+			Parent = holder,
+		})
+		corner(tick, UDim.new(1, 0))
+		bindColors(tick, { BackgroundColor3 = Theme.Accent })
 		local text_ = label({
-			Position = UDim2.fromOffset(inset, 8),
+			Position = UDim2.fromOffset(inset + 10, 8),
 			Size = UDim2.new(0, 0, 0, 16),
 			AutomaticSize = Enum.AutomaticSize.X,
 			Text = string.upper(text),
 			TextSize = 12,
+			FontFace = Fonts.Bold,
 			TextColor3 = Theme.Muted,
 			TextTruncate = Enum.TextTruncate.None,
 			Parent = holder,
@@ -1900,7 +1918,7 @@ local Library = (function()
 			Parent = holder,
 		})
 		local function fitRule()
-			rule.Size = UDim2.new(1, -(text_.AbsoluteSize.X / self.Window.Scale.Scale + inset + 12 + ruleInset), 0, 1)
+			rule.Size = UDim2.new(1, -(text_.AbsoluteSize.X / self.Window.Scale.Scale + inset + 22 + ruleInset), 0, 1)
 		end
 		text_:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitRule)
 		task.defer(fitRule)
@@ -5492,7 +5510,7 @@ local Library = (function()
 		-- scale reads far better than a desktop-sized window shrunk to fit.
 		local cameraSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.zero
         local tablet = TOUCH and cameraSize.X >= 900 and cameraSize.Y >= 720
-        local size = opts.Size or (TOUCH and not tablet and UDim2.fromOffset(640, 430) or UDim2.fromOffset(760, 520))
+        local size = opts.Size or (TOUCH and not tablet and UDim2.fromOffset(672, 452) or UDim2.fromOffset(864, 572))
 		local keybind = opts.Keybind == false and Enum.KeyCode.Unknown or (opts.Keybind or Enum.KeyCode.RightControl)
 
 		local self = setmetatable({
@@ -5679,6 +5697,16 @@ local Library = (function()
 			Parent = sidebar,
 		})
 		corner(sidebarFill, UDim.new(0, 10))
+		-- A quiet vertical wash: the rail is a shade warmer at the top where the
+		-- mark sits and settles into the plate colour at the profile card. Flat
+		-- panels are what made the old window look grey.
+		local railWash = create("UIGradient", {
+			Rotation = 90,
+			Parent = sidebarFill,
+		})
+		onTheme(railWash, function()
+			railWash.Color = ColorSequence.new(Theme.Surface2, Theme.Background)
+		end)
 		self.SidebarFill = sidebarFill
 		create("Frame", {
 			Name = "Divider",
@@ -5697,38 +5725,76 @@ local Library = (function()
 			BackgroundTransparency = 1,
 			Parent = sidebar,
 		})
+		-- One soft halo behind the mark. It is the first thing the eye lands
+		-- on in a screenshot, so it gets light while everything else stays flat.
+		local halo = glow(header, UDim2.fromOffset(112, 112), UDim2.fromOffset(42, 42), 1, 90)
+		halo.ImageTransparency = 0.9
+		halo.Visible = true
+		self.HeaderHalo = halo
+		local plate = create("Frame", {
+			Name = "LogoPlate",
+			Position = UDim2.fromOffset(14, 12),
+			Size = UDim2.fromOffset(56, 56),
+			BackgroundColor3 = Theme.Surface2,
+			BorderSizePixel = 0,
+			Parent = header,
+		})
+		corner(plate, UDim.new(0, 16))
+		stroke(plate, Theme.Stroke, 0.25)
+		self.HeaderPlate = plate
 		local logo = create("ImageLabel", {
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 14, 0.5, 0),
-			Size = UDim2.fromOffset(40, 40),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(42, 42),
 			BackgroundTransparency = 1,
 			Image = "",
 			ImageColor3 = Theme.Accent,
 			ScaleType = Enum.ScaleType.Fit,
-			Parent = header,
+			Parent = plate,
 		})
 		applyIcon(logo, opts.Icon or Assets.Logo, true)
 		local subtitle = opts.Version or opts.Subtitle
 		self.HeaderLogo = logo
 		self.HeaderTitle = label({
-			Position = UDim2.new(0, 62, 0.5, subtitle and -15 or -9),
-			Size = UDim2.new(1, -74, 0, 18),
+			Position = UDim2.new(0, 82, 0, 14),
+			Size = UDim2.new(1, -94, 0, 28),
 			Text = self.Title,
-			TextSize = 14,
+			TextSize = 20,
 			FontFace = Fonts.Bold,
+			TextTruncate = Enum.TextTruncate.AtEnd,
 			Parent = header,
 		})
 		if subtitle then
+			-- Full width under the plate: a long game name no longer fights
+			-- with the title for the same 120 pixels.
 			self.HeaderSub = label({
-				Position = UDim2.new(0, 62, 0.5, 3),
-				Size = UDim2.new(1, -74, 0, 14),
+				Position = UDim2.new(0, 14, 0, 74),
+				Size = UDim2.new(1, -76, 0, 15),
 				Text = tostring(subtitle),
-				TextSize = 12,
+				TextSize = 11,
 				FontFace = Fonts.Regular,
 				TextColor3 = Theme.Muted,
+				TextTruncate = Enum.TextTruncate.AtEnd,
 				Parent = header,
 			})
 		end
+		-- A hairline closes the header so the rail reads as its own surface
+		-- instead of melting into the first tab.
+		local hairline = create("Frame", {
+			Name = "HeaderEdge",
+			Position = UDim2.new(0, 0, 0, HEADER_HEIGHT - 1),
+			Size = UDim2.new(1, 0, 0, 1),
+			BackgroundColor3 = Theme.Stroke,
+			BorderSizePixel = 0,
+			Parent = header,
+		})
+		create("UIGradient", {
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.2),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+			Parent = hairline,
+		})
 
 		local profileEnabled = opts.Profile ~= false
 		local tabList = create("ScrollingFrame", {
@@ -5749,8 +5815,8 @@ local Library = (function()
 		local indicator = create("Frame", {
 			Position = UDim2.fromOffset(8, 2),
 			Size = UDim2.new(1, -16, 0, TAB_TILE_HEIGHT),
-			BackgroundColor3 = Theme.Surface3,
-			BackgroundTransparency = 0.35,
+			BackgroundColor3 = Theme.Accent,
+			BackgroundTransparency = 0.88,
 			BorderSizePixel = 0,
 			Visible = false,
 			Parent = tabList,
@@ -5761,9 +5827,9 @@ local Library = (function()
 		local pill = create("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 0, 0.5, 0),
-			Size = UDim2.fromOffset(2, 14),
+			Size = UDim2.fromOffset(3, 18),
 			BackgroundColor3 = Theme.Accent,
-			Visible = false,
+			Visible = true,
 			BorderSizePixel = 0,
 			Parent = indicator,
 		})
@@ -6931,9 +6997,17 @@ local Library = (function()
 		if self.HeaderSub then
 			self.HeaderSub.Visible = not enabled
 		end
-		if self.HeaderLogo then
-			tween(self.HeaderLogo, {
-				Position = enabled and UDim2.fromScale(0.5, 0.5) or UDim2.new(0, 14, 0.5, 0),
+		-- The mark sits on a plate now, so the plate is what moves: on the
+		-- narrow rail it centres in the 68 px strip, otherwise it goes back to
+		-- its 14 px inset.
+		if self.HeaderPlate then
+			tween(self.HeaderPlate, {
+				Position = enabled and UDim2.new(0, 6, 0, 12) or UDim2.new(0, 14, 0, 12),
+			}, 0.2, Enum.EasingStyle.Quint)
+		end
+		if self.HeaderHalo then
+			tween(self.HeaderHalo, {
+				Position = enabled and UDim2.fromOffset(34, 42) or UDim2.fromOffset(42, 42),
 			}, 0.2, Enum.EasingStyle.Quint)
 		end
 		if self.ProfileName then
@@ -15337,8 +15411,10 @@ local Library = (function()
 		strip:SetAttribute("NoDrag", true)
 		local highlight = create("Frame", {
 			Size = UDim2.fromOffset(0, 32),
-			BackgroundColor3 = Theme.Surface3,
-			BackgroundTransparency = 0.35,
+			-- Same ember wash as the rail, so the two levels of navigation read
+			-- as one system instead of two different greys.
+			BackgroundColor3 = Theme.Accent,
+			BackgroundTransparency = 0.88,
 			BorderSizePixel = 0,
 			Visible = false,
 			Parent = strip,
@@ -16437,13 +16513,13 @@ local Library = (function()
 			Parent = sidebar,
 		})
 		self.ProfileCard = card
-		corner(card, UDim.new(0, 8))
+		corner(card, UDim.new(0, 12))
 		local cardStroke = stroke(card, Theme.Stroke, 0)
 		local head = avatar(self, card, {
 			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 8, 0.5, 0),
-			Size = UDim2.fromOffset(32, 32),
-		})
+			Position = UDim2.new(0, 10, 0.5, 0),
+			Size = UDim2.fromOffset(36, 36),
+		}, Theme.Accent, 0.75)
 		local online = create("Frame", {
 			AnchorPoint = Vector2.new(1, 1),
 			Position = UDim2.new(1, 1, 1, 1),
@@ -16456,9 +16532,9 @@ local Library = (function()
 		corner(online, UDim.new(1, 0))
 		stroke(online, Theme.Surface2, 0, 2)
 		local name = label({
-			Position = UDim2.new(0, 48, 0.5, -15),
-			Size = UDim2.new(1, -74, 0, 15),
-			TextSize = 12,
+			Position = UDim2.new(0, 54, 0.5, -16),
+			Size = UDim2.new(1, -80, 0, 15),
+			TextSize = 13,
 			FontFace = Fonts.Bold,
 			Parent = card,
 		})
@@ -16466,8 +16542,8 @@ local Library = (function()
 		self.ProfileAvatar = head
 		self:_trackName(name, "Display")
 		local gameLabel = label({
-			Position = UDim2.new(0, 48, 0.5, 1),
-			Size = UDim2.new(1, -74, 0, 13),
+			Position = UDim2.new(0, 54, 0.5, 1),
+			Size = UDim2.new(1, -80, 0, 13),
 			Text = "…",
 			TextSize = 12,
 			FontFace = Fonts.Regular,
@@ -18303,8 +18379,8 @@ local Library = (function()
 		if hasIcon then
 			local iconImage = create("ImageLabel", {
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.new(0, 20, 0.5, 0),
-				Size = UDim2.fromOffset(16, 16),
+				Position = UDim2.new(0, 22, 0.5, 0),
+				Size = UDim2.fromOffset(18, 18),
 				BackgroundTransparency = 1,
 				ImageColor3 = Theme.Muted,
 				ScaleType = Enum.ScaleType.Fit,
@@ -18317,10 +18393,10 @@ local Library = (function()
 			tab._icon = iconImage
 		end
 		tab._label = label({
-			Position = UDim2.fromOffset(hasIcon and 38 or 14, 0),
-			Size = UDim2.new(1, hasIcon and -46 or -22, 1, 0),
+			Position = UDim2.fromOffset(hasIcon and 42 or 16, 0),
+			Size = UDim2.new(1, hasIcon and -50 or -24, 1, 0),
 			Text = tab.Name,
-			TextSize = 13,
+			TextSize = 14,
 			TextColor3 = Theme.Muted,
 			Parent = button,
 		})
@@ -18344,7 +18420,7 @@ local Library = (function()
 			Position = UDim2.fromOffset(titleX, 20),
 			Size = UDim2.new(1, -titleX, 0, 24),
 			Text = opts.PageTitle or tab.Name,
-			TextSize = 22,
+			TextSize = 24,
 			Parent = page,
 		})
 		if opts.Desc then
@@ -21009,7 +21085,7 @@ local Library = (function()
 			indicator.Visible = true
 			indicator.Position = UDim2.fromOffset(8, targetY)
 			indicator.BackgroundTransparency = 1
-			tween(indicator, { BackgroundTransparency = 0.35 }, 0.3)
+			tween(indicator, { BackgroundTransparency = 0.88 }, 0.3)
 		end
 		tween(indicator, { Position = UDim2.fromOffset(8, targetY) }, 0.45, Enum.EasingStyle.Quint)
 	end
@@ -21157,10 +21233,18 @@ local Library = (function()
 			chip.MouseButton1Click:Connect(function()
 				scrollBy(direction)
 			end)
+			if not vertical then
+				-- Keep the fade, drop the chip: it overlaps the tab labels.
+				chip.Visible = false
+				chip.Active = false
+				chip.Size = UDim2.fromOffset(0, 0)
+				chipStroke.Transparency = 1
+			end
 			hints[direction] = {
 				Direction = direction,
 				Fade = fade,
 				Chip = chip,
+				ChipOnlyWhenVertical = not vertical,
 				Stroke = chipStroke,
 				Arrow = arrow,
 				ArrowFade = arrowFade,
@@ -21171,7 +21255,11 @@ local Library = (function()
 			}
 		end
 
+		-- Two separate things fade in here. The soft edge is shown on every
+		-- strip; the little "3 more" chip only on the vertical rail, because on
+		-- a 30 px row of sub tabs it lands on top of the labels.
 		local function show(hint, on)
+			local chipOn = on and not hint.ChipOnlyWhenVertical
 			if hint.Shown == on then
 				return
 			end
@@ -21179,26 +21267,29 @@ local Library = (function()
 			hint.Generation += 1
 			local away = hint.Home
 				+ (vertical and UDim2.fromOffset(0, hint.Direction * 6) or UDim2.fromOffset(hint.Direction * 6, 0))
-			local value = on and 0 or 1
+			local fadeValue = on and 0 or 1
+			local chipValue = chipOn and 0 or 1
 			if on then
 				hint.Fade.Visible = true
-				hint.Chip.Visible = true
-				hint.Chip.Position = away
-				tween(hint.Chip, { Position = hint.Home, BackgroundTransparency = 0.08 }, 0.3, Enum.EasingStyle.Quint)
 			else
-				tween(hint.Chip, { Position = away, BackgroundTransparency = 1 }, 0.2, Enum.EasingStyle.Quint)
 				local generation = hint.Generation
 				task.delay(0.21, function()
 					if hint.Generation == generation then
 						hint.Fade.Visible = false
-						hint.Chip.Visible = false
 					end
 				end)
 			end
-			tween(hint.Fade, { BackgroundTransparency = value }, 0.2)
-			tween(hint.Stroke, { Transparency = value }, 0.2)
-			tween(hint.Arrow, { [hint.ArrowFade] = value }, 0.2)
-			tween(hint.Count, { TextTransparency = value }, 0.2)
+			if chipOn then
+				hint.Chip.Visible = true
+				hint.Chip.Position = away
+				tween(hint.Chip, { Position = hint.Home, BackgroundTransparency = 0.08 }, 0.3, Enum.EasingStyle.Quint)
+			elseif hint.Chip.Visible then
+				hint.Chip.Visible = false
+			end
+			tween(hint.Fade, { BackgroundTransparency = fadeValue }, 0.2)
+			tween(hint.Stroke, { Transparency = chipValue }, 0.2)
+			tween(hint.Arrow, { [hint.ArrowFade] = chipValue }, 0.2)
+			tween(hint.Count, { TextTransparency = chipValue }, 0.2)
 		end
 
 		local function refresh()
@@ -24051,44 +24142,35 @@ local Library = (function()
 				if not badge then
 					badge = create("TextLabel", {
 						Name = "VersionBadge",
-						Position = UDim2.fromOffset(14, 3),
-						Size = UDim2.fromOffset(43, 16),
+						AnchorPoint = Vector2.new(1, 0),
+						Position = UDim2.new(1, -12, 0, 73),
+						Size = UDim2.fromOffset(44, 16),
 						BackgroundColor3 = Theme.Accent,
+						BackgroundTransparency = 0.86,
 						BorderSizePixel = 0,
-						TextColor3 = Theme.AccentDark,
+						TextColor3 = Theme.Accent,
 						TextSize = 10,
 						FontFace = Fonts.Bold,
 						TextXAlignment = Enum.TextXAlignment.Center,
+						ZIndex = 3,
 						Parent = header,
 					})
-					corner(badge, UDim.new(0, 6))
-					bindColors(badge, { BackgroundColor3 = Theme.Accent, TextColor3 = Theme.AccentDark })
+					corner(badge, UDim.new(0, 8))
+					local badgeStroke = stroke(badge, Theme.Accent, 0.55)
+					bindColors(badge, { BackgroundColor3 = Theme.Accent, TextColor3 = Theme.Accent })
+					bindColors(badgeStroke, { Color = Theme.Accent })
 				end
 				badge.Text = tostring(value or "")
 				badge.Visible = badge.Text ~= ""
-				logo.Position = UDim2.new(0, 14, 0.5, 0)
-				title.Position = UDim2.new(0, 56, 0.5, sub and -15 or -9)
-				title.Size = UDim2.fromOffset(0, 18)
-				title.AutomaticSize = Enum.AutomaticSize.X
-				if sub then
-					sub.Position = UDim2.new(0, 56, 0.5, 3)
-				end
+				-- The title keeps the room it always had; only the pill follows the
+				-- compact rail, where there is no title to sit next to.
 				local function place()
-                    logo.Position = self._compact and UDim2.fromScale(0.5, 0.5) or UDim2.new(0, 14, 0.5, 0)
 					badge.Visible = title.Visible and tostring(value or "") ~= ""
-					badge.Position = UDim2.new(
-						0,
-						56 + math.ceil(title.AbsoluteSize.X / math.max(self.Scale.Scale, 0.01)) + 8,
-						0.5,
-						sub and -15 or -9
-					)
 				end
 				place()
 				if not self._versionPlacement then
 					self._versionPlacement = true
-					table.insert(self._connections, title:GetPropertyChangedSignal("AbsoluteSize"):Connect(place))
 					table.insert(self._connections, title:GetPropertyChangedSignal("Visible"):Connect(place))
-					table.insert(self._connections, self.Scale:GetPropertyChangedSignal("Scale"):Connect(place))
 				end
 			end
 			Window.SetVersionBadge = guarded(Window.SetVersionBadge)
@@ -24104,7 +24186,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 49
+			Library.MacrOSRevision = 50
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
