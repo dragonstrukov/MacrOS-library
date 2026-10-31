@@ -160,19 +160,19 @@ local Library = (function()
 	end
 
 	Library.Theme = {
-		Background = Color3.fromRGB(18, 13, 15),
-		Surface = Color3.fromRGB(24, 18, 20),
-		Surface2 = Color3.fromRGB(31, 23, 26),
-		Surface3 = Color3.fromRGB(52, 36, 38),
-		Stroke = Color3.fromRGB(58, 42, 44),
-		StrokeHover = Color3.fromRGB(112, 74, 63),
-		Accent = Color3.fromRGB(240, 158, 92),
-		AccentDark = Color3.fromRGB(40, 22, 14),
-		Text = Color3.fromRGB(246, 237, 229),
-		Muted = Color3.fromRGB(176, 150, 142),
+		Background = Color3.fromRGB(15, 15, 15),
+		Surface = Color3.fromRGB(20, 20, 20),
+		Surface2 = Color3.fromRGB(25, 25, 25),
+		Surface3 = Color3.fromRGB(50, 50, 50),
+		Stroke = Color3.fromRGB(40, 40, 40),
+		StrokeHover = Color3.fromRGB(70, 70, 70),
+		Accent = Color3.fromRGB(128, 160, 246),
+		AccentDark = Color3.fromRGB(12, 12, 12),
+		Text = Color3.fromRGB(255, 255, 255),
+		Muted = Color3.fromRGB(140, 140, 140),
 		Warning = Color3.fromRGB(240, 176, 108),
-		Success = Color3.fromRGB(168, 214, 160),
-		Error = Color3.fromRGB(238, 122, 118),
+		Success = Color3.fromRGB(150, 220, 170),
+		Error = Color3.fromRGB(240, 120, 120),
 	}
 
 	-- Order decides which key wins when two theme colors are identical.
@@ -247,7 +247,6 @@ local Library = (function()
 	end
 
 	Library.ThemePresets = {
-		MacrOS = preset({ 18, 13, 15 }, { 24, 18, 20 }, { 31, 23, 26 }, { 52, 36, 38 }, { 58, 42, 44 }, { 112, 74, 63 }, { 240, 158, 92 }, { 40, 22, 14 }, { 246, 237, 229 }, { 176, 150, 142 }),
 		-- Colours here must not be pure white, pure black or any other colour the
 		-- library hard-codes, or those objects would get bound to the theme.
 		Midnight = preset(
@@ -577,7 +576,7 @@ local Library = (function()
 		),
 	}
 
-	Library.ThemeName = "MacrOS"
+	Library.ThemeName = "Midnight"
 
 	pcall(function()
 		if type(makefolder) == "function" then
@@ -830,17 +829,17 @@ local Library = (function()
 	end
 	Library.Touch = TOUCH
 
-	local SIDEBAR_WIDTH = 224
+	local SIDEBAR_WIDTH = 188
 	-- Icons-only rail for phones and narrow windows.
-	local COMPACT_WIDTH = 68
-	local HEADER_HEIGHT = 92
-	local TAB_TILE_HEIGHT = 38
-	local CARD_HEIGHT = TOUCH and 58 or 54
-	local CARD_HEIGHT_DESC = TOUCH and 74 or 70
+	local COMPACT_WIDTH = 64
+	local HEADER_HEIGHT = 62
+	local TAB_TILE_HEIGHT = 34
+	local CARD_HEIGHT = TOUCH and 54 or 48
+	local CARD_HEIGHT_DESC = TOUCH and 70 or 64
 	local DROPDOWN_OPTION_HEIGHT = TOUCH and 40 or 34
 	local CHIP_HEIGHT = TOUCH and 34 or 28
 	local PROFILE_HEIGHT = 64
-	local SEARCH_WIDTH = 184
+	local SEARCH_WIDTH = 176
 	local STACK_BELOW = 440
 
 	-- Elements read their geometry from one of these. Cards stand alone on a tab,
@@ -852,11 +851,11 @@ local Library = (function()
 			DescHeight = CARD_HEIGHT_DESC,
 			Chip = CHIP_HEIGHT,
 			Option = DROPDOWN_OPTION_HEIGHT,
-			TextSize = 15,
-			DescSize = 12,
-			TitleHeight = 19,
-			DescGap = 21,
-			DescLine = 16,
+			TextSize = 14,
+			DescSize = 13,
+			TitleHeight = 18,
+			DescGap = 20,
+			DescLine = 17,
 			Slider = CARD_HEIGHT_DESC,
 		},
 		Row = {
@@ -1524,17 +1523,10 @@ local Library = (function()
 		end
 		local frame = create(className, props)
 		frame:SetAttribute("NoDrag", true)
-		corner(frame, UDim.new(0, 10))
+		corner(frame)
 		local frameStroke = stroke(frame, Theme.Stroke, compact and 1 or 0)
 		if compact then
 			frameStroke:SetAttribute("Hidden", true)
-		end
-		if not compact then
-			-- A single lit pixel along the top edge: a card reads as a raised
-			-- surface instead of a rectangle of a slightly different grey.
-			local top = edgeHighlight(frame)
-			bindColors(top, { BackgroundColor3 = Theme.Text })
-			top.BackgroundTransparency = 0.93
 		end
 		return frame, frameStroke
 	end
@@ -1545,15 +1537,15 @@ local Library = (function()
 		if desc then
 			local top = math.floor((metrics.DescHeight - (metrics.DescGap + metrics.DescLine)) / 2)
 			title = label({
-				Position = UDim2.fromOffset(16, top),
-				Size = UDim2.new(1, -(16 + rightReserve), 0, metrics.TitleHeight),
+				Position = UDim2.fromOffset(14, top),
+				Size = UDim2.new(1, -(14 + rightReserve), 0, metrics.TitleHeight),
 				Text = name,
 				TextSize = metrics.TextSize,
 				Parent = parent,
 			})
 			descLabel = label({
-				Position = UDim2.fromOffset(16, top + metrics.DescGap),
-				Size = UDim2.new(1, -(16 + rightReserve), 0, metrics.DescLine),
+				Position = UDim2.fromOffset(14, top + metrics.DescGap),
+				Size = UDim2.new(1, -(14 + rightReserve), 0, metrics.DescLine),
 				Text = desc,
 				TextSize = metrics.DescSize,
 				FontFace = Fonts.Regular,
@@ -1562,8 +1554,8 @@ local Library = (function()
 			})
 		else
 			title = label({
-				Position = UDim2.fromOffset(16, 0),
-				Size = UDim2.new(1, -(16 + rightReserve), 1, 0),
+				Position = UDim2.fromOffset(14, 0),
+				Size = UDim2.new(1, -(14 + rightReserve), 1, 0),
 				Text = name,
 				TextSize = metrics.TextSize,
 				Parent = parent,
@@ -1887,23 +1879,12 @@ local Library = (function()
 			LayoutOrder = self:_nextOrder(),
 			Parent = self.List,
 		})
-		local tick = create("Frame", {
-			Position = UDim2.fromOffset(inset, 10),
-			Size = UDim2.fromOffset(3, 12),
-			BackgroundColor3 = Theme.Accent,
-			BackgroundTransparency = 0.15,
-			BorderSizePixel = 0,
-			Parent = holder,
-		})
-		corner(tick, UDim.new(1, 0))
-		bindColors(tick, { BackgroundColor3 = Theme.Accent })
 		local text_ = label({
-			Position = UDim2.fromOffset(inset + 10, 8),
+			Position = UDim2.fromOffset(inset, 8),
 			Size = UDim2.new(0, 0, 0, 16),
 			AutomaticSize = Enum.AutomaticSize.X,
 			Text = string.upper(text),
 			TextSize = 12,
-			FontFace = Fonts.Bold,
 			TextColor3 = Theme.Muted,
 			TextTruncate = Enum.TextTruncate.None,
 			Parent = holder,
@@ -1918,7 +1899,7 @@ local Library = (function()
 			Parent = holder,
 		})
 		local function fitRule()
-			rule.Size = UDim2.new(1, -(text_.AbsoluteSize.X / self.Window.Scale.Scale + inset + 22 + ruleInset), 0, 1)
+			rule.Size = UDim2.new(1, -(text_.AbsoluteSize.X / self.Window.Scale.Scale + inset + 12 + ruleInset), 0, 1)
 		end
 		text_:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitRule)
 		task.defer(fitRule)
@@ -3125,9 +3106,6 @@ local Library = (function()
 				fullText = detail and tostring(detail.Title or value)
 					or (value ~= nil and tostring(value) or (opts.NoneText or "None"))
 			end
-			if self_._displayOverride ~= nil then
-				fullText = tostring(self_._displayOverride)
-			end
 			valueLabel.Text = trimmed()
 			-- A picked value reads in full colour; "None" stays muted.
 			local picked = #options > 0 and (if multi then #value > 0 else value ~= nil)
@@ -3674,13 +3652,6 @@ local Library = (function()
 
 		function self_:Get()
 			return currentValue()
-		end
-
-		-- Read-only summary without inventing a selection or invoking callbacks.
-		function self_:SetDisplayOverride(text)
-			self_._displayOverride = text
-			renderValue(false)
-			fitChip(true)
 		end
 
 		local function sameValue(a, b)
@@ -5510,7 +5481,7 @@ local Library = (function()
 		-- scale reads far better than a desktop-sized window shrunk to fit.
 		local cameraSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.zero
         local tablet = TOUCH and cameraSize.X >= 900 and cameraSize.Y >= 720
-        local size = opts.Size or (TOUCH and not tablet and UDim2.fromOffset(672, 452) or UDim2.fromOffset(864, 572))
+        local size = opts.Size or (TOUCH and not tablet and UDim2.fromOffset(640, 430) or UDim2.fromOffset(760, 520))
 		local keybind = opts.Keybind == false and Enum.KeyCode.Unknown or (opts.Keybind or Enum.KeyCode.RightControl)
 
 		local self = setmetatable({
@@ -5613,7 +5584,7 @@ local Library = (function()
 			BackgroundTransparency = 1,
 			Text = "",
 			AutoButtonColor = false,
-			Modal = false,
+			Modal = true,
 			Active = false,
 			Parent = root,
 		})
@@ -5697,16 +5668,6 @@ local Library = (function()
 			Parent = sidebar,
 		})
 		corner(sidebarFill, UDim.new(0, 10))
-		-- A quiet vertical wash: the rail is a shade warmer at the top where the
-		-- mark sits and settles into the plate colour at the profile card. Flat
-		-- panels are what made the old window look grey.
-		local railWash = create("UIGradient", {
-			Rotation = 90,
-			Parent = sidebarFill,
-		})
-		onTheme(railWash, function()
-			railWash.Color = ColorSequence.new(Theme.Surface2, Theme.Background)
-		end)
 		self.SidebarFill = sidebarFill
 		create("Frame", {
 			Name = "Divider",
@@ -5725,76 +5686,38 @@ local Library = (function()
 			BackgroundTransparency = 1,
 			Parent = sidebar,
 		})
-		-- One soft halo behind the mark. It is the first thing the eye lands
-		-- on in a screenshot, so it gets light while everything else stays flat.
-		local halo = glow(header, UDim2.fromOffset(112, 112), UDim2.fromOffset(42, 42), 1, 90)
-		halo.ImageTransparency = 0.9
-		halo.Visible = true
-		self.HeaderHalo = halo
-		local plate = create("Frame", {
-			Name = "LogoPlate",
-			Position = UDim2.fromOffset(14, 12),
-			Size = UDim2.fromOffset(56, 56),
-			BackgroundColor3 = Theme.Surface2,
-			BorderSizePixel = 0,
-			Parent = header,
-		})
-		corner(plate, UDim.new(0, 16))
-		stroke(plate, Theme.Stroke, 0.25)
-		self.HeaderPlate = plate
 		local logo = create("ImageLabel", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(42, 42),
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 14, 0.5, 0),
+			Size = UDim2.fromOffset(32, 32),
 			BackgroundTransparency = 1,
 			Image = "",
 			ImageColor3 = Theme.Accent,
 			ScaleType = Enum.ScaleType.Fit,
-			Parent = plate,
+			Parent = header,
 		})
 		applyIcon(logo, opts.Icon or Assets.Logo, true)
 		local subtitle = opts.Version or opts.Subtitle
 		self.HeaderLogo = logo
 		self.HeaderTitle = label({
-			Position = UDim2.new(0, 82, 0, 14),
-			Size = UDim2.new(1, -94, 0, 28),
+			Position = UDim2.new(0, 56, 0.5, subtitle and -15 or -9),
+			Size = UDim2.new(1, -68, 0, 18),
 			Text = self.Title,
-			TextSize = 20,
+			TextSize = 14,
 			FontFace = Fonts.Bold,
-			TextTruncate = Enum.TextTruncate.AtEnd,
 			Parent = header,
 		})
 		if subtitle then
-			-- Full width under the plate: a long game name no longer fights
-			-- with the title for the same 120 pixels.
 			self.HeaderSub = label({
-				Position = UDim2.new(0, 14, 0, 74),
-				Size = UDim2.new(1, -76, 0, 15),
+				Position = UDim2.new(0, 56, 0.5, 3),
+				Size = UDim2.new(1, -68, 0, 14),
 				Text = tostring(subtitle),
-				TextSize = 11,
+				TextSize = 12,
 				FontFace = Fonts.Regular,
 				TextColor3 = Theme.Muted,
-				TextTruncate = Enum.TextTruncate.AtEnd,
 				Parent = header,
 			})
 		end
-		-- A hairline closes the header so the rail reads as its own surface
-		-- instead of melting into the first tab.
-		local hairline = create("Frame", {
-			Name = "HeaderEdge",
-			Position = UDim2.new(0, 0, 0, HEADER_HEIGHT - 1),
-			Size = UDim2.new(1, 0, 0, 1),
-			BackgroundColor3 = Theme.Stroke,
-			BorderSizePixel = 0,
-			Parent = header,
-		})
-		create("UIGradient", {
-			Transparency = NumberSequence.new({
-				NumberSequenceKeypoint.new(0, 0.2),
-				NumberSequenceKeypoint.new(1, 1),
-			}),
-			Parent = hairline,
-		})
 
 		local profileEnabled = opts.Profile ~= false
 		local tabList = create("ScrollingFrame", {
@@ -5815,8 +5738,8 @@ local Library = (function()
 		local indicator = create("Frame", {
 			Position = UDim2.fromOffset(8, 2),
 			Size = UDim2.new(1, -16, 0, TAB_TILE_HEIGHT),
-			BackgroundColor3 = Theme.Accent,
-			BackgroundTransparency = 0.88,
+			BackgroundColor3 = Theme.Surface3,
+			BackgroundTransparency = 0.35,
 			BorderSizePixel = 0,
 			Visible = false,
 			Parent = tabList,
@@ -5827,9 +5750,9 @@ local Library = (function()
 		local pill = create("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 0, 0.5, 0),
-			Size = UDim2.fromOffset(3, 18),
+			Size = UDim2.fromOffset(2, 14),
 			BackgroundColor3 = Theme.Accent,
-			Visible = true,
+			Visible = false,
 			BorderSizePixel = 0,
 			Parent = indicator,
 		})
@@ -6997,17 +6920,9 @@ local Library = (function()
 		if self.HeaderSub then
 			self.HeaderSub.Visible = not enabled
 		end
-		-- The mark sits on a plate now, so the plate is what moves: on the
-		-- narrow rail it centres in the 68 px strip, otherwise it goes back to
-		-- its 14 px inset.
-		if self.HeaderPlate then
-			tween(self.HeaderPlate, {
-				Position = enabled and UDim2.new(0, 6, 0, 12) or UDim2.new(0, 14, 0, 12),
-			}, 0.2, Enum.EasingStyle.Quint)
-		end
-		if self.HeaderHalo then
-			tween(self.HeaderHalo, {
-				Position = enabled and UDim2.fromOffset(34, 42) or UDim2.fromOffset(42, 42),
+		if self.HeaderLogo then
+			tween(self.HeaderLogo, {
+				Position = enabled and UDim2.fromScale(0.5, 0.5) or UDim2.new(0, 14, 0.5, 0),
 			}, 0.2, Enum.EasingStyle.Quint)
 		end
 		if self.ProfileName then
@@ -7993,14 +7908,47 @@ local Library = (function()
 	end
 
 	-- Nearest centre that keeps the whole window inside the viewport.
-	-- Do not compete with Roblox's camera controller for MouseBehavior.
-	-- Pointer ownership here only tracks window dragging, not the OS cursor.
 	function Library:ReleasePointer()
 		self._pointerOwner = nil
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		UserInputService.MouseIconEnabled = true
 	end
 	function Library:_installCursorLease()
-		-- The old render-step lease and modal gate forced the mouse free every
-		-- frame, preventing camera rotation. GUI controls handle their own input.
+		if self._cursorLeaseInstalled then
+			return
+		end
+		self._cursorLeaseInstalled = true
+		local holding = false
+		RunService:BindToRenderStep("MacrOSCursorLease", Enum.RenderPriority.Last.Value + 1, function()
+			local visible = false
+			for _, w in ipairs(Library.Windows) do
+				local active = not w._destroyed and w.Open and not w.Minimized and w.Root and w.Root.Parent and w.Root.Visible and w.Gui and w.Gui.Parent and w.Gui.Enabled
+				if w._cursorGate then
+					w._cursorGate.Modal = active
+					w._cursorGate.Visible = active
+				end
+				if active then
+					visible = true
+				end
+			end
+			if visible then
+                -- Open UI owns the cursor, including during RMB presses.
+                -- Run after camera updates so camera lock cannot pin UI input.
+				if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+					UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+				end
+                if not UserInputService.MouseIconEnabled then
+					UserInputService.MouseIconEnabled = true
+                end
+			elseif holding then
+				Library:ReleasePointer()
+			end
+			holding = visible
+			if #Library.Windows == 0 then
+				RunService:UnbindFromRenderStep("MacrOSCursorLease")
+				Library._cursorLeaseInstalled = false
+			end
+		end)
 	end
 	function Window:Center()
 		if self._destroyed then
@@ -12054,7 +12002,6 @@ local Library = (function()
 	end
 
 	local PRESET_ORDER = {
-		"MacrOS",
 		"Midnight",
 		"Nebula",
 		"Synthwave",
@@ -15411,10 +15358,8 @@ local Library = (function()
 		strip:SetAttribute("NoDrag", true)
 		local highlight = create("Frame", {
 			Size = UDim2.fromOffset(0, 32),
-			-- Same ember wash as the rail, so the two levels of navigation read
-			-- as one system instead of two different greys.
-			BackgroundColor3 = Theme.Accent,
-			BackgroundTransparency = 0.88,
+			BackgroundColor3 = Theme.Surface3,
+			BackgroundTransparency = 0.35,
 			BorderSizePixel = 0,
 			Visible = false,
 			Parent = strip,
@@ -16513,13 +16458,13 @@ local Library = (function()
 			Parent = sidebar,
 		})
 		self.ProfileCard = card
-		corner(card, UDim.new(0, 12))
+		corner(card, UDim.new(0, 8))
 		local cardStroke = stroke(card, Theme.Stroke, 0)
 		local head = avatar(self, card, {
 			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 10, 0.5, 0),
-			Size = UDim2.fromOffset(36, 36),
-		}, Theme.Accent, 0.75)
+			Position = UDim2.new(0, 8, 0.5, 0),
+			Size = UDim2.fromOffset(32, 32),
+		})
 		local online = create("Frame", {
 			AnchorPoint = Vector2.new(1, 1),
 			Position = UDim2.new(1, 1, 1, 1),
@@ -16532,9 +16477,9 @@ local Library = (function()
 		corner(online, UDim.new(1, 0))
 		stroke(online, Theme.Surface2, 0, 2)
 		local name = label({
-			Position = UDim2.new(0, 54, 0.5, -16),
-			Size = UDim2.new(1, -80, 0, 15),
-			TextSize = 13,
+			Position = UDim2.new(0, 48, 0.5, -15),
+			Size = UDim2.new(1, -74, 0, 15),
+			TextSize = 12,
 			FontFace = Fonts.Bold,
 			Parent = card,
 		})
@@ -16542,8 +16487,8 @@ local Library = (function()
 		self.ProfileAvatar = head
 		self:_trackName(name, "Display")
 		local gameLabel = label({
-			Position = UDim2.new(0, 54, 0.5, 1),
-			Size = UDim2.new(1, -80, 0, 13),
+			Position = UDim2.new(0, 48, 0.5, 1),
+			Size = UDim2.new(1, -74, 0, 13),
 			Text = "…",
 			TextSize = 12,
 			FontFace = Fonts.Regular,
@@ -18379,8 +18324,8 @@ local Library = (function()
 		if hasIcon then
 			local iconImage = create("ImageLabel", {
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.new(0, 22, 0.5, 0),
-				Size = UDim2.fromOffset(18, 18),
+				Position = UDim2.new(0, 20, 0.5, 0),
+				Size = UDim2.fromOffset(16, 16),
 				BackgroundTransparency = 1,
 				ImageColor3 = Theme.Muted,
 				ScaleType = Enum.ScaleType.Fit,
@@ -18393,10 +18338,10 @@ local Library = (function()
 			tab._icon = iconImage
 		end
 		tab._label = label({
-			Position = UDim2.fromOffset(hasIcon and 42 or 16, 0),
-			Size = UDim2.new(1, hasIcon and -50 or -24, 1, 0),
+			Position = UDim2.fromOffset(hasIcon and 38 or 14, 0),
+			Size = UDim2.new(1, hasIcon and -46 or -22, 1, 0),
 			Text = tab.Name,
-			TextSize = 14,
+			TextSize = 13,
 			TextColor3 = Theme.Muted,
 			Parent = button,
 		})
@@ -18420,7 +18365,7 @@ local Library = (function()
 			Position = UDim2.fromOffset(titleX, 20),
 			Size = UDim2.new(1, -titleX, 0, 24),
 			Text = opts.PageTitle or tab.Name,
-			TextSize = 24,
+			TextSize = 22,
 			Parent = page,
 		})
 		if opts.Desc then
@@ -21085,7 +21030,7 @@ local Library = (function()
 			indicator.Visible = true
 			indicator.Position = UDim2.fromOffset(8, targetY)
 			indicator.BackgroundTransparency = 1
-			tween(indicator, { BackgroundTransparency = 0.88 }, 0.3)
+			tween(indicator, { BackgroundTransparency = 0.35 }, 0.3)
 		end
 		tween(indicator, { Position = UDim2.fromOffset(8, targetY) }, 0.45, Enum.EasingStyle.Quint)
 	end
@@ -21233,18 +21178,10 @@ local Library = (function()
 			chip.MouseButton1Click:Connect(function()
 				scrollBy(direction)
 			end)
-			if not vertical then
-				-- Keep the fade, drop the chip: it overlaps the tab labels.
-				chip.Visible = false
-				chip.Active = false
-				chip.Size = UDim2.fromOffset(0, 0)
-				chipStroke.Transparency = 1
-			end
 			hints[direction] = {
 				Direction = direction,
 				Fade = fade,
 				Chip = chip,
-				ChipOnlyWhenVertical = not vertical,
 				Stroke = chipStroke,
 				Arrow = arrow,
 				ArrowFade = arrowFade,
@@ -21255,11 +21192,7 @@ local Library = (function()
 			}
 		end
 
-		-- Two separate things fade in here. The soft edge is shown on every
-		-- strip; the little "3 more" chip only on the vertical rail, because on
-		-- a 30 px row of sub tabs it lands on top of the labels.
 		local function show(hint, on)
-			local chipOn = on and not hint.ChipOnlyWhenVertical
 			if hint.Shown == on then
 				return
 			end
@@ -21267,29 +21200,26 @@ local Library = (function()
 			hint.Generation += 1
 			local away = hint.Home
 				+ (vertical and UDim2.fromOffset(0, hint.Direction * 6) or UDim2.fromOffset(hint.Direction * 6, 0))
-			local fadeValue = on and 0 or 1
-			local chipValue = chipOn and 0 or 1
+			local value = on and 0 or 1
 			if on then
 				hint.Fade.Visible = true
+				hint.Chip.Visible = true
+				hint.Chip.Position = away
+				tween(hint.Chip, { Position = hint.Home, BackgroundTransparency = 0.08 }, 0.3, Enum.EasingStyle.Quint)
 			else
+				tween(hint.Chip, { Position = away, BackgroundTransparency = 1 }, 0.2, Enum.EasingStyle.Quint)
 				local generation = hint.Generation
 				task.delay(0.21, function()
 					if hint.Generation == generation then
 						hint.Fade.Visible = false
+						hint.Chip.Visible = false
 					end
 				end)
 			end
-			if chipOn then
-				hint.Chip.Visible = true
-				hint.Chip.Position = away
-				tween(hint.Chip, { Position = hint.Home, BackgroundTransparency = 0.08 }, 0.3, Enum.EasingStyle.Quint)
-			elseif hint.Chip.Visible then
-				hint.Chip.Visible = false
-			end
-			tween(hint.Fade, { BackgroundTransparency = fadeValue }, 0.2)
-			tween(hint.Stroke, { Transparency = chipValue }, 0.2)
-			tween(hint.Arrow, { [hint.ArrowFade] = chipValue }, 0.2)
-			tween(hint.Count, { TextTransparency = chipValue }, 0.2)
+			tween(hint.Fade, { BackgroundTransparency = value }, 0.2)
+			tween(hint.Stroke, { Transparency = value }, 0.2)
+			tween(hint.Arrow, { [hint.ArrowFade] = value }, 0.2)
+			tween(hint.Count, { TextTransparency = value }, 0.2)
 		end
 
 		local function refresh()
@@ -24142,35 +24072,44 @@ local Library = (function()
 				if not badge then
 					badge = create("TextLabel", {
 						Name = "VersionBadge",
-						AnchorPoint = Vector2.new(1, 0),
-						Position = UDim2.new(1, -12, 0, 73),
-						Size = UDim2.fromOffset(44, 16),
+						Position = UDim2.fromOffset(14, 3),
+						Size = UDim2.fromOffset(43, 16),
 						BackgroundColor3 = Theme.Accent,
-						BackgroundTransparency = 0.86,
 						BorderSizePixel = 0,
-						TextColor3 = Theme.Accent,
+						TextColor3 = Theme.AccentDark,
 						TextSize = 10,
 						FontFace = Fonts.Bold,
 						TextXAlignment = Enum.TextXAlignment.Center,
-						ZIndex = 3,
 						Parent = header,
 					})
-					corner(badge, UDim.new(0, 8))
-					local badgeStroke = stroke(badge, Theme.Accent, 0.55)
-					bindColors(badge, { BackgroundColor3 = Theme.Accent, TextColor3 = Theme.Accent })
-					bindColors(badgeStroke, { Color = Theme.Accent })
+					corner(badge, UDim.new(0, 6))
+					bindColors(badge, { BackgroundColor3 = Theme.Accent, TextColor3 = Theme.AccentDark })
 				end
 				badge.Text = tostring(value or "")
 				badge.Visible = badge.Text ~= ""
-				-- The title keeps the room it always had; only the pill follows the
-				-- compact rail, where there is no title to sit next to.
+				logo.Position = UDim2.new(0, 14, 0.5, 0)
+				title.Position = UDim2.new(0, 56, 0.5, sub and -15 or -9)
+				title.Size = UDim2.fromOffset(0, 18)
+				title.AutomaticSize = Enum.AutomaticSize.X
+				if sub then
+					sub.Position = UDim2.new(0, 56, 0.5, 3)
+				end
 				local function place()
+                    logo.Position = self._compact and UDim2.fromScale(0.5, 0.5) or UDim2.new(0, 14, 0.5, 0)
 					badge.Visible = title.Visible and tostring(value or "") ~= ""
+					badge.Position = UDim2.new(
+						0,
+						56 + math.ceil(title.AbsoluteSize.X / math.max(self.Scale.Scale, 0.01)) + 8,
+						0.5,
+						sub and -15 or -9
+					)
 				end
 				place()
 				if not self._versionPlacement then
 					self._versionPlacement = true
+					table.insert(self._connections, title:GetPropertyChangedSignal("AbsoluteSize"):Connect(place))
 					table.insert(self._connections, title:GetPropertyChangedSignal("Visible"):Connect(place))
+					table.insert(self._connections, self.Scale:GetPropertyChangedSignal("Scale"):Connect(place))
 				end
 			end
 			Window.SetVersionBadge = guarded(Window.SetVersionBadge)
@@ -24186,7 +24125,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 50
+			Library.MacrOSRevision = 55
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
@@ -29384,8 +29323,115 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         for _,entry in ipairs(targetFX.lines)do entry.core.Visible=false;entry.glow.Visible=false end
         for _,entry in ipairs(targetFX.dots)do entry.core.Visible=false;entry.glow.Visible=false end
     end
+    -- ---------------------------------------------------------------------
+    -- Real item textures. Roblox will not load a PNG from outside the game, so
+    -- the pixels of the vanilla 16x16 items are written into an EditableImage at
+    -- runtime and shown on ImageLabels. That is the actual Minecraft asset, not
+    -- a redrawing of it: same 16x16 grid, same colours.
+    --   each line is one row, one letter per pixel, '.' is transparent, A = 1
+    local ITEM_TEXTURES={
+        Swords={
+            palette={{14,63,54},{164,253,240},{8,37,32},{43,199,172},{51,235,203},{21,99,85},{30,138,119},{73,54,21},{104,78,30},{137,103,39},{40,30,11}},
+            rows={
+                ".............AAA",
+                "............ABBC",
+                "...........ABDBC",
+                "..........ABDBC.",
+                ".........ABDEC..",
+                "........ABDEC...",
+                "..AA...AEDEC....",
+                "..AFA.AEDEC.....",
+                "...AGCEGEC......",
+                "...AGGFEC.......",
+                "....AFAC........",
+                "...HICAAC.......",
+                "..HJK.CCAC......",
+                "AAIK....CC......",
+                "AFC.............",
+                "CCC.............",
+            },
+        },
+        Crystals={
+            palette={{111,79,171},{254,203,230},{84,57,138},{179,142,243},{255,253,213},{207,160,243},{141,106,204}},
+            rows={
+                "................",
+                "................",
+                ".........AAAAA..",
+                "........ABBBBC..",
+                ".......ADBBEFC..",
+                "......ABDDEFGC..",
+                ".....AFBDFAGGC..",
+                "....ADFBFGAGC...",
+                "...ADDFEAGAC....",
+                "..AGGGBDAGC.....",
+                "..CAGDGDAC......",
+                "..CCCAGDC.......",
+                "..CCACGC........",
+                "...CCGA.........",
+                "....AA..........",
+                "................",
+            },
+        },
+    }
+    local itemContents={}
+    -- Turning rows into an EditableImage. Returns nil when the executor does
+    -- not allow it; every caller then draws an outline instead.
+    local function itemTexture(kind)
+        if itemContents[kind]~=nil then return itemContents[kind] or nil end
+        local spec=ITEM_TEXTURES[kind]
+        local ok,content=pcall(function()
+            local height=#spec.rows
+            local width=#spec.rows[1]
+            local image=game:GetService("AssetService"):CreateEditableImage({Size=Vector2.new(width,height)})
+            local data=buffer.create(width*height*4)
+            local at=0
+            for y=1,height do
+                local row=spec.rows[y]
+                for x=1,width do
+                    local index=string.byte(row,x)-64
+                    local colour=spec.palette[index]
+                    local r,g,b,a=0,0,0,0
+                    if colour then r,g,b,a=colour[1],colour[2],colour[3],255 end
+                    buffer.writeu8(data,at,r);buffer.writeu8(data,at+1,g)
+                    buffer.writeu8(data,at+2,b);buffer.writeu8(data,at+3,a)
+                    at+=4
+                end
+            end
+            image:WritePixelsBuffer(Vector2.zero,Vector2.new(width,height),data)
+            return Content.fromObject(image)
+        end)
+        itemContents[kind]=(ok and content)or false
+        return ok and content or nil
+    end
+    -- One label pair per item: a tinted copy behind for the glow, the real
+    -- texture on top. Labels are pooled and only their transform changes.
+    local itemSprites={Swords={},Crystals={}}
+    local function itemSprite(kind,index,texture)
+        local pool=itemSprites[kind]
+        local entry=pool[index]
+        if entry then return entry end
+        local ok,built=pcall(function()
+            local glow=make("ImageLabel",{Name="MacrOSTarget"..kind.."Glow"..index,BackgroundTransparency=1,BorderSizePixel=0,
+                AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.fromOffset(1,1),Visible=false,ZIndex=4},overlay)
+            local core=make("ImageLabel",{Name="MacrOSTarget"..kind..index,BackgroundTransparency=1,BorderSizePixel=0,
+                AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.fromOffset(1,1),Visible=false,ZIndex=5},overlay)
+            glow.ImageContent=texture;core.ImageContent=texture
+            return {core=core,glow=glow}
+        end)
+        if not ok then return nil end
+        pool[index]=built
+        return built
+    end
+    local function hideItemSprites(kind,from)
+        local pool=itemSprites[kind]
+        for index=from,#pool do
+            local entry=pool[index]
+            if entry then entry.core.Visible=false;entry.glow.Visible=false end
+        end
+    end
     function self:ClearTargetESP()
-        hideTargetFX();targetFX.alpha=0;targetFX.last=nil;targetFX.position=nil;targetFX.hp=nil;targetFX.hurt=0
+        hideTargetFX();hideItemSprites("Swords",1);hideItemSprites("Crystals",1)
+        targetFX.alpha=0;targetFX.last=nil;targetFX.position=nil;targetFX.hp=nil;targetFX.hurt=0
     end
     function self:RenderTargetESP(data,cfg,camera,dt)
         if not cfg.targetESP then self:ClearTargetESP();return end
@@ -29414,8 +29460,13 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         local opacity=targetFX.alpha*(1-cfg.targetESPAlpha)
         local radius=info.radius*cfg.targetESPSize
         local countLine,countDot=0,0
+        local view=camera.ViewportSize or Vector2.new(1280,720)
         local function line(a,b,fade,width)
             if a.Z<=0.1 or b.Z<=0.1 then return end
+            -- A point just in front of the lens (or off to the side) can project
+            -- to coordinates thousands of pixels away. Drawing that stroke is
+            -- what turned near swords into long slashes across the screen.
+            if math.abs(a.X)>view.X*2 or math.abs(a.Y)>view.Y*2 or math.abs(b.X)>view.X*2 or math.abs(b.Y)>view.Y*2 then return end
             countLine+=1;if countLine>256 then return end
             local item=targetFX.lines[countLine]
             if not item then
@@ -29445,6 +29496,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         end
         local width=cfg.targetESPThickness
         local mode=cfg.targetESPStyle
+        if mode~="Swords"then hideItemSprites("Swords",1)end
+        if mode~="Crystals"then hideItemSprites("Crystals",1)end
         local shape=(type(cfg.targetESPShapeByStyle)=="table"and cfg.targetESPShapeByStyle[mode])or cfg.targetESPShape or "Circle"
         local function shaped(angle,r) return r*shapeRadius(shape,angle) end
         if mode=="Ghosts"then
@@ -29484,19 +29537,55 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                 worldLine(base+Vector3.new(math.cos(a)*ra,0,math.sin(a)*ra),base+Vector3.new(math.cos(b)*rb,0,math.sin(b)*rb),1,width*2)
             end
         elseif mode=="Swords"then
-            -- Flying swords: each blade orbits the target and bobs a little. A
-            -- blade is four thick strokes, so a dozen swords stay cheap.
+            -- The vanilla diamond sword, drawn as the real texture. The item is
+            -- a diagonal sprite, so it is rotated to stand tip-down like in the
+            -- reference footage: 135 degrees anticlockwise from the sheet.
+            local head=camera:WorldToViewportPoint(center+Vector3.new(0,info.height*0.5,0))
+            local feet=camera:WorldToViewportPoint(center-Vector3.new(0,info.height*0.5,0))
+            local shown=math.abs(head.Y-feet.Y)
+            local scale=(cfg.targetESPSize or 1.5)/1.5
+            local len=math.clamp(shown*0.42,10,260)*math.clamp(scale,0.4,2.4)
             local blades=SWORD_COUNT[shape] or 8
+            local orbit=radius
+            local texture=itemTexture("Swords")
+            local drawn=0
             for i=0,blades-1 do
-                local a=phase*1.7+i*math.pi*2/blades
-                local radial=Vector3.new(math.cos(a),0,math.sin(a))
-                local tangent=Vector3.new(-math.sin(a),0,math.cos(a))
-                local base=center+radial*radius+Vector3.new(0,math.sin(phase*2.1+i*0.8)*info.height*0.12,0)
-                local up=Vector3.new(0,info.height*0.5,0)
-                worldLine(base-up*0.35,base+up,1,width*1.8)
-                worldLine(base+up*0.12-tangent*(radius*0.5),base+up*0.12+tangent*(radius*0.5),1,width)
-                dot(base+up,math.max(2,width*1.4),1)
+                local a=phase*1.2+i*math.pi*2/blades
+                local lift=math.sin(phase*1.9+i*0.8)*info.height*0.2+(i%2==0 and info.height*0.1 or -info.height*0.1)
+                local at=center+Vector3.new(math.cos(a)*orbit,lift,math.sin(a)*orbit)
+                local sp=camera:WorldToViewportPoint(at)
+                if sp.Z>0.35 then
+                    drawn+=1
+                    local lean=math.deg(math.sin(phase*1.1+i*1.7)*0.18)
+                    local sprite=texture and itemSprite("Swords",drawn,texture)or nil
+                    if sprite then
+                        sprite.core.Visible=true
+                        sprite.core.Position=UDim2.fromOffset(sp.X,sp.Y)
+                        sprite.core.Size=UDim2.fromOffset(len,len)
+                        -- Roblox Rotation is clockwise: +135 turns the up-right
+                        -- tip (45 degrees) down to 270, tip pointing at the floor.
+                        sprite.core.Rotation=135+lean
+                        sprite.core.ImageTransparency=1-math.clamp(opacity,0,1)
+                        sprite.glow.Visible=cfg.targetESPGlow
+                        if cfg.targetESPGlow then
+                            sprite.glow.Position=sprite.core.Position
+                            sprite.glow.Size=UDim2.fromOffset(len*1.2,len*1.2)
+                            sprite.glow.Rotation=sprite.core.Rotation
+                            sprite.glow.ImageColor3=color
+                            sprite.glow.ImageTransparency=1-math.clamp(opacity,0,1)*0.5
+                        end
+                    else
+                        -- Fallback for executors without EditableImage: the same
+                        -- silhouette in strokes, so the style never disappears.
+                        local bw=len*0.03
+                        line(Vector3.new(sp.X-len*0.16,sp.Y-len*0.24,sp.Z),Vector3.new(sp.X+len*0.16,sp.Y-len*0.24,sp.Z),1,math.max(2,bw*2))
+                        line(Vector3.new(sp.X-bw,sp.Y-len*0.18,sp.Z),Vector3.new(sp.X-bw*0.5,sp.Y+len*0.40,sp.Z),1,math.max(2,bw*2))
+                        line(Vector3.new(sp.X+bw,sp.Y-len*0.18,sp.Z),Vector3.new(sp.X+bw*0.5,sp.Y+len*0.40,sp.Z),1,math.max(2,bw*2))
+                        line(Vector3.new(sp.X,sp.Y-len*0.26,sp.Z),Vector3.new(sp.X,sp.Y-len*0.44,sp.Z),1,math.max(2,bw*1.6))
+                    end
+                end
             end
+            if drawn==0 then hideItemSprites("Swords",1)else hideItemSprites("Swords",drawn+1)end
         elseif mode=="Lightning"then
             -- Bolts strike down onto the target. The jagged path is re-rolled
             -- eight times a second, so they crackle instead of standing still.
@@ -29534,23 +29623,47 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                 end
             end
         elseif mode=="Crystals"then
-            -- Crystal spikes at golden-ratio heights, all pointing at the target.
+            -- Amethyst shard, the real item texture, scattered on the body at
+            -- golden-ratio heights like the reference effect.
+            local head=camera:WorldToViewportPoint(center+Vector3.new(0,info.height*0.5,0))
+            local feet=camera:WorldToViewportPoint(center-Vector3.new(0,info.height*0.5,0))
+            local shown=math.abs(head.Y-feet.Y)
+            local scale=(cfg.targetESPSize or 1.5)/1.5
+            local size=math.clamp(shown*0.16,6,110)*math.clamp(scale,0.4,2.4)
             local count=CRYSTAL_COUNT[shape] or 12
+            local texture=itemTexture("Crystals")
+            local drawn=0
             for i=0,count-1 do
                 local a=phase*0.8+i*math.pi*2/count
                 local h=(i*0.618)%1
-                local base=center+Vector3.new(math.cos(a)*radius,info.height*(0.1+h*0.85),math.sin(a)*radius)
-                local inward=(center-base).Unit
-                local tip=base+inward*radius*0.4
-                local side=Vector3.new(-math.sin(a),0,math.cos(a))*radius*0.13
-                local top=base+Vector3.new(0,radius*0.16,0)
-                local bottom=base-Vector3.new(0,radius*0.16,0)
-                worldLine(top,tip,1,width*1.3)
-                worldLine(tip,bottom,1,width*1.3)
-                worldLine(bottom,top+side,0.5,width)
-                worldLine(bottom,top-side,0.5,width)
-                dot(tip,math.max(2,width*1.4),1)
+                local at=center+Vector3.new(math.cos(a)*radius,info.height*(h-0.5)*0.95,math.sin(a)*radius)
+                local sp=camera:WorldToViewportPoint(at)
+                if sp.Z>0.35 then
+                    drawn+=1
+                    local spin=math.deg(phase*40+i*37)
+                    local sprite=texture and itemSprite("Crystals",drawn,texture)or nil
+                    if sprite then
+                        sprite.core.Visible=true
+                        sprite.core.Position=UDim2.fromOffset(sp.X,sp.Y)
+                        sprite.core.Size=UDim2.fromOffset(size,size)
+                        sprite.core.Rotation=spin
+                        sprite.core.ImageTransparency=1-math.clamp(opacity,0,1)
+                        sprite.glow.Visible=cfg.targetESPGlow
+                        if cfg.targetESPGlow then
+                            sprite.glow.Position=sprite.core.Position
+                            sprite.glow.Size=UDim2.fromOffset(size*1.5,size*1.5)
+                            sprite.glow.Rotation=spin
+                            sprite.glow.ImageColor3=color
+                            sprite.glow.ImageTransparency=1-math.clamp(opacity,0,1)*0.45
+                        end
+                    else
+                        local rx=size*0.28
+                        line(Vector3.new(sp.X,sp.Y-size*0.6,sp.Z),Vector3.new(sp.X-rx,sp.Y+size*0.5,sp.Z),1,math.max(1.5,width*0.7))
+                        line(Vector3.new(sp.X,sp.Y-size*0.6,sp.Z),Vector3.new(sp.X+rx,sp.Y+size*0.5,sp.Z),1,math.max(1.5,width*0.7))
+                    end
+                end
             end
+            if drawn==0 then hideItemSprites("Crystals",1)else hideItemSprites("Crystals",drawn+1)end
         elseif mode=="Chevrons"then
             -- The mark from the screenshot: four thick chevrons above, right,
             -- below and left of the target, points facing away from it and the
