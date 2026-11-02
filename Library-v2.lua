@@ -28443,8 +28443,8 @@ local Library = (function()
 				Width = native.Root.Size.X.Offset,
 				Height = native.Root.Size.Y.Offset,
 				Tab = native.CurrentTab and native.CurrentTab.Name,
-				KeybindX = panel.Position.X.Offset,
-				KeybindY = panel.Position.Y.Offset,
+				KeybindX = overlay:GetPosition()[2],
+				KeybindY = overlay:GetPosition()[4],
 			}
 		end
 		function w:ApplyLayout(layout)
@@ -28466,10 +28466,13 @@ local Library = (function()
 			end
 			native.Root.Position = UDim2.new(num(layout.XScale, 0.5, 0, 1), x, num(layout.YScale, 0.5, 0, 1), y)
 			native:_clampToScreen()
-			panel.Position = UDim2.fromOffset(
+			local keybindPosition = overlay:GetPosition()
+			overlay:SetPosition({
+				keybindPosition[1],
 				num(layout.KeybindX, 24, 0, math.max(0, native.Gui.AbsoluteSize.X - 226)),
+				keybindPosition[3],
 				num(layout.KeybindY, 220, 0, math.max(0, native.Gui.AbsoluteSize.Y - 32))
-			)
+			})
 		end
 		function w:FinishStartupBuild() end
 		function w:Destroy()
