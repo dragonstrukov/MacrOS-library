@@ -18434,6 +18434,22 @@ local Library = (function()
 		return hash / 360
 	end
 
+	-- Optional remote-cover loader (set by the Spotify client). Roblox cannot
+	-- display https:// images directly, so the loader downloads the bytes and
+	-- returns a local asset id (getcustomasset). Returns nil when unsupported.
+	local musicRemoteLoader = nil
+	function Library:SetMusicCoverLoader(fn)
+		musicRemoteLoader = fn
+	end
+
+	-- Optional audio resolver for tracks without a Roblox SoundId.
+	-- fn(track) -> playable SoundId string (e.g. getcustomasset of a cached MP3).
+	-- Used by the free Audius/Render integration; runs async inside playTrack.
+	local musicAudioLoader = nil
+	function Library:SetMusicAudioLoader(fn)
+		musicAudioLoader = fn
+	end
+
 	-- Builds a square cover: a real image when the track has one, otherwise a
 	-- per-track gradient with a music note, so the catalog never looks empty.
 	local function musicCover(parent, track, size, order)
@@ -18466,23 +18482,41 @@ local Library = (function()
 			Parent = holder,
 		})
 		applyIcon(note, "music")
+		local function paintGradient()
+			image.Visible = false
+			note.Visible = true
+			gradient.Enabled = true
+			local hue = musicHue(musicKey(track))
+			gradient.Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.fromHSV(hue, 0.55, 0.55)),
+				ColorSequenceKeypoint.new(1, Color3.fromHSV((hue + 0.12) % 1, 0.6, 0.3)),
+			})
+			gradient.Rotation = 35
+		end
+		local function paintImage(src)
+			image.Image = src
+			image.Visible = true
+			note.Visible = false
+			gradient.Enabled = false
+		end
+		local coverToken = 0
 		local function render()
 			local src = musicAsset(track.Cover or track.Image or track.Icon)
-			if src then
-				image.Image = src
-				image.Visible = true
-				note.Visible = false
-				gradient.Enabled = false
+			if src and (src:find("^http://") or src:find("^https://")) and musicRemoteLoader then
+				-- Remote cover: show the gradient until the bytes are cached.
+				paintGradient()
+				coverToken += 1
+				local token = coverToken
+				task.spawn(function()
+					local ok, asset = pcall(musicRemoteLoader, src)
+					if ok and asset and token == coverToken and holder.Parent then
+						paintImage(asset)
+					end
+				end)
+			elseif src then
+				paintImage(src)
 			else
-				image.Visible = false
-				note.Visible = true
-				gradient.Enabled = true
-				local hue = musicHue(musicKey(track))
-				gradient.Color = ColorSequence.new({
-					ColorSequenceKeypoint.new(0, Color3.fromHSV(hue, 0.55, 0.55)),
-					ColorSequenceKeypoint.new(1, Color3.fromHSV((hue + 0.12) % 1, 0.6, 0.3)),
-				})
-				gradient.Rotation = 35
+				paintGradient()
 			end
 		end
 		render()
@@ -18509,6 +18543,7 @@ local Library = (function()
 			_views = {},
 			_current = nil,
 			_playing = false,
+			_loading = false,
 			_volume = math.clamp(tonumber(opts.Volume) or 0.7, 0, 1),
 			_shuffle = opts.Shuffle == true,
 			_repeat = opts.Repeat or "off",
@@ -18521,6 +18556,15 @@ local Library = (function()
 			_genreChips = {},
 		}
 		self._musicPlayer = player
+
+		-- External player (e.g. Spotify Connect). When present, playback is
+		-- delegated to it instead of the local Roblox Sound. It must expose:
+		--   Play(track), Pause(), Resume(), Stop(), Next(), Previous(),
+		--   Seek(seconds), SetVolume(0..1), SetShuffle(bool), SetRepeat(mode),
+		--   GetState() -> { Playing, Position, Duration, TrackId }
+		local external = opts.ExternalPlayer
+		player._external = external
+		player._extState = { Playing = false, Position = 0, Duration = 0, TrackId = nil }
 
 		-- ---------------- persistence (likes / favorites / prefs) ----------
 		local storageFile = opts.StorageFile or "MacrOS/UI/music-state.json"
@@ -19422,9 +19466,13 @@ local Library = (function()
 		-- ---------------- playback ----------------------------------------
 		stopPlayback = function()
 			playToken += 1
-			pcall(function()
-				sound:Stop()
-			end)
+			if external then
+				pcall(external.Stop)
+			else
+				pcall(function()
+					sound:Stop()
+				end)
+			end
 			player._playing = false
 			updatePlayIcon()
 			safeCall(opts.OnStop, player._current)
@@ -19434,9 +19482,77 @@ local Library = (function()
 			if not track or player._destroyed then
 				return
 			end
-			local src = musicAsset(track.SoundId or track.Audio)
-			if not src and (type(track.Id) == "number" or (type(track.Id) == "string" and track.Id:match("^%d+$"))) then
+			-- External player (Spotify Connect): no local Sound / SoundId needed.
+			if external then
+				playToken += 1
+				player._current = track
+				player._playing = true
+				local key = musicKey(track)
+				player._views[key] = (tonumber(player._views[key]) or 0) + 1
+				saveState()
+				safeCall(opts.OnView, track, trackViews(track))
+				safeCall(opts.OnPlay, track)
+				task.spawn(function()
+					local ok, err = pcall(external.Play, track)
+					if not ok and not player._destroyed then
+						player._playing = false
+						updatePlayIcon()
+						window:Notify({
+							Title = text("NotifyTitle", "Музон"),
+							Content = text("ExternalFail", "Spotify: ") .. tostring(err),
+							Duration = 5,
+						})
+						safeCall(opts.OnTrackError, track, err)
+					end
+				end)
+				updatePlayIcon()
+				renderNow()
+				refreshRows()
+				return
+			end
+			local src = musicAsset(track._resolvedAudio or track.SoundId or track.Audio)
+			-- Numeric Id fallback is only for Roblox audio assets, never for remote
+			-- tracks (Audius hashids can be all-digit strings).
+			if not src and not track.StreamId and (type(track.Id) == "number" or (type(track.Id) == "string" and track.Id:match("^%d+$"))) then
 				src = musicAsset(track.Id)
+			end
+			if not src and musicAudioLoader then
+				-- Free streaming (Audius/Render): resolve MP3 -> local asset async,
+				-- then re-enter playTrack with the cached asset. No SoundId needed.
+				playToken += 1
+				local token = playToken
+				player._current = track
+				player._playing = false
+				player._loading = true
+				updatePlayIcon()
+				renderNow()
+				refreshRows()
+				window:Notify({
+					Title = text("NotifyTitle", "Музон"),
+					Content = text("Loading", "Загрузка трека… ") .. tostring(track.Name or ""),
+					Duration = 2,
+				})
+				task.spawn(function()
+					local ok, resolved = pcall(musicAudioLoader, track)
+					if token ~= playToken or player._destroyed then
+						return
+					end
+					player._loading = false
+					if ok and type(resolved) == "string" and resolved ~= "" then
+						track._resolvedAudio = resolved
+						playTrack(track)
+					else
+						player._playing = false
+						updatePlayIcon()
+						window:Notify({
+							Title = text("NotifyTitle", "Музон"),
+							Content = text("LoadFail", "Не удалось загрузить аудио: ") .. tostring(track.Name or "?"),
+							Duration = 4,
+						})
+						safeCall(opts.OnTrackError, track, resolved)
+					end
+				end)
+				return
 			end
 			if not src then
 				window:Notify({ Title = text("NotifyTitle", "Музон"), Content = text("NoSource", "У трека нет SoundId"), Duration = 3 })
@@ -19505,6 +19621,15 @@ local Library = (function()
 		end
 
 		local function playNext()
+			if external and external.Next then
+				task.spawn(function()
+					local ok, err = pcall(external.Next)
+					if not ok and not player._destroyed then
+						window:Notify({ Title = text("NotifyTitle", "Музон"), Content = "Spotify: " .. tostring(err), Duration = 4 })
+					end
+				end)
+				return
+			end
 			if #player._list == 0 then
 				return
 			end
@@ -19530,6 +19655,15 @@ local Library = (function()
 		end
 
 		local function playPrevious()
+			if external and external.Previous then
+				task.spawn(function()
+					local ok, err = pcall(external.Previous)
+					if not ok and not player._destroyed then
+						window:Notify({ Title = text("NotifyTitle", "Музон"), Content = "Spotify: " .. tostring(err), Duration = 4 })
+					end
+				end)
+				return
+			end
 			if #player._list == 0 then
 				return
 			end
@@ -19601,7 +19735,13 @@ local Library = (function()
 
 		bindSlider(volHit, volTrack, volFill, volKnob, function(value)
 			player._volume = value
-			sound.Volume = value
+			if external then
+				task.spawn(function()
+					pcall(external.SetVolume, value)
+				end)
+			else
+				sound.Volume = value
+			end
 			safeCall(opts.OnVolume, value)
 			footer.Text = string.format(
 				text("Footer", "%d треков · громкость %d%% · сортировка: %s"),
@@ -19611,6 +19751,22 @@ local Library = (function()
 		end)
 
 		bindSlider(seekHit, seekTrack, seekFill, nil, function(value)
+			if external then
+				local length = (player._extState and player._extState.Duration or 0)
+				if length <= 0 and player._current then
+					length = tonumber(player._current.Duration) or 0
+				end
+				if length > 0 then
+					local pos = value * length
+					player._extState.Position = pos
+					elapsedLabel.Text = musicTime(pos)
+					task.spawn(function()
+						pcall(external.Seek, pos)
+					end)
+					safeCall(opts.OnSeek, pos, player._current)
+				end
+				return
+			end
 			if player._current and sound.IsLoaded and sound.TimeLength > 0 then
 				sound.TimePosition = value * sound.TimeLength
 				elapsedLabel.Text = musicTime(sound.TimePosition)
@@ -19623,14 +19779,55 @@ local Library = (function()
 			if player._destroyed or not panel.Visible then
 				return
 			end
-			local length = sound.TimeLength or 0
-			local position = sound.TimePosition or 0
+			local length, position
+			if external then
+				local st = player._extState or {}
+				length = st.Duration or 0
+				position = st.Position or 0
+				if length <= 0 and player._current then
+					length = tonumber(player._current.Duration) or 0
+				end
+			else
+				length = sound.TimeLength or 0
+				position = sound.TimePosition or 0
+			end
 			local ratio = length > 0 and math.clamp(position / length, 0, 1) or 0
 			seekFill.Size = UDim2.fromScale(ratio, 1)
 			elapsedLabel.Text = musicTime(position)
 			totalLabel.Text = musicTime(length > 0 and length or (player._current and player._current.Duration) or 0)
 		end
 		table.insert(window._frameSteps, progressStep)
+
+		-- Poll the external player's state in the background (not every frame).
+		if external and external.GetState then
+			local pollInterval = tonumber(opts.ExternalPollInterval) or 1
+			task.spawn(function()
+				while not player._destroyed do
+					if panel.Visible then
+						local ok, st = pcall(external.GetState)
+						if ok and type(st) == "table" and not player._destroyed then
+							player._extState = st
+							if st.Playing ~= nil and st.Playing ~= player._playing then
+								player._playing = st.Playing == true
+								updatePlayIcon()
+							end
+							-- If Spotify moved to a different track, reflect it.
+							if st.Track and type(st.Track) == "table" then
+								local curKey = player._current and musicKey(player._current)
+								local newKey = musicKey(st.Track)
+								if curKey ~= newKey then
+									player._current = st.Track
+									renderNow()
+									refreshRows()
+									safeCall(opts.OnPlay, st.Track)
+								end
+							end
+						end
+					end
+					task.wait(pollInterval)
+				end
+			end)
+		end
 
 		-- ---------------- header drag (LMB only) --------------------------
 		local dragInput, dragStart, dragOrigin
@@ -19765,9 +19962,15 @@ local Library = (function()
 			if self._destroyed then
 				return self
 			end
-			pcall(function()
-				sound:Pause()
-			end)
+			if external then
+				task.spawn(function()
+					pcall(external.Pause)
+				end)
+			else
+				pcall(function()
+					sound:Pause()
+				end)
+			end
 			self._playing = false
 			updatePlayIcon()
 			safeCall(opts.OnPause, self._current)
@@ -19778,9 +19981,15 @@ local Library = (function()
 				return self
 			end
 			if self._current then
-				pcall(function()
-					sound:Resume()
-				end)
+				if external then
+					task.spawn(function()
+						pcall(external.Resume)
+					end)
+				else
+					pcall(function()
+						sound:Resume()
+					end)
+				end
 				self._playing = true
 				updatePlayIcon()
 				safeCall(opts.OnPlay, self._current)
@@ -19803,7 +20012,13 @@ local Library = (function()
 		function player:SetVolume(value)
 			value = math.clamp(tonumber(value) or 0, 0, 1)
 			self._volume = value
-			sound.Volume = value
+			if external then
+				task.spawn(function()
+					pcall(external.SetVolume, value)
+				end)
+			else
+				sound.Volume = value
+			end
 			volFill.Size = UDim2.fromScale(value, 1)
 			volKnob.Position = UDim2.fromScale(value, 0.5)
 			saveState()
@@ -19815,6 +20030,11 @@ local Library = (function()
 		end
 		function player:SetShuffle(value)
 			self._shuffle = value == true
+			if external and external.SetShuffle then
+				task.spawn(function()
+					pcall(external.SetShuffle, self._shuffle)
+				end)
+			end
 			tween(shuffleIcon, { ImageColor3 = self._shuffle and Theme.Accent or Theme.Text }, 0.12)
 			saveState()
 			return self
@@ -19824,6 +20044,13 @@ local Library = (function()
 				mode = "off"
 			end
 			self._repeat = mode
+			if external and external.SetRepeat then
+				task.spawn(function()
+					-- Spotify uses track / context / off.
+					local map = { off = "off", all = "context", one = "track" }
+					pcall(external.SetRepeat, map[mode] or mode)
+				end)
+			end
 			tween(repeatIcon, { ImageColor3 = mode == "off" and Theme.Text or Theme.Accent }, 0.12)
 			repeatOne.Visible = mode == "one"
 			saveState()
@@ -19998,9 +20225,32 @@ local Library = (function()
 				player:Favorite(player._current, not isFav(player._current))
 			end
 		end)
+		local remoteSearchToken = 0
 		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 			player._query = searchBox.Text
-			renderList()
+			if type(opts.OnRemoteSearch) == "function" then
+				-- Debounced remote search (Spotify). Empty query clears results.
+				remoteSearchToken += 1
+				local token = remoteSearchToken
+				local query = player._query
+				task.delay(0.45, function()
+					if token ~= remoteSearchToken or player._destroyed then
+						return
+					end
+					if query == "" then
+						player:SetTracks({})
+						return
+					end
+					task.spawn(function()
+						local ok, result = pcall(opts.OnRemoteSearch, query)
+						if ok and type(result) == "table" and token == remoteSearchToken and not player._destroyed then
+							player:SetTracks(result)
+						end
+					end)
+				end)
+			else
+				renderList()
+			end
 			safeCall(opts.OnSearch, player._query)
 		end)
 
