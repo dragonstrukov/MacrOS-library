@@ -5578,13 +5578,16 @@ local Library = (function()
 			Parent = gui,
 		})
 		self.Root = root
+		-- Kept as a tiny marker for compatibility, but never Modal. A Modal
+		-- button hands the mouse to the UI and blocks the camera's right-click
+		-- look, which is exactly the bug this gate used to cause.
 		self._cursorGate = create("TextButton", {
 			Name = "CursorRelease",
 			Size = UDim2.fromOffset(1, 1),
 			BackgroundTransparency = 1,
 			Text = "",
 			AutoButtonColor = false,
-			Modal = true,
+			Modal = false,
 			Active = false,
 			Parent = root,
 		})
@@ -7907,12 +7910,39 @@ local Library = (function()
 		return Library.Density
 	end
 
-	-- Nearest centre that keeps the whole window inside the viewport.
+	-- True while the physical right mouse button is held. Reading the live
+	-- button state (instead of caching Began/Ended events) survives focus loss,
+	-- alt-tab and missed InputEnded events, so the lease never gets stuck.
+	function Library:_rmbDown()
+		local ok, down = pcall(function()
+			return UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+		end)
+		return ok and down == true
+	end
+
 	function Library:ReleasePointer()
 		self._pointerOwner = nil
-		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-		UserInputService.MouseIconEnabled = true
+		-- Never fight the camera while the player is holding RMB: it owns the
+		-- mouse during a look-drag and restores Default itself on release.
+		if self:_rmbDown() then
+			return
+		end
+		if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		end
+		if not UserInputService.MouseIconEnabled then
+			UserInputService.MouseIconEnabled = true
+		end
 	end
+
+	-- Cursor management that cooperates with the default camera instead of
+	-- fighting it. The old version forced MouseBehavior.Default every frame
+	-- even during RMB drags (and used a Modal button), which blocked camera
+	-- rotation and made the mouse jitter/freeze whenever the two systems
+	-- overwrote each other. Now:
+	--   * UI visible, RMB up   -> free cursor, icon shown, UI clickable.
+	--   * RMB held             -> hands off: the camera locks and rotates.
+	--   * UI hidden/destroyed  -> release once, then stop touching the mouse.
 	function Library:_installCursorLease()
 		if self._cursorLeaseInstalled then
 			return
@@ -7922,25 +7952,43 @@ local Library = (function()
 		RunService:BindToRenderStep("MacrOSCursorLease", Enum.RenderPriority.Last.Value + 1, function()
 			local visible = false
 			for _, w in ipairs(Library.Windows) do
-				local active = not w._destroyed and w.Open and not w.Minimized and w.Root and w.Root.Parent and w.Root.Visible and w.Gui and w.Gui.Parent and w.Gui.Enabled
+				local guiActive = w.Gui and w.Gui.Parent and w.Gui.Enabled
+				local windowActive = not w._destroyed
+					and w.Open
+					and not w.Minimized
+					and w.Root
+					and w.Root.Parent
+					and w.Root.Visible
+					and guiActive
+				-- The floating music window lives outside Root, so it keeps the
+				-- cursor free even while the main window is hidden.
+				local music = w._musicPlayer
+				local musicActive = not w._destroyed
+					and guiActive
+					and music
+					and music._panel
+					and music._panel.Parent
+					and music._panel.Visible
+				local active = windowActive or musicActive
 				if w._cursorGate then
-					w._cursorGate.Modal = active
-					w._cursorGate.Visible = active
+					w._cursorGate.Modal = false
+					w._cursorGate.Visible = windowActive == true
 				end
 				if active then
 					visible = true
 				end
 			end
-			if visible then
-                -- Open UI owns the cursor, including during RMB presses.
-                -- Run after camera updates so camera lock cannot pin UI input.
+			local rmb = Library:_rmbDown()
+			if visible and not rmb then
+				-- Runs after the camera update, so the final state of the frame
+				-- is a free, visible cursor the player can click the UI with.
 				if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
 					UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 				end
-                if not UserInputService.MouseIconEnabled then
+				if not UserInputService.MouseIconEnabled then
 					UserInputService.MouseIconEnabled = true
-                end
-			elseif holding then
+				end
+			elseif holding and not visible and not rmb then
 				Library:ReleasePointer()
 			end
 			holding = visible
@@ -17092,11 +17140,17 @@ local Library = (function()
 		self:_homeAction(actions, 4, "copy", "Job ID", function()
 			self:CopyToClipboard(game.JobId, "Job ID")
 		end)
+		if self._musicHomeButton ~= false then
+			self:_homeAction(actions, 5, "music", self._musicButtonText or "Музон", function()
+				local music = self._musicPlayer or self:CreateMusicWindow(self._musicOptions or {})
+				music:Open()
+			end)
+		end
 		if self.HomeActions ~= false then
-			self:_homeAction(actions, 5, "eye-off", "Hide", function()
+			self:_homeAction(actions, 6, "eye-off", "Hide", function()
 				self:SetMinimized(true)
 			end)
-			self:_homeAction(actions, 6, "power", "Unload", function()
+			self:_homeAction(actions, 7, "power", "Unload", function()
 				-- Closing the menu is the whole point, but the script behind it has
 				-- switches of its own: whoever wants to turn them off first puts a
 				-- function in Library._unloadHooks and gets called here.
@@ -18180,6 +18234,13 @@ local Library = (function()
 		self._hideAvatar = opts.HideAvatar == true
 		-- Hide / Unload live on the game card unless the script turns them off
 		self.HomeActions = opts.HomeActions ~= false
+		-- "Open music UI" button on the Home game card. opts.Music can carry
+		-- the same options table you would pass to Window:CreateMusicWindow.
+		self._musicHomeButton = opts.MusicButton ~= false
+		self._musicButtonText = opts.MusicButtonText or "Музон"
+		if type(opts.Music) == "table" then
+			self._musicOptions = opts.Music
+		end
 		self:_renderIdentity(true)
 		local tab = self:Tab({
 			Name = opts.Name or "Home",
@@ -18293,6 +18354,1710 @@ local Library = (function()
 			end
 		end)
 		return tab
+	end
+
+	-- =====================================================================
+	-- Music window ("Музон")
+	-- A separate floating player window: catalog with cover avatars,
+	-- likes, favorites, views, search, genre filters, sorting and a full
+	-- playback bar (play/pause, next/prev, shuffle, repeat, seek, volume).
+	-- Data-driven: pass Tracks / OnFetch and optional callbacks, or open it
+	-- with no arguments to get a built-in public-domain demo catalog.
+	-- =====================================================================
+
+	local MUSIC_DEMO = {
+		{ Id = 9043887091, Name = "Lo-fi Chill A", Artist = "JS aka THE BEST", SoundId = 9043887091, Genre = "Lo-fi", Duration = 137, Likes = 1284, Views = 23810, Added = 1700000006, Uploader = "APMOfficial", UserId = 7462718749 },
+		{ Id = 9046862941, Name = "Sunset Chill (Bed Version)", Artist = "APM Music", SoundId = 9046862941, Genre = "Chill", Duration = 0, Likes = 964, Views = 17420, Added = 1700000005, Uploader = "APMOfficial", UserId = 7462718749 },
+		{ Id = 9039953638, Name = "Piano Style", Artist = "APM Music", SoundId = 9039953638, Genre = "Piano", Duration = 101, Likes = 812, Views = 15110, Added = 1700000004, Uploader = "APMOfficial", UserId = 7462718749 },
+		{ Id = 1838635121, Name = "Sad End (Solo Piano)", Artist = "Romain Paillot", SoundId = 1838635121, Genre = "Piano", Duration = 0, Likes = 1490, Views = 31200, Added = 1700000003, Uploader = "APMOfficial", UserId = 7462718749 },
+		{ Id = 1836283178, Name = "Fur Elise", Artist = "Ludwig van Beethoven", SoundId = 1836283178, Genre = "Classical", Duration = 0, Likes = 2210, Views = 48930, Added = 1700000002, Uploader = "APMOfficial", UserId = 7462718749 },
+		{ Id = 1841908242, Name = "Glistening Towers (a)", Artist = "APM Music", SoundId = 1841908242, Genre = "Ambient", Duration = 0, Likes = 655, Views = 11870, Added = 1700000001, Uploader = "APMOfficial", UserId = 7462718749 },
+		{ Id = 1845756489, Name = "Town Talk", Artist = "APM Music", SoundId = 1845756489, Genre = "Jazz", Duration = 0, Likes = 431, Views = 8045, Added = 1700000000, Uploader = "APMOfficial", UserId = 7462718749 },
+	}
+
+	local function musicTime(seconds)
+		seconds = math.max(0, math.floor(tonumber(seconds) or 0))
+		local m = math.floor(seconds / 60)
+		local s = seconds % 60
+		return string.format("%d:%02d", m, s)
+	end
+
+	local function musicCount(value)
+		local n = tonumber(value) or 0
+		if n >= 1000000 then
+			return string.format("%.1fM", n / 1000000)
+		elseif n >= 1000 then
+			return string.format("%.1fK", n / 1000)
+		end
+		return tostring(math.floor(n))
+	end
+
+	local function musicAsset(value)
+		if type(value) == "number" then
+			return "rbxassetid://" .. string.format("%.0f", value)
+		end
+		if type(value) == "string" then
+			if value:match("^%d+$") then
+				return "rbxassetid://" .. value
+			end
+			if value ~= "" then
+				return value
+			end
+		end
+		return nil
+	end
+
+	local function musicAvatar(source, userId)
+		if type(source) == "table" then
+			local image = source.Avatar or source.UploaderAvatar
+			if image then
+				return musicAsset(image)
+			end
+			userId = source.UserId or source.UploaderId or source.CreatorId
+		end
+		userId = tonumber(userId)
+		if userId and userId > 0 then
+			return "rbxthumb://type=AvatarHeadShot&id=" .. string.format("%.0f", userId) .. "&w=150&h=150"
+		end
+		return nil
+	end
+
+	local function musicKey(track)
+		return tostring(track.Id or track.SoundId or track.Name or "?")
+	end
+
+	local function musicHue(key)
+		local hash = 0
+		for i = 1, #key do
+			hash = (hash * 31 + string.byte(key, i)) % 360
+		end
+		return hash / 360
+	end
+
+	-- Builds a square cover: a real image when the track has one, otherwise a
+	-- per-track gradient with a music note, so the catalog never looks empty.
+	local function musicCover(parent, track, size, order)
+		local holder = create("Frame", {
+			Size = UDim2.fromOffset(size, size),
+			BackgroundColor3 = Theme.Surface3,
+			BorderSizePixel = 0,
+			LayoutOrder = order or 0,
+			ClipsDescendants = true,
+			Parent = parent,
+		})
+		corner(holder, UDim.new(0, 8))
+		stroke(holder, Theme.Stroke, 0.4)
+		local image = create("ImageLabel", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			ScaleType = Enum.ScaleType.Crop,
+			Visible = false,
+			Parent = holder,
+		})
+		local gradient = create("UIGradient", { Parent = holder })
+		local note = create("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(math.floor(size * 0.42), math.floor(size * 0.42)),
+			BackgroundTransparency = 1,
+			ImageColor3 = Color3.new(1, 1, 1),
+			ImageTransparency = 0.15,
+			ScaleType = Enum.ScaleType.Fit,
+			Parent = holder,
+		})
+		applyIcon(note, "music")
+		local function render()
+			local src = musicAsset(track.Cover or track.Image or track.Icon)
+			if src then
+				image.Image = src
+				image.Visible = true
+				note.Visible = false
+				gradient.Enabled = false
+			else
+				image.Visible = false
+				note.Visible = true
+				gradient.Enabled = true
+				local hue = musicHue(musicKey(track))
+				gradient.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromHSV(hue, 0.55, 0.55)),
+					ColorSequenceKeypoint.new(1, Color3.fromHSV((hue + 0.12) % 1, 0.6, 0.3)),
+				})
+				gradient.Rotation = 35
+			end
+		end
+		render()
+		return holder, render
+	end
+
+	function Window:CreateMusicWindow(opts)
+		opts = normalize(opts, { Title = "Name", Songs = "Tracks", Music = "Tracks" })
+		if self._musicPlayer then
+			return self._musicPlayer
+		end
+		local window = self
+		self._musicOptions = opts
+		local L = opts.Labels or {}
+		local function text(key, default)
+			return L[key] or default
+		end
+
+		local player = {
+			_tracks = {},
+			_list = {},
+			_likes = {},
+			_favorites = {},
+			_views = {},
+			_current = nil,
+			_playing = false,
+			_volume = math.clamp(tonumber(opts.Volume) or 0.7, 0, 1),
+			_shuffle = opts.Shuffle == true,
+			_repeat = opts.Repeat or "off",
+			_query = "",
+			_sort = opts.Sort or "Popular",
+			_filter = "All",
+			_genre = nil,
+			_destroyed = false,
+			_rows = {},
+			_genreChips = {},
+		}
+		self._musicPlayer = player
+
+		-- ---------------- persistence (likes / favorites / prefs) ----------
+		local storageFile = opts.StorageFile or "MacrOS/UI/music-state.json"
+		local function loadState()
+			if type(readfile) ~= "function" or type(isfile) ~= "function" then
+				return
+			end
+			local ok, data = pcall(function()
+				if isfile(storageFile) then
+					return HttpService:JSONDecode(readfile(storageFile))
+				end
+			end)
+			if ok and type(data) == "table" then
+				player._likes = type(data.Likes) == "table" and data.Likes or {}
+				player._favorites = type(data.Favorites) == "table" and data.Favorites or {}
+				player._views = type(data.Views) == "table" and data.Views or {}
+				if type(data.Volume) == "number" then
+					player._volume = math.clamp(data.Volume, 0, 1)
+				end
+				if type(data.Shuffle) == "boolean" then
+					player._shuffle = data.Shuffle
+				end
+				if data.Repeat == "off" or data.Repeat == "all" or data.Repeat == "one" then
+					player._repeat = data.Repeat
+				end
+				if type(data.Sort) == "string" then
+					player._sort = data.Sort
+				end
+			end
+		end
+		local function saveState()
+			if type(writefile) ~= "function" then
+				return
+			end
+			pcall(function()
+				if type(makefolder) == "function" and type(isfolder) == "function" then
+					for _, folder in ipairs({ "MacrOS", "MacrOS/UI" }) do
+						if not isfolder(folder) then
+							makefolder(folder)
+						end
+					end
+				end
+				writefile(storageFile, HttpService:JSONEncode({
+					Likes = player._likes,
+					Favorites = player._favorites,
+					Views = player._views,
+					Volume = player._volume,
+					Shuffle = player._shuffle,
+					Repeat = player._repeat,
+					Sort = player._sort,
+				}))
+			end)
+		end
+		loadState()
+
+		-- ---------------- audio -------------------------------------------
+		-- SoundService guarantees global (2D) playback regardless of where the
+		-- GUI lives. It is destroyed explicitly in player:Destroy / Window:Destroy.
+		local sound = create("Sound", {
+			Name = "MacrOSMusic",
+			Volume = player._volume,
+			Looped = false,
+			Parent = game:GetService("SoundService"),
+		})
+		player._sound = sound
+		local playToken = 0
+
+		-- ---------------- floating layer + panel --------------------------
+		local layer = window._floatingLayer
+		if not layer then
+			layer = create("Frame", {
+				Name = "FloatingLayer",
+				Size = UDim2.fromScale(1, 1),
+				BackgroundTransparency = 1,
+				Active = false,
+				ZIndex = 40,
+				Parent = window.Gui,
+			})
+			window._floatingLayer = layer
+		end
+		local W, H = 640, 540
+		local panel = create("CanvasGroup", {
+			Name = "MusicWindow",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(W, H),
+			BackgroundColor3 = Theme.Background,
+			BorderSizePixel = 0,
+			GroupTransparency = 0,
+			ZIndex = 2,
+			Visible = false,
+			Parent = layer,
+		})
+		player._panel = panel
+		corner(panel, UDim.new(0, 12))
+		local panelStroke = stroke(panel, Theme.Stroke)
+		edgeHighlight(panel)
+		window._floatingPanels = window._floatingPanels or {}
+		table.insert(window._floatingPanels, panel)
+
+		-- shadow behind the panel
+		create("ImageLabel", {
+			Position = UDim2.fromOffset(-24, -24),
+			Size = UDim2.new(1, 48, 1, 48),
+			BackgroundTransparency = 1,
+			Image = Assets.Shadow,
+			ImageColor3 = Color3.new(0, 0, 0),
+			ImageTransparency = 0.55,
+			ScaleType = Enum.ScaleType.Slice,
+			SliceCenter = Rect.new(49, 49, 450, 450),
+			ZIndex = 0,
+			Parent = panel,
+		})
+
+		local function clampPanel()
+			local view = window.Gui.AbsoluteSize
+			local size = panel.AbsoluteSize
+			local pos = panel.AbsolutePosition - window.Gui.AbsolutePosition
+			local half = size / 2
+			local x = math.clamp(pos.X + half.X, math.min(half.X, view.X / 2), math.max(view.X - half.X, view.X / 2))
+			local y = math.clamp(pos.Y + half.Y, math.min(half.Y, view.Y / 2), math.max(view.Y - half.Y, view.Y / 2))
+			panel.Position = UDim2.fromOffset(x, y)
+		end
+
+		-- ---------------- header (drag strip) -----------------------------
+		local header = create("Frame", {
+			Size = UDim2.new(1, 0, 0, 40),
+			BackgroundTransparency = 1,
+			Active = true,
+			Parent = panel,
+		})
+		local headerIcon = create("ImageLabel", {
+			Position = UDim2.fromOffset(14, 12),
+			Size = UDim2.fromOffset(16, 16),
+			BackgroundTransparency = 1,
+			ImageColor3 = Theme.Accent,
+			ScaleType = Enum.ScaleType.Fit,
+			Parent = header,
+		})
+		applyIcon(headerIcon, "music")
+		local titleLabel = label({
+			Position = UDim2.fromOffset(38, 0),
+			Size = UDim2.new(1, -150, 0, 40),
+			Text = opts.Name or text("Title", "Музон"),
+			TextSize = 15,
+			FontFace = Fonts.Bold,
+			Parent = header,
+		})
+		local countLabel = label({
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -44, 0, 0),
+			Size = UDim2.fromOffset(100, 40),
+			Text = "",
+			TextSize = 12,
+			TextColor3 = Theme.Muted,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			Parent = header,
+		})
+		local closeBtn = create("TextButton", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.fromOffset(26, 26),
+			BackgroundColor3 = Theme.Surface2,
+			BackgroundTransparency = 0.4,
+			Text = "",
+			AutoButtonColor = false,
+			Parent = header,
+		})
+		corner(closeBtn, UDim.new(0, 7))
+		local closeIcon = create("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(13, 13),
+			BackgroundTransparency = 1,
+			ImageColor3 = Theme.Muted,
+			ScaleType = Enum.ScaleType.Fit,
+			Parent = closeBtn,
+		})
+		applyIcon(closeIcon, "x")
+		hoverStroke(closeBtn, stroke(closeBtn))
+
+		-- ---------------- now playing card --------------------------------
+		local now = create("Frame", {
+			Position = UDim2.fromOffset(12, 46),
+			Size = UDim2.new(1, -24, 0, 88),
+			BackgroundColor3 = Theme.Surface,
+			BorderSizePixel = 0,
+			Parent = panel,
+		})
+		corner(now, UDim.new(0, 10))
+		stroke(now, Theme.Stroke)
+		local nowCoverHolder = create("Frame", {
+			Position = UDim2.fromOffset(12, 12),
+			Size = UDim2.fromOffset(64, 64),
+			BackgroundTransparency = 1,
+			Parent = now,
+		})
+		local nowCover, renderNowCover = nil, nil
+		local nowTitle = label({
+			Position = UDim2.fromOffset(88, 12),
+			Size = UDim2.new(1, -220, 0, 20),
+			Text = text("Nothing", "Ничего не играет"),
+			TextSize = 15,
+			FontFace = Fonts.Bold,
+			Parent = now,
+		})
+		local nowArtist = label({
+			Position = UDim2.fromOffset(88, 33),
+			Size = UDim2.new(1, -220, 0, 16),
+			Text = text("Pick", "Выбери трек из списка"),
+			TextSize = 12,
+			FontFace = Fonts.Regular,
+			TextColor3 = Theme.Muted,
+			Parent = now,
+		})
+		local nowAvatar = create("ImageLabel", {
+			Position = UDim2.fromOffset(88, 56),
+			Size = UDim2.fromOffset(18, 18),
+			BackgroundColor3 = Theme.Surface3,
+			Image = "",
+			ScaleType = Enum.ScaleType.Crop,
+			Parent = now,
+		})
+		corner(nowAvatar, UDim.new(1, 0))
+		local nowUploader = label({
+			Position = UDim2.fromOffset(112, 56),
+			Size = UDim2.new(1, -244, 0, 18),
+			Text = "",
+			TextSize = 11,
+			FontFace = Fonts.Regular,
+			TextColor3 = Theme.Muted,
+			Parent = now,
+		})
+		local nowStats = label({
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -12, 0, 14),
+			Size = UDim2.fromOffset(110, 16),
+			Text = "",
+			TextSize = 11,
+			TextColor3 = Theme.Muted,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			Parent = now,
+		})
+		local nowLikeBtn, nowLikeIcon
+		local nowFavBtn, nowFavIcon
+		local function smallAction(parent, icon, x, y)
+			local b = create("TextButton", {
+				Position = UDim2.fromOffset(x, y),
+				Size = UDim2.fromOffset(30, 26),
+				BackgroundColor3 = Theme.Surface2,
+				BackgroundTransparency = 0.3,
+				Text = "",
+				AutoButtonColor = false,
+				Parent = parent,
+			})
+			corner(b, UDim.new(0, 7))
+			local i = create("ImageLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(14, 14),
+				BackgroundTransparency = 1,
+				ImageColor3 = Theme.Muted,
+				ScaleType = Enum.ScaleType.Fit,
+				Parent = b,
+			})
+			applyIcon(i, icon)
+			hoverStroke(b, stroke(b))
+			return b, i
+		end
+		nowLikeBtn, nowLikeIcon = smallAction(now, "heart", W - 24 - 68, 50)
+		nowFavBtn, nowFavIcon = smallAction(now, "star", W - 24 - 34, 50)
+
+		-- ---------------- playback controls -------------------------------
+		local controls = create("Frame", {
+			Position = UDim2.fromOffset(12, 142),
+			Size = UDim2.new(1, -24, 0, 56),
+			BackgroundTransparency = 1,
+			Parent = panel,
+		})
+		local function controlButton(icon, x, size)
+			local b = create("TextButton", {
+				Position = UDim2.fromOffset(x, 0),
+				Size = UDim2.fromOffset(size, size),
+				BackgroundColor3 = Theme.Surface2,
+				BackgroundTransparency = 0.25,
+				Text = "",
+				AutoButtonColor = false,
+				Parent = controls,
+			})
+			corner(b, UDim.new(0, 8))
+			local i = create("ImageLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(math.floor(size * 0.45), math.floor(size * 0.45)),
+				BackgroundTransparency = 1,
+				ImageColor3 = Theme.Text,
+				ScaleType = Enum.ScaleType.Fit,
+				Parent = b,
+			})
+			applyIcon(i, icon)
+			hoverStroke(b, stroke(b))
+			return b, i
+		end
+		local shuffleBtn, shuffleIcon = controlButton("shuffle", 0, 30)
+		local prevBtn, prevIcon = controlButton("skip-back", 36, 30)
+		local playBtn, playIcon = controlButton("play", 72, 38)
+		playBtn.Position = UDim2.fromOffset(72, -4)
+		playBtn.BackgroundColor3 = Theme.Accent
+		playBtn.BackgroundTransparency = 0
+		playIcon.ImageColor3 = Theme.AccentDark
+		local nextBtn, nextIcon = controlButton("skip-forward", 116, 30)
+		local repeatBtn, repeatIcon = controlButton("repeat", 152, 30)
+		local repeatOne = label({
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, -3, 1, -2),
+			Size = UDim2.fromOffset(8, 8),
+			Text = "1",
+			TextSize = 8,
+			FontFace = Fonts.Bold,
+			TextColor3 = Theme.AccentDark,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			Visible = false,
+			Parent = repeatBtn,
+		})
+
+		-- volume
+		local volIcon = create("ImageLabel", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -128, 0, 15),
+			Size = UDim2.fromOffset(15, 15),
+			BackgroundTransparency = 1,
+			ImageColor3 = Theme.Muted,
+			ScaleType = Enum.ScaleType.Fit,
+			Parent = controls,
+		})
+		applyIcon(volIcon, "volume-2")
+		local volTrack = create("Frame", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -14, 0, 15),
+			Size = UDim2.fromOffset(104, 5),
+			BackgroundColor3 = Theme.Surface3,
+			BorderSizePixel = 0,
+			Parent = controls,
+		})
+		corner(volTrack, UDim.new(1, 0))
+		local volFill = create("Frame", {
+			Size = UDim2.fromScale(player._volume, 1),
+			BackgroundColor3 = Theme.Accent,
+			BorderSizePixel = 0,
+			Parent = volTrack,
+		})
+		corner(volFill, UDim.new(1, 0))
+		local volKnob = create("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(player._volume, 0.5),
+			Size = UDim2.fromOffset(11, 11),
+			BackgroundColor3 = Theme.Text,
+			BorderSizePixel = 0,
+			ZIndex = 2,
+			Parent = volTrack,
+		})
+		corner(volKnob, UDim.new(1, 0))
+		local volHit = create("TextButton", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, -6, 0.5, 0),
+			Size = UDim2.new(1, 12, 0, 22),
+			BackgroundTransparency = 1,
+			Text = "",
+			AutoButtonColor = false,
+			Parent = volTrack,
+		})
+
+		-- progress / seek bar
+		local elapsedLabel = label({
+			Position = UDim2.fromOffset(0, 38),
+			Size = UDim2.fromOffset(44, 14),
+			Text = "0:00",
+			TextSize = 11,
+			TextColor3 = Theme.Muted,
+			Parent = controls,
+		})
+		local totalLabel = label({
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, 0, 0, 38),
+			Size = UDim2.fromOffset(44, 14),
+			Text = "0:00",
+			TextSize = 11,
+			TextColor3 = Theme.Muted,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			Parent = controls,
+		})
+		local seekTrack = create("Frame", {
+			Position = UDim2.fromOffset(50, 43),
+			Size = UDim2.new(1, -100, 0, 5),
+			BackgroundColor3 = Theme.Surface3,
+			BorderSizePixel = 0,
+			Parent = controls,
+		})
+		corner(seekTrack, UDim.new(1, 0))
+		local seekFill = create("Frame", {
+			Size = UDim2.fromScale(0, 1),
+			BackgroundColor3 = Theme.Accent,
+			BorderSizePixel = 0,
+			Parent = seekTrack,
+		})
+		corner(seekFill, UDim.new(1, 0))
+		local seekHit = create("TextButton", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, -6, 0.5, 0),
+			Size = UDim2.new(1, 12, 0, 22),
+			BackgroundTransparency = 1,
+			Text = "",
+			AutoButtonColor = false,
+			Parent = seekTrack,
+		})
+
+		-- ---------------- search + sort row -------------------------------
+		local searchRow = create("Frame", {
+			Position = UDim2.fromOffset(12, 206),
+			Size = UDim2.new(1, -24, 0, 32),
+			BackgroundTransparency = 1,
+			Parent = panel,
+		})
+		local searchHolder = create("Frame", {
+			Size = UDim2.fromOffset(190, 32),
+			BackgroundColor3 = Theme.Surface,
+			BorderSizePixel = 0,
+			Parent = searchRow,
+		})
+		corner(searchHolder, UDim.new(0, 8))
+		local searchStroke = stroke(searchHolder)
+		local searchIcon = create("ImageLabel", {
+			Position = UDim2.fromOffset(9, 9),
+			Size = UDim2.fromOffset(14, 14),
+			BackgroundTransparency = 1,
+			ImageColor3 = Theme.Muted,
+			ScaleType = Enum.ScaleType.Fit,
+			Parent = searchHolder,
+		})
+		applyIcon(searchIcon, "search")
+		local searchBox = create("TextBox", {
+			Position = UDim2.fromOffset(30, 0),
+			Size = UDim2.new(1, -38, 1, 0),
+			BackgroundTransparency = 1,
+			Text = "",
+			PlaceholderText = text("Search", "Поиск трека..."),
+			PlaceholderColor3 = Theme.Muted,
+			TextColor3 = Theme.Text,
+			TextSize = 12,
+			FontFace = Fonts.Regular,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ClearTextOnFocus = false,
+			Parent = searchHolder,
+		})
+		local sortRow = create("Frame", {
+			Position = UDim2.fromOffset(200, 0),
+			Size = UDim2.new(1, -200, 1, 0),
+			BackgroundTransparency = 1,
+			Parent = searchRow,
+		})
+		local sortLayout = create("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			HorizontalAlignment = Enum.HorizontalAlignment.Right,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 5),
+			Parent = sortRow,
+		})
+
+		-- ---------------- filter / genre row ------------------------------
+		local filterRow = create("Frame", {
+			Position = UDim2.fromOffset(12, 244),
+			Size = UDim2.new(1, -24, 0, 26),
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			Parent = panel,
+		})
+		local filterLayout = create("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 5),
+			Parent = filterRow,
+		})
+
+		-- ---------------- track list --------------------------------------
+		local list = create("ScrollingFrame", {
+			Position = UDim2.fromOffset(12, 278),
+			Size = UDim2.new(1, -24, 1, -306),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ScrollBarThickness = 3,
+			ScrollBarImageColor3 = Theme.Accent,
+			ScrollBarImageTransparency = 0.4,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			CanvasSize = UDim2.new(),
+			Parent = panel,
+		})
+		list:SetAttribute("NoDrag", true)
+		local listLayout = create("UIListLayout", {
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 6),
+			Parent = list,
+		})
+		local listPad = create("UIPadding", {
+			PaddingRight = UDim.new(0, 4),
+			PaddingBottom = UDim.new(0, 4),
+			Parent = list,
+		})
+		local emptyLabel = label({
+			Position = UDim2.fromOffset(12, 300),
+			Size = UDim2.new(1, -24, 0, 60),
+			Text = "",
+			TextSize = 13,
+			TextColor3 = Theme.Muted,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextWrapped = true,
+			Visible = false,
+			Parent = panel,
+		})
+		local footer = label({
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, 14, 1, -8),
+			Size = UDim2.new(1, -28, 0, 16),
+			Text = "",
+			TextSize = 11,
+			TextColor3 = Theme.Muted,
+			Parent = panel,
+		})
+
+		-- ---------------- chip helper -------------------------------------
+		local function chip(parent, labelText, order, width)
+			local b = create("TextButton", {
+				Size = UDim2.fromOffset(width or 0, 24),
+				AutomaticSize = width and Enum.AutomaticSize.None or Enum.AutomaticSize.X,
+				BackgroundColor3 = Theme.Surface2,
+				Text = "",
+				AutoButtonColor = false,
+				LayoutOrder = order,
+				Parent = parent,
+			})
+			b:SetAttribute("NoDrag", true)
+			corner(b, UDim.new(1, 0))
+			local s = stroke(b)
+			padding(b, 10, 10)
+			local t = label({
+				Size = UDim2.new(0, 0, 1, 0),
+				AutomaticSize = Enum.AutomaticSize.X,
+				Text = labelText,
+				TextSize = 11,
+				TextColor3 = Theme.Muted,
+				TextXAlignment = Enum.TextXAlignment.Center,
+				TextTruncate = Enum.TextTruncate.None,
+				Parent = b,
+			})
+			local object = { Button = b, Label = t, Stroke = s }
+			function object.Set(on)
+				tween(b, { BackgroundColor3 = on and Theme.Accent or Theme.Surface2, BackgroundTransparency = on and 0 or 0.15 }, 0.12)
+				tween(t, { TextColor3 = on and Theme.AccentDark or Theme.Muted }, 0.12)
+				tween(s, { Transparency = on and 1 or 0.2 }, 0.12)
+			end
+			return object
+		end
+
+		-- sort chips
+		local sortModes = {
+			{ Key = "Popular", Label = text("Popular", "Популярные") },
+			{ Key = "Likes", Label = text("Likes", "Лайки") },
+			{ Key = "New", Label = text("New", "Новые") },
+			{ Key = "Name", Label = text("Name", "А-Я") },
+		}
+		local sortChips = {}
+		for index, mode in ipairs(sortModes) do
+			local c = chip(sortRow, mode.Label, index)
+			sortChips[mode.Key] = c
+			c.Button.MouseButton1Click:Connect(function()
+				player:SetSort(mode.Key)
+			end)
+		end
+
+		-- filter chips
+		local filterModes = {
+			{ Key = "All", Label = text("All", "Все") },
+			{ Key = "Favorites", Label = text("Favorites", "Фавориты") },
+			{ Key = "Liked", Label = text("Liked", "Лайкнутые") },
+		}
+		local filterChips = {}
+		for index, mode in ipairs(filterModes) do
+			local c = chip(filterRow, mode.Label, index)
+			filterChips[mode.Key] = c
+			c.Button.MouseButton1Click:Connect(function()
+				player:SetFilter(mode.Key)
+			end)
+		end
+
+		-- ---------------- forward declarations ----------------------------
+		local renderList, renderNow, refreshChips, rebuildGenres, playTrack, stopPlayback, updatePlayIcon
+
+		-- ---------------- state helpers -----------------------------------
+		local function trackLikes(t)
+			return (tonumber(t.Likes) or 0) + (player._likes[musicKey(t)] and 1 or 0)
+		end
+		local function trackViews(t)
+			local key = musicKey(t)
+			return (tonumber(t.Views) or 0) + (tonumber(player._views[key]) or 0)
+		end
+		local function isLiked(t)
+			return player._likes[musicKey(t)] == true
+		end
+		local function isFav(t)
+			return player._favorites[musicKey(t)] == true
+		end
+
+		-- ---------------- list rendering ----------------------------------
+		local function rowStat(parent, icon, x, order_)
+			local holder, image = glowIcon(parent, icon, Theme.Muted, UDim2.new())
+			holder.Position = UDim2.fromOffset(x, 0)
+			holder.Size = UDim2.fromOffset(12, 12)
+			holder.LayoutOrder = order_
+			local t = label({
+				Position = UDim2.fromOffset(x + 16, 0),
+				Size = UDim2.fromOffset(40, 20),
+				Text = "0",
+				TextSize = 11,
+				TextColor3 = Theme.Muted,
+				TextTruncate = Enum.TextTruncate.None,
+				Parent = parent,
+			})
+			return t, image
+		end
+
+		local function buildRow(track, order)
+			local key = musicKey(track)
+			local row = create("TextButton", {
+				Size = UDim2.new(1, 0, 0, 58),
+				BackgroundColor3 = Theme.Surface,
+				BackgroundTransparency = 0.25,
+				Text = "",
+				AutoButtonColor = false,
+				LayoutOrder = order,
+				Parent = list,
+			})
+			row:SetAttribute("NoDrag", true)
+			corner(row, UDim.new(0, 9))
+			local rowStroke = stroke(row, Theme.Stroke, 0.25)
+			hoverStroke(row, rowStroke)
+			local cover = musicCover(row, track, 42, 0)
+			cover.Position = UDim2.fromOffset(8, 8)
+			local avatar = create("ImageLabel", {
+				Position = UDim2.fromOffset(36, 36),
+				Size = UDim2.fromOffset(16, 16),
+				BackgroundColor3 = Theme.Surface3,
+				Image = musicAvatar(track) or "",
+				ScaleType = Enum.ScaleType.Crop,
+				ZIndex = 3,
+				Parent = row,
+			})
+			corner(avatar, UDim.new(1, 0))
+			stroke(avatar, Theme.Background, 0, 1.5)
+			local title = label({
+				Position = UDim2.fromOffset(60, 8),
+				Size = UDim2.new(1, -250, 0, 18),
+				Text = track.Name or "Unknown",
+				TextSize = 13,
+				FontFace = Fonts.Bold,
+				Parent = row,
+			})
+			local artist = label({
+				Position = UDim2.fromOffset(60, 27),
+				Size = UDim2.new(1, -250, 0, 15),
+				Text = (track.Artist or track.Uploader or "?") .. (track.Genre and ("  ·  " .. track.Genre) or ""),
+				TextSize = 11,
+				FontFace = Fonts.Regular,
+				TextColor3 = Theme.Muted,
+				Parent = row,
+			})
+			local stats = create("Frame", {
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -112, 0, 10),
+				Size = UDim2.fromOffset(100, 20),
+				BackgroundTransparency = 1,
+				Parent = row,
+			})
+			local likesText, heartIcon = rowStat(stats, "heart", 0, 1)
+			local viewsText, eyeIcon = rowStat(stats, "eye", 52, 2)
+			local likeBtn, likeIcon = smallAction(row, "heart", 0, 0)
+			likeBtn.AnchorPoint = Vector2.new(1, 0.5)
+			likeBtn.Position = UDim2.new(1, -42, 0.5, 0)
+			likeBtn.Size = UDim2.fromOffset(28, 26)
+			local favBtn, favIcon = smallAction(row, "star", 0, 0)
+			favBtn.AnchorPoint = Vector2.new(1, 0.5)
+			favBtn.Position = UDim2.new(1, -8, 0.5, 0)
+			favBtn.Size = UDim2.fromOffset(28, 26)
+			local playBadge = create("ImageLabel", {
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -78, 0.5, 0),
+				Size = UDim2.fromOffset(14, 14),
+				BackgroundTransparency = 1,
+				ImageColor3 = Theme.Accent,
+				ScaleType = Enum.ScaleType.Fit,
+				Visible = false,
+				Parent = row,
+			})
+			applyIcon(playBadge, "volume-2")
+
+			local entry = {
+				Track = track, Key = key, Frame = row, Title = title, Artist = artist,
+				Likes = likesText, Views = viewsText, Heart = heartIcon, Eye = eyeIcon,
+				LikeButton = likeBtn, LikeIcon = likeIcon, FavButton = favBtn, FavIcon = favIcon,
+				PlayBadge = playBadge, Stroke = rowStroke,
+			}
+
+			local function renderRow()
+				likesText.Text = musicCount(trackLikes(track))
+				viewsText.Text = musicCount(trackViews(track))
+				local liked = isLiked(track)
+				local fav = isFav(track)
+				tween(likeIcon, { ImageColor3 = liked and Theme.Accent or Theme.Muted }, 0.12)
+				tween(favIcon, { ImageColor3 = fav and Theme.Accent or Theme.Muted }, 0.12)
+				local current = player._current and musicKey(player._current) == key
+				playBadge.Visible = current == true
+				row.BackgroundColor3 = current and Theme.Surface2 or Theme.Surface
+				rowStroke.Color = current and Theme.Accent or Theme.Stroke
+				rowStroke.Transparency = current and 0.2 or 0.25
+			end
+			entry.Render = renderRow
+
+			local isTap = tapGuard(row, function()
+				return list
+			end)
+			row.MouseButton1Click:Connect(function()
+				if isTap() then
+					playTrack(track)
+				end
+			end)
+			likeBtn.MouseButton1Click:Connect(function()
+				player:Like(track, not isLiked(track))
+			end)
+			favBtn.MouseButton1Click:Connect(function()
+				player:Favorite(track, not isFav(track))
+			end)
+			renderRow()
+			return entry
+		end
+
+		renderList = function()
+			for _, entry in pairs(player._rows) do
+				entry.Frame:Destroy()
+			end
+			player._rows = {}
+			-- filter + search + genre
+			local q = string.lower(player._query or "")
+			local filtered = {}
+			for _, track in ipairs(player._tracks) do
+				local key = musicKey(track)
+				local keep = true
+				if player._filter == "Favorites" then
+					keep = isFav(track)
+				elseif player._filter == "Liked" then
+					keep = isLiked(track)
+				end
+				if keep and player._genre and track.Genre ~= player._genre then
+					keep = false
+				end
+				if keep and q ~= "" then
+					local hay = string.lower(
+						tostring(track.Name or "") .. " " .. tostring(track.Artist or "") .. " "
+						.. tostring(track.Uploader or "") .. " " .. tostring(track.Genre or "")
+					)
+					keep = string.find(hay, q, 1, true) ~= nil
+				end
+				if keep then
+					table.insert(filtered, track)
+				end
+			end
+			local sort = player._sort
+			table.sort(filtered, function(a, b)
+				if sort == "Likes" then
+					return trackLikes(a) > trackLikes(b)
+				elseif sort == "New" then
+					return (tonumber(a.Added) or 0) > (tonumber(b.Added) or 0)
+				elseif sort == "Name" then
+					return string.lower(tostring(a.Name or "")) < string.lower(tostring(b.Name or ""))
+				end
+				return trackViews(a) > trackViews(b)
+			end)
+			player._list = filtered
+			for index, track in ipairs(filtered) do
+				player._rows[musicKey(track)] = buildRow(track, index)
+			end
+			emptyLabel.Visible = #filtered == 0
+			emptyLabel.Text = #player._tracks == 0
+				and text("Empty", "Треков пока нет. Добавь их через Music:AddTrack() или Music:SetTracks().")
+				or text("NoMatch", "Ничего не найдено. Попробуй другой запрос или фильтр.")
+			countLabel.Text = tostring(#filtered) .. " / " .. tostring(#player._tracks)
+			footer.Text = string.format(
+				text("Footer", "%d треков · громкость %d%% · сортировка: %s"),
+				#player._tracks, math.floor(player._volume * 100 + 0.5), tostring(player._sort)
+			)
+			for _, entry in pairs(player._rows) do
+				entry.Render()
+			end
+		end
+
+		refreshChips = function()
+			for key, c in pairs(sortChips) do
+				c.Set(player._sort == key)
+			end
+			for key, c in pairs(filterChips) do
+				c.Set(player._filter == key)
+			end
+			for genre, c in pairs(player._genreChips) do
+				c.Set(player._genre == genre)
+			end
+			if player._allGenreChip then
+				player._allGenreChip.Set(player._genre == nil)
+			end
+		end
+
+		rebuildGenres = function()
+			for _, c in pairs(player._genreChips) do
+				c.Button:Destroy()
+			end
+			player._genreChips = {}
+			if player._allGenreChip then
+				player._allGenreChip.Button:Destroy()
+				player._allGenreChip = nil
+			end
+			local genres, seen = {}, {}
+			for _, track in ipairs(player._tracks) do
+				if track.Genre and track.Genre ~= "" and not seen[track.Genre] then
+					seen[track.Genre] = true
+					table.insert(genres, track.Genre)
+				end
+			end
+			table.sort(genres)
+			-- "All genres" chip first, then one chip per genre.
+			local all = chip(filterRow, text("AllGenres", "Все жанры"), 10)
+			all.Button.MouseButton1Click:Connect(function()
+				player._genre = nil
+				refreshChips()
+				renderList()
+			end)
+			player._allGenreChip = all
+			for index, genre in ipairs(genres) do
+				local c = chip(filterRow, genre, 11 + index)
+				c.Button.MouseButton1Click:Connect(function()
+					player._genre = (player._genre == genre) and nil or genre
+					refreshChips()
+					renderList()
+				end)
+				player._genreChips[genre] = c
+			end
+			refreshChips()
+		end
+
+		-- ---------------- now playing -------------------------------------
+		renderNow = function()
+			local track = player._current
+			if not track then
+				nowTitle.Text = text("Nothing", "Ничего не играет")
+				nowArtist.Text = text("Pick", "Выбери трек из списка")
+				nowUploader.Text = ""
+				nowStats.Text = ""
+				nowAvatar.Image = ""
+				if nowCover then
+					nowCover:Destroy()
+					nowCover = nil
+				end
+				nowLikeIcon.ImageColor3 = Theme.Muted
+				nowFavIcon.ImageColor3 = Theme.Muted
+				return
+			end
+			nowTitle.Text = track.Name or "Unknown"
+			nowArtist.Text = track.Artist or track.Uploader or "?"
+			nowUploader.Text = track.Uploader or ""
+			nowAvatar.Image = musicAvatar(track) or ""
+			nowStats.Text = "♥ " .. musicCount(trackLikes(track)) .. "   ·   " .. musicCount(trackViews(track)) .. " просм."
+			if nowCover then
+				nowCover:Destroy()
+			end
+			nowCover, renderNowCover = musicCover(nowCoverHolder, track, 64, 0)
+			nowLikeIcon.ImageColor3 = isLiked(track) and Theme.Accent or Theme.Muted
+			nowFavIcon.ImageColor3 = isFav(track) and Theme.Accent or Theme.Muted
+		end
+
+		updatePlayIcon = function()
+			applyIcon(playIcon, player._playing and "pause" or "play")
+			playIcon.ImageColor3 = Theme.AccentDark
+		end
+
+		local function refreshRows()
+			for _, entry in pairs(player._rows) do
+				entry.Render()
+			end
+		end
+
+		-- ---------------- playback ----------------------------------------
+		stopPlayback = function()
+			playToken += 1
+			pcall(function()
+				sound:Stop()
+			end)
+			player._playing = false
+			updatePlayIcon()
+			safeCall(opts.OnStop, player._current)
+		end
+
+		playTrack = function(track)
+			if not track or player._destroyed then
+				return
+			end
+			local src = musicAsset(track.SoundId or track.Audio)
+			if not src and (type(track.Id) == "number" or (type(track.Id) == "string" and track.Id:match("^%d+$"))) then
+				src = musicAsset(track.Id)
+			end
+			if not src then
+				window:Notify({ Title = text("NotifyTitle", "Музон"), Content = text("NoSource", "У трека нет SoundId"), Duration = 3 })
+				return
+			end
+			playToken += 1
+			local token = playToken
+			player._current = track
+			player._playing = true
+			local key = musicKey(track)
+			player._views[key] = (tonumber(player._views[key]) or 0) + 1
+			saveState()
+			safeCall(opts.OnView, track, trackViews(track))
+			safeCall(opts.OnPlay, track)
+			pcall(function()
+				sound:Stop()
+				sound.SoundId = src
+				sound.TimePosition = 0
+				sound.Volume = player._volume
+				sound:Play()
+			end)
+			updatePlayIcon()
+			renderNow()
+			refreshRows()
+			-- Wait for the sound to load so the duration label is correct.
+			task.spawn(function()
+				local deadline = os.clock() + 8
+				while token == playToken and not player._destroyed and os.clock() < deadline do
+					if sound.IsLoaded then
+						break
+					end
+					task.wait(0.1)
+				end
+				if token ~= playToken or player._destroyed then
+					return
+				end
+				if sound.IsLoaded then
+					track.Duration = sound.TimeLength
+					totalLabel.Text = musicTime(sound.TimeLength)
+				else
+					-- Private / removed audio never loads. Tell the player instead
+					-- of leaving a silent "playing" state.
+					player._playing = false
+					updatePlayIcon()
+					window:Notify({
+						Title = text("NotifyTitle", "Музон"),
+						Content = text("LoadFail", "Не удалось загрузить аудио (возможно, оно приватное): ") .. tostring(track.Name or src),
+						Duration = 4,
+					})
+					safeCall(opts.OnTrackError, track, src)
+				end
+			end)
+		end
+
+		local function currentIndex()
+			if not player._current then
+				return nil
+			end
+			local key = musicKey(player._current)
+			for index, track in ipairs(player._list) do
+				if musicKey(track) == key then
+					return index
+				end
+			end
+			return nil
+		end
+
+		local function playNext()
+			if #player._list == 0 then
+				return
+			end
+			if player._shuffle then
+				playTrack(player._list[math.random(1, #player._list)])
+				return
+			end
+			local index = currentIndex()
+			if index then
+				local nextIndex = index + 1
+				if nextIndex > #player._list then
+					if player._repeat == "all" then
+						nextIndex = 1
+					else
+						stopPlayback()
+						return
+					end
+				end
+				playTrack(player._list[nextIndex])
+			else
+				playTrack(player._list[1])
+			end
+		end
+
+		local function playPrevious()
+			if #player._list == 0 then
+				return
+			end
+			if player._shuffle then
+				playTrack(player._list[math.random(1, #player._list)])
+				return
+			end
+			local index = currentIndex()
+			if index then
+				local prevIndex = index - 1
+				if prevIndex < 1 then
+					prevIndex = player._repeat == "all" and #player._list or 1
+				end
+				playTrack(player._list[prevIndex])
+			else
+				playTrack(player._list[1])
+			end
+		end
+
+		sound.Ended:Connect(function()
+			if player._destroyed or not player._playing then
+				return
+			end
+			safeCall(opts.OnEnded, player._current)
+			if player._repeat == "one" then
+				local track = player._current
+				playTrack(track)
+				return
+			end
+			playNext()
+		end)
+
+		-- ---------------- seek + volume dragging --------------------------
+		local function bindSlider(hit, trackFrame, fill, knob, onChange)
+			local dragging = false
+			local function valueFromPointer()
+				local pos = pointerPosition()
+				local abs = trackFrame.AbsolutePosition
+				local size = trackFrame.AbsoluteSize.X
+				if size <= 0 then
+					return 0
+				end
+				return math.clamp((pos.X - abs.X) / size, 0, 1)
+			end
+			local function apply(value)
+				fill.Size = UDim2.fromScale(value, 1)
+				if knob then
+					knob.Position = UDim2.fromScale(value, 0.5)
+				end
+				onChange(value)
+			end
+			hit.InputBegan:Connect(function(input)
+				if isPress(input) then
+					dragging = true
+					apply(valueFromPointer())
+				end
+			end)
+			table.insert(window._connections, UserInputService.InputChanged:Connect(function(input)
+				if dragging and isMove(input) then
+					apply(valueFromPointer())
+				end
+			end))
+			table.insert(window._connections, UserInputService.InputEnded:Connect(function(input)
+				if isPress(input) then
+					dragging = false
+				end
+			end))
+		end
+
+		bindSlider(volHit, volTrack, volFill, volKnob, function(value)
+			player._volume = value
+			sound.Volume = value
+			safeCall(opts.OnVolume, value)
+			footer.Text = string.format(
+				text("Footer", "%d треков · громкость %d%% · сортировка: %s"),
+				#player._tracks, math.floor(value * 100 + 0.5), tostring(player._sort)
+			)
+			saveState()
+		end)
+
+		bindSlider(seekHit, seekTrack, seekFill, nil, function(value)
+			if player._current and sound.IsLoaded and sound.TimeLength > 0 then
+				sound.TimePosition = value * sound.TimeLength
+				elapsedLabel.Text = musicTime(sound.TimePosition)
+				safeCall(opts.OnSeek, value * sound.TimeLength, player._current)
+			end
+		end)
+
+		-- ---------------- render loop (progress) --------------------------
+		local progressStep = function()
+			if player._destroyed or not panel.Visible then
+				return
+			end
+			local length = sound.TimeLength or 0
+			local position = sound.TimePosition or 0
+			local ratio = length > 0 and math.clamp(position / length, 0, 1) or 0
+			seekFill.Size = UDim2.fromScale(ratio, 1)
+			elapsedLabel.Text = musicTime(position)
+			totalLabel.Text = musicTime(length > 0 and length or (player._current and player._current.Duration) or 0)
+		end
+		table.insert(window._frameSteps, progressStep)
+
+		-- ---------------- header drag (LMB only) --------------------------
+		local dragInput, dragStart, dragOrigin
+		table.insert(window._connections, header.InputBegan:Connect(function(input)
+			if isPress(input) and not player._destroyed then
+				dragInput = input
+				dragStart = pointerPosition()
+				dragOrigin = panel.AbsolutePosition - window.Gui.AbsolutePosition
+			end
+		end))
+		table.insert(window._connections, UserInputService.InputChanged:Connect(function(input)
+			if dragInput and isMove(input) and not player._destroyed then
+				local delta = pointerPosition() - dragStart
+				local view = window.Gui.AbsoluteSize
+				local half = panel.AbsoluteSize / 2
+				local x = math.clamp(dragOrigin.X + half.X + delta.X, math.min(half.X, view.X / 2), math.max(view.X - half.X, view.X / 2))
+				local y = math.clamp(dragOrigin.Y + half.Y + delta.Y, math.min(half.Y, view.Y / 2), math.max(view.Y - half.Y, view.Y / 2))
+				panel.Position = UDim2.fromOffset(x, y)
+			end
+		end))
+		table.insert(window._connections, UserInputService.InputEnded:Connect(function(input)
+			if input == dragInput or (dragInput and isPress(input)) then
+				dragInput = nil
+			end
+		end))
+		table.insert(window._connections, UserInputService.WindowFocusReleased:Connect(function()
+			dragInput = nil
+		end))
+
+		-- ---------------- public API --------------------------------------
+		function player:Open()
+			if self._destroyed then
+				return
+			end
+			panel.Visible = true
+			panel.GroupTransparency = 1
+			tween(panel, { GroupTransparency = 0 }, 0.22, Enum.EasingStyle.Quint)
+			clampPanel()
+			renderList()
+			renderNow()
+			refreshChips()
+		end
+		function player:Close()
+			if self._destroyed then
+				return
+			end
+			tween(panel, { GroupTransparency = 1 }, 0.18, Enum.EasingStyle.Quint)
+			task.delay(0.19, function()
+				if not player._destroyed and panel.Parent then
+					panel.Visible = false
+				end
+			end)
+		end
+		function player:Toggle()
+			if panel.Visible then
+				self:Close()
+			else
+				self:Open()
+			end
+		end
+		function player:IsVisible()
+			return panel.Visible
+		end
+
+		function player:SetTracks(list)
+			self._tracks = {}
+			if type(list) == "table" then
+				for _, track in ipairs(list) do
+					if type(track) == "table" then
+						table.insert(self._tracks, track)
+					end
+				end
+			end
+			rebuildGenres()
+			renderList()
+			return self
+		end
+		function player:AddTrack(track)
+			if type(track) ~= "table" then
+				return self
+			end
+			table.insert(self._tracks, track)
+			rebuildGenres()
+			renderList()
+			return self
+		end
+		function player:RemoveTrack(id)
+			local key = tostring(id)
+			for index, track in ipairs(self._tracks) do
+				if musicKey(track) == key or tostring(track.SoundId) == key then
+					table.remove(self._tracks, index)
+					break
+				end
+			end
+			rebuildGenres()
+			renderList()
+			return self
+		end
+		function player:GetTracks()
+			return self._tracks
+		end
+		function player:GetCurrent()
+			return self._current
+		end
+		function player:IsPlaying()
+			return self._playing
+		end
+
+		function player:Play(track)
+			if track == nil then
+				if self._current then
+					self:Resume()
+				elseif #self._list > 0 then
+					playTrack(self._list[1])
+				end
+				return self
+			end
+			if type(track) == "number" or type(track) == "string" then
+				local key = tostring(track)
+				for _, t in ipairs(self._tracks) do
+					if musicKey(t) == key or tostring(t.SoundId) == key then
+						playTrack(t)
+						return self
+					end
+				end
+				return self
+			end
+			playTrack(track)
+			return self
+		end
+		function player:Pause()
+			if self._destroyed then
+				return self
+			end
+			pcall(function()
+				sound:Pause()
+			end)
+			self._playing = false
+			updatePlayIcon()
+			safeCall(opts.OnPause, self._current)
+			return self
+		end
+		function player:Resume()
+			if self._destroyed then
+				return self
+			end
+			if self._current then
+				pcall(function()
+					sound:Resume()
+				end)
+				self._playing = true
+				updatePlayIcon()
+				safeCall(opts.OnPlay, self._current)
+			end
+			return self
+		end
+		function player:Stop()
+			stopPlayback()
+			return self
+		end
+		function player:Next()
+			playNext()
+			return self
+		end
+		function player:Previous()
+			playPrevious()
+			return self
+		end
+
+		function player:SetVolume(value)
+			value = math.clamp(tonumber(value) or 0, 0, 1)
+			self._volume = value
+			sound.Volume = value
+			volFill.Size = UDim2.fromScale(value, 1)
+			volKnob.Position = UDim2.fromScale(value, 0.5)
+			saveState()
+			renderList()
+			return self
+		end
+		function player:GetVolume()
+			return self._volume
+		end
+		function player:SetShuffle(value)
+			self._shuffle = value == true
+			tween(shuffleIcon, { ImageColor3 = self._shuffle and Theme.Accent or Theme.Text }, 0.12)
+			saveState()
+			return self
+		end
+		function player:SetRepeat(mode)
+			if mode ~= "off" and mode ~= "all" and mode ~= "one" then
+				mode = "off"
+			end
+			self._repeat = mode
+			tween(repeatIcon, { ImageColor3 = mode == "off" and Theme.Text or Theme.Accent }, 0.12)
+			repeatOne.Visible = mode == "one"
+			saveState()
+			return self
+		end
+
+		function player:Like(track, value)
+			local t = track
+			if type(track) == "string" or type(track) == "number" then
+				for _, entry in ipairs(self._tracks) do
+					if musicKey(entry) == tostring(track) then
+						t = entry
+						break
+					end
+				end
+			end
+			if type(t) ~= "table" then
+				return self
+			end
+			local key = musicKey(t)
+			local on = value ~= false
+			if on then
+				self._likes[key] = true
+			else
+				self._likes[key] = nil
+			end
+			saveState()
+			safeCall(opts.OnLike, t, on)
+			renderNow()
+			refreshRows()
+			if self._filter == "Liked" then
+				renderList()
+			end
+			return self
+		end
+		function player:IsLiked(track)
+			return type(track) == "table" and isLiked(track)
+		end
+		function player:Favorite(track, value)
+			local t = track
+			if type(track) == "string" or type(track) == "number" then
+				for _, entry in ipairs(self._tracks) do
+					if musicKey(entry) == tostring(track) then
+						t = entry
+						break
+					end
+				end
+			end
+			if type(t) ~= "table" then
+				return self
+			end
+			local key = musicKey(t)
+			local on = value ~= false
+			if on then
+				self._favorites[key] = true
+			else
+				self._favorites[key] = nil
+			end
+			saveState()
+			safeCall(opts.OnFavorite, t, on)
+			renderNow()
+			refreshRows()
+			if self._filter == "Favorites" then
+				renderList()
+			end
+			return self
+		end
+		function player:IsFavorite(track)
+			return type(track) == "table" and isFav(track)
+		end
+
+		function player:SetSort(mode)
+			self._sort = mode
+			refreshChips()
+			renderList()
+			saveState()
+			safeCall(opts.OnSort, mode)
+			return self
+		end
+		function player:SetFilter(mode)
+			self._filter = mode
+			refreshChips()
+			renderList()
+			safeCall(opts.OnFilter, mode)
+			return self
+		end
+		function player:SetSearch(query)
+			self._query = tostring(query or "")
+			searchBox.Text = self._query
+			renderList()
+			safeCall(opts.OnSearch, self._query)
+			return self
+		end
+		function player:Refresh()
+			rebuildGenres()
+			renderList()
+			renderNow()
+			refreshChips()
+			return self
+		end
+
+		function player:Destroy()
+			if self._destroyed then
+				return
+			end
+			self._destroyed = true
+			saveState()
+			playToken += 1
+			for index, step in ipairs(window._frameSteps) do
+				if step == progressStep then
+					table.remove(window._frameSteps, index)
+					break
+				end
+			end
+			pcall(function()
+				sound:Stop()
+				sound:Destroy()
+			end)
+			for index, p in ipairs(window._floatingPanels or {}) do
+				if p == panel then
+					table.remove(window._floatingPanels, index)
+					break
+				end
+			end
+			if panel.Parent then
+				panel:Destroy()
+			end
+			if window._musicPlayer == self then
+				window._musicPlayer = nil
+			end
+		end
+
+		-- ---------------- control wiring ----------------------------------
+		closeBtn.MouseButton1Click:Connect(function()
+			ripple(closeBtn)
+			player:Close()
+		end)
+		playBtn.MouseButton1Click:Connect(function()
+			ripple(playBtn)
+			if player._playing then
+				player:Pause()
+			elseif player._current then
+				player:Resume()
+			elseif #player._list > 0 then
+				playTrack(player._list[1])
+			end
+		end)
+		prevBtn.MouseButton1Click:Connect(function()
+			ripple(prevBtn)
+			playPrevious()
+		end)
+		nextBtn.MouseButton1Click:Connect(function()
+			ripple(nextBtn)
+			playNext()
+		end)
+		shuffleBtn.MouseButton1Click:Connect(function()
+			ripple(shuffleBtn)
+			player:SetShuffle(not player._shuffle)
+		end)
+		repeatBtn.MouseButton1Click:Connect(function()
+			ripple(repeatBtn)
+			local order = { off = "all", all = "one", one = "off" }
+			player:SetRepeat(order[player._repeat] or "off")
+		end)
+		nowLikeBtn.MouseButton1Click:Connect(function()
+			if player._current then
+				player:Like(player._current, not isLiked(player._current))
+			end
+		end)
+		nowFavBtn.MouseButton1Click:Connect(function()
+			if player._current then
+				player:Favorite(player._current, not isFav(player._current))
+			end
+		end)
+		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+			player._query = searchBox.Text
+			renderList()
+			safeCall(opts.OnSearch, player._query)
+		end)
+
+		-- ---------------- theme -------------------------------------------
+		onTheme(panel, function()
+			panel.BackgroundColor3 = Theme.Background
+			panelStroke.Color = Theme.Stroke
+			now.BackgroundColor3 = Theme.Surface
+			controls.BackgroundColor3 = Theme.Background
+			playBtn.BackgroundColor3 = Theme.Accent
+			playIcon.ImageColor3 = Theme.AccentDark
+			seekFill.BackgroundColor3 = Theme.Accent
+			volFill.BackgroundColor3 = Theme.Accent
+			footer.TextColor3 = Theme.Muted
+			refreshChips()
+			renderNow()
+			refreshRows()
+		end)
+
+		-- ---------------- initial data ------------------------------------
+		local function useDemo()
+			player:SetTracks(MUSIC_DEMO)
+		end
+		if type(opts.OnFetch) == "function" then
+			player:SetTracks({})
+			task.spawn(function()
+				local ok, result = pcall(opts.OnFetch)
+				if ok and type(result) == "table" and not player._destroyed then
+					player:SetTracks(result)
+				end
+			end)
+		elseif type(opts.Tracks) == "table" and #opts.Tracks > 0 then
+			player:SetTracks(opts.Tracks)
+		else
+			useDemo()
+		end
+
+		player:SetVolume(player._volume)
+		player:SetShuffle(player._shuffle)
+		player:SetRepeat(player._repeat)
+		refreshChips()
+		renderNow()
+		if opts.Open then
+			player:Open()
+		end
+		return player
+	end
+	Window.CreateMusicPlayer = Window.CreateMusicWindow
+	Window.MusicWindow = Window.CreateMusicWindow
+	Window.Music = Window.CreateMusicWindow
+	function Window:GetMusicWindow()
+		return self._musicPlayer
+	end
+	function Window:OpenMusicWindow(opts)
+		local music = self._musicPlayer or self:CreateMusicWindow(opts or self._musicOptions or {})
+		music:Open()
+		return music
 	end
 
 	function Window:Tab(opts, icon)
@@ -23602,6 +25367,11 @@ local Library = (function()
 	end
 
 	function Window:Destroy()
+		if self._musicPlayer then
+			pcall(function()
+				self._musicPlayer:Destroy()
+			end)
+		end
 		if self._cursorGate then
 			self._cursorGate.Modal = false
 		end
