@@ -19546,7 +19546,7 @@ local Library = (function()
 						updatePlayIcon()
 						window:Notify({
 							Title = text("NotifyTitle", "Музон"),
-							Content = text("LoadFail", "Не удалось загрузить аудио: ") .. tostring(track.Name or "?"),
+							Content = text("LoadFail", "Не удалось загрузить аудио: ") .. tostring(track.Name or "?") .. " (" .. tostring(resolved) .. ")",
 							Duration = 4,
 						})
 						safeCall(opts.OnTrackError, track, resolved)
