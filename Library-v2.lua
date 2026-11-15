@@ -17141,7 +17141,7 @@ local Library = (function()
 			self:CopyToClipboard(game.JobId, "Job ID")
 		end)
 		if self._musicHomeButton ~= false then
-			self:_homeAction(actions, 5, "music", self._musicButtonText or "Музон", function()
+			self:_homeAction(actions, 5, "music", self._musicButtonText or "Music", function()
 				local music = self._musicPlayer or self:CreateMusicWindow(self._musicOptions or {})
 				music:Open()
 			end)
@@ -18237,7 +18237,7 @@ local Library = (function()
 		-- "Open music UI" button on the Home game card. opts.Music can carry
 		-- the same options table you would pass to Window:CreateMusicWindow.
 		self._musicHomeButton = opts.MusicButton ~= false
-		self._musicButtonText = opts.MusicButtonText or "Музон"
+		self._musicButtonText = opts.MusicButtonText or "Music"
 		if type(opts.Music) == "table" then
 			self._musicOptions = opts.Music
 		end
@@ -18357,7 +18357,7 @@ local Library = (function()
 	end
 
 	-- =====================================================================
-	-- Music window ("Музон")
+	-- Music window ("Music")
 	-- A separate floating player window: catalog with cover avatars,
 	-- likes, favorites, views, search, genre filters, sorting and a full
 	-- playback bar (play/pause, next/prev, shuffle, repeat, seek, volume).
@@ -18708,7 +18708,7 @@ local Library = (function()
 		local titleLabel = label({
 			Position = UDim2.fromOffset(38, 0),
 			Size = UDim2.new(1, -150, 0, 40),
-			Text = opts.Name or text("Title", "Музон"),
+			Text = opts.Name or text("Title", "Music"),
 			TextSize = 15,
 			FontFace = Fonts.Bold,
 			Parent = header,
@@ -18766,7 +18766,7 @@ local Library = (function()
 		local nowTitle = label({
 			Position = UDim2.fromOffset(88, 12),
 			Size = UDim2.new(1, -220, 0, 20),
-			Text = text("Nothing", "Ничего не играет"),
+			Text = text("Nothing", "Nothing playing"),
 			TextSize = 15,
 			FontFace = Fonts.Bold,
 			Parent = now,
@@ -18774,7 +18774,7 @@ local Library = (function()
 		local nowArtist = label({
 			Position = UDim2.fromOffset(88, 33),
 			Size = UDim2.new(1, -220, 0, 16),
-			Text = text("Pick", "Выбери трек из списка"),
+			Text = text("Pick", "Pick a track from the list"),
 			TextSize = 12,
 			FontFace = Fonts.Regular,
 			TextColor3 = Theme.Muted,
@@ -18786,6 +18786,7 @@ local Library = (function()
 			BackgroundColor3 = Theme.Surface3,
 			Image = "",
 			ScaleType = Enum.ScaleType.Crop,
+			Visible = false,
 			Parent = now,
 		})
 		corner(nowAvatar, UDim.new(1, 0))
@@ -18796,16 +18797,17 @@ local Library = (function()
 			TextSize = 11,
 			FontFace = Fonts.Regular,
 			TextColor3 = Theme.Muted,
+			Visible = false,
 			Parent = now,
 		})
+		-- Likes + views on one line under the artist (likes first, then views).
 		local nowStats = label({
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -12, 0, 14),
-			Size = UDim2.fromOffset(110, 16),
+			Position = UDim2.fromOffset(88, 56),
+			Size = UDim2.new(1, -220, 0, 18),
 			Text = "",
 			TextSize = 11,
 			TextColor3 = Theme.Muted,
-			TextXAlignment = Enum.TextXAlignment.Right,
+			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = now,
 		})
 		local nowLikeBtn, nowLikeIcon
@@ -19010,7 +19012,7 @@ local Library = (function()
 			Size = UDim2.new(1, -38, 1, 0),
 			BackgroundTransparency = 1,
 			Text = "",
-			PlaceholderText = text("Search", "Поиск трека..."),
+			PlaceholderText = text("Search", "Search tracks..."),
 			PlaceholderColor3 = Theme.Muted,
 			TextColor3 = Theme.Text,
 			TextSize = 12,
@@ -19132,10 +19134,10 @@ local Library = (function()
 
 		-- sort chips
 		local sortModes = {
-			{ Key = "Popular", Label = text("Popular", "Популярные") },
-			{ Key = "Likes", Label = text("Likes", "Лайки") },
-			{ Key = "New", Label = text("New", "Новые") },
-			{ Key = "Name", Label = text("Name", "А-Я") },
+			{ Key = "Popular", Label = text("Popular", "Popular") },
+			{ Key = "Likes", Label = text("Likes", "Likes") },
+			{ Key = "New", Label = text("New", "New") },
+			{ Key = "Name", Label = text("Name", "A-Z") },
 		}
 		local sortChips = {}
 		for index, mode in ipairs(sortModes) do
@@ -19148,9 +19150,9 @@ local Library = (function()
 
 		-- filter chips
 		local filterModes = {
-			{ Key = "All", Label = text("All", "Все") },
-			{ Key = "Favorites", Label = text("Favorites", "Фавориты") },
-			{ Key = "Liked", Label = text("Liked", "Лайкнутые") },
+			{ Key = "All", Label = text("All", "All") },
+			{ Key = "Favorites", Label = text("Favorites", "Favorites") },
+			{ Key = "Liked", Label = text("Liked", "Liked") },
 		}
 		local filterChips = {}
 		for index, mode in ipairs(filterModes) do
@@ -19358,11 +19360,11 @@ local Library = (function()
 			end
 			emptyLabel.Visible = #filtered == 0
 			emptyLabel.Text = #player._tracks == 0
-				and text("Empty", "Треков пока нет. Добавь их через Music:AddTrack() или Music:SetTracks().")
-				or text("NoMatch", "Ничего не найдено. Попробуй другой запрос или фильтр.")
+				and text("Empty", "No tracks yet. Add them via Music:AddTrack() or Music:SetTracks().")
+				or text("NoMatch", "Nothing found. Try another query or filter.")
 			countLabel.Text = tostring(#filtered) .. " / " .. tostring(#player._tracks)
 			footer.Text = string.format(
-				text("Footer", "%d треков · громкость %d%% · сортировка: %s"),
+				text("Footer", "%d tracks · volume %d%% · sort: %s"),
 				#player._tracks, math.floor(player._volume * 100 + 0.5), tostring(player._sort)
 			)
 			for _, entry in pairs(player._rows) do
@@ -19403,7 +19405,7 @@ local Library = (function()
 			end
 			table.sort(genres)
 			-- "All genres" chip first, then one chip per genre.
-			local all = chip(filterRow, text("AllGenres", "Все жанры"), 10)
+			local all = chip(filterRow, text("AllGenres", "All genres"), 10)
 			all.Button.MouseButton1Click:Connect(function()
 				player._genre = nil
 				refreshChips()
@@ -19426,8 +19428,8 @@ local Library = (function()
 		renderNow = function()
 			local track = player._current
 			if not track then
-				nowTitle.Text = text("Nothing", "Ничего не играет")
-				nowArtist.Text = text("Pick", "Выбери трек из списка")
+				nowTitle.Text = text("Nothing", "Nothing playing")
+				nowArtist.Text = text("Pick", "Pick a track from the list")
 				nowUploader.Text = ""
 				nowStats.Text = ""
 				nowAvatar.Image = ""
@@ -19441,9 +19443,9 @@ local Library = (function()
 			end
 			nowTitle.Text = track.Name or "Unknown"
 			nowArtist.Text = track.Artist or track.Uploader or "?"
-			nowUploader.Text = track.Uploader or ""
-			nowAvatar.Image = musicAvatar(track) or ""
-			nowStats.Text = "♥ " .. musicCount(trackLikes(track)) .. "   ·   " .. musicCount(trackViews(track)) .. " просм."
+			nowUploader.Text = ""
+			nowAvatar.Image = ""
+			nowStats.Text = "♥ " .. musicCount(trackLikes(track)) .. "  ·  " .. musicCount(trackViews(track)) .. " views"
 			if nowCover then
 				nowCover:Destroy()
 			end
@@ -19498,7 +19500,7 @@ local Library = (function()
 						player._playing = false
 						updatePlayIcon()
 						window:Notify({
-							Title = text("NotifyTitle", "Музон"),
+							Title = text("NotifyTitle", "Music"),
 							Content = text("ExternalFail", "Spotify: ") .. tostring(err),
 							Duration = 5,
 						})
@@ -19528,8 +19530,8 @@ local Library = (function()
 				renderNow()
 				refreshRows()
 				window:Notify({
-					Title = text("NotifyTitle", "Музон"),
-					Content = text("Loading", "Загрузка трека… ") .. tostring(track.Name or ""),
+					Title = text("NotifyTitle", "Music"),
+					Content = text("Loading", "Loading track… ") .. tostring(track.Name or ""),
 					Duration = 2,
 				})
 				task.spawn(function()
@@ -19545,8 +19547,8 @@ local Library = (function()
 						player._playing = false
 						updatePlayIcon()
 						window:Notify({
-							Title = text("NotifyTitle", "Музон"),
-							Content = text("LoadFail", "Не удалось загрузить аудио: ") .. tostring(track.Name or "?") .. " (" .. tostring(resolved) .. ")",
+							Title = text("NotifyTitle", "Music"),
+							Content = text("LoadFail", "Failed to load audio: ") .. tostring(track.Name or "?") .. " (" .. tostring(resolved) .. ")",
 							Duration = 4,
 						})
 						safeCall(opts.OnTrackError, track, resolved)
@@ -19555,7 +19557,7 @@ local Library = (function()
 				return
 			end
 			if not src then
-				window:Notify({ Title = text("NotifyTitle", "Музон"), Content = text("NoSource", "У трека нет SoundId"), Duration = 3 })
+				window:Notify({ Title = text("NotifyTitle", "Music"), Content = text("NoSource", "Track has no SoundId"), Duration = 3 })
 				return
 			end
 			playToken += 1
@@ -19579,7 +19581,7 @@ local Library = (function()
 			refreshRows()
 			-- Wait for the sound to load so the duration label is correct.
 			task.spawn(function()
-				local deadline = os.clock() + 8
+				local deadline = os.clock() + 20
 				while token == playToken and not player._destroyed and os.clock() < deadline do
 					if sound.IsLoaded then
 						break
@@ -19598,8 +19600,8 @@ local Library = (function()
 					player._playing = false
 					updatePlayIcon()
 					window:Notify({
-						Title = text("NotifyTitle", "Музон"),
-						Content = text("LoadFail", "Не удалось загрузить аудио (возможно, оно приватное): ") .. tostring(track.Name or src),
+						Title = text("NotifyTitle", "Music"),
+						Content = text("LoadFail", "Failed to load audio (possibly private): ") .. tostring(track.Name or src),
 						Duration = 4,
 					})
 					safeCall(opts.OnTrackError, track, src)
@@ -19625,7 +19627,7 @@ local Library = (function()
 				task.spawn(function()
 					local ok, err = pcall(external.Next)
 					if not ok and not player._destroyed then
-						window:Notify({ Title = text("NotifyTitle", "Музон"), Content = "Spotify: " .. tostring(err), Duration = 4 })
+						window:Notify({ Title = text("NotifyTitle", "Music"), Content = "Spotify: " .. tostring(err), Duration = 4 })
 					end
 				end)
 				return
@@ -19659,7 +19661,7 @@ local Library = (function()
 				task.spawn(function()
 					local ok, err = pcall(external.Previous)
 					if not ok and not player._destroyed then
-						window:Notify({ Title = text("NotifyTitle", "Музон"), Content = "Spotify: " .. tostring(err), Duration = 4 })
+						window:Notify({ Title = text("NotifyTitle", "Music"), Content = "Spotify: " .. tostring(err), Duration = 4 })
 					end
 				end)
 				return
@@ -19744,7 +19746,7 @@ local Library = (function()
 			end
 			safeCall(opts.OnVolume, value)
 			footer.Text = string.format(
-				text("Footer", "%d треков · громкость %d%% · сортировка: %s"),
+				text("Footer", "%d tracks · volume %d%% · sort: %s"),
 				#player._tracks, math.floor(value * 100 + 0.5), tostring(player._sort)
 			)
 			saveState()
