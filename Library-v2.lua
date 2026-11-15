@@ -1,3 +1,5 @@
+
+
 local Library = (function()
 	local TweenService = game:GetService("TweenService")
 	local UserInputService = game:GetService("UserInputService")
@@ -18983,13 +18985,15 @@ local Library = (function()
 			hoverStroke(row, rowStroke)
 			local cover = musicCover(row, track, 42, 0)
 			cover.Position = UDim2.fromOffset(8, 8)
+			local avatarImg = musicAvatar(track) or ""
 			local avatar = create("ImageLabel", {
 				Position = UDim2.fromOffset(36, 36),
 				Size = UDim2.fromOffset(16, 16),
 				BackgroundColor3 = Theme.Surface3,
-				Image = musicAvatar(track) or "",
+				Image = avatarImg,
 				ScaleType = Enum.ScaleType.Crop,
 				ZIndex = 3,
+				Visible = avatarImg ~= "",
 				Parent = row,
 			})
 			corner(avatar, UDim.new(1, 0))
@@ -19013,7 +19017,7 @@ local Library = (function()
 			})
 			local stats = create("Frame", {
 				AnchorPoint = Vector2.new(1, 0),
-				Position = UDim2.new(1, -112, 0, 10),
+				Position = UDim2.new(1, -165, 0, 10),
 				Size = UDim2.fromOffset(100, 20),
 				BackgroundTransparency = 1,
 				Parent = row,
@@ -19122,9 +19126,25 @@ local Library = (function()
 				return trackViews(a) > trackViews(b)
 			end)
 			player._list = filtered
+			player._renderToken = (player._renderToken or 0) + 1
+			local renderToken = player._renderToken
 			for index, track in ipairs(filtered) do
+				if index > 50 then break end
 				player._rows[musicKey(track)] = buildRow(track, index)
 			end
+			task.spawn(function()
+				for index, track in ipairs(filtered) do
+					if index > 50 then
+						if renderToken ~= player._renderToken or player._destroyed then return end
+						player._rows[musicKey(track)] = buildRow(track, index)
+						if index % 20 == 0 then task.wait() end
+					end
+				end
+				for _, entry in pairs(player._rows) do
+					if renderToken ~= player._renderToken or player._destroyed then return end
+					entry.Render()
+				end
+			end)
 			emptyLabel.Visible = #filtered == 0
 			emptyLabel.Text = #player._tracks == 0
 				and text("Empty", "No tracks yet. Add them via Music:AddTrack() or Music:SetTracks().")
