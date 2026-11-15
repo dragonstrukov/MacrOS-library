@@ -1,5 +1,3 @@
--- The library lives in its own function so its locals don't count against
--- the script below it: Luau allows 200 locals per function.
 local Library = (function()
 	local TweenService = game:GetService("TweenService")
 	local UserInputService = game:GetService("UserInputService")
@@ -88,7 +86,7 @@ local Library = (function()
 		if frame and not element._userVisible then
 			frame.Visible = false
 		end
-		-- Disabled: dimmed under a cover that swallows input.
+
 		function element:SetDisabled(disabled)
 			Library._setDisabled(element, frame, disabled)
 		end
@@ -98,8 +96,8 @@ local Library = (function()
 		if opts.Disabled == true then
 			element:SetDisabled(true)
 		end
-		-- DependsOn: shown (or enabled, with DependsMode = "Disable") only while
-		-- other flags allow it. See Library._dependsMet for the rule forms.
+
+
 		function element:SetDependsOn(rule, mode)
 			element._dependsOn = rule
 			element._dependsMode = mode or element._dependsMode
@@ -114,7 +112,7 @@ local Library = (function()
 			element._dependsMode = opts.DependsMode
 			element:SetDependsOn(opts.DependsOn)
 		end
-		-- Tooltip: a string, or { Title, Text, Icon }. nil, false or "" hides it.
+
 		function element:SetTooltip(tip)
 			element._tooltip = tip
 			if frame and window and not element._tooltipBound then
@@ -175,7 +173,7 @@ local Library = (function()
 		Error = Color3.fromRGB(240, 120, 120),
 	}
 
-	-- Order decides which key wins when two theme colors are identical.
+
 	local THEME_KEYS = {
 		"Accent",
 		"AccentDark",
@@ -196,8 +194,7 @@ local Library = (function()
 		return Color3.fromRGB(r, g, b)
 	end
 
-	-- Muted text is drawn small, so lift it toward Text until it clears WCAG AA
-	-- (4.5:1) against Surface2, the lightest surface it usually sits on.
+
 	function Library._readableMuted(muted, text, surface)
 		local function luminance(color)
 			local function channel(v)
@@ -247,8 +244,8 @@ local Library = (function()
 	end
 
 	Library.ThemePresets = {
-		-- Colours here must not be pure white, pure black or any other colour the
-		-- library hard-codes, or those objects would get bound to the theme.
+
+
 		Midnight = preset(
 			{ 15, 18, 26 },
 			{ 18, 22, 31 },
@@ -477,7 +474,7 @@ local Library = (function()
 			{ 226, 234, 250 },
 			{ 100, 116, 152 }
 		),
-		-- Seasonal and themed palettes.
+
 		Halloween = preset(
 			{ 18, 12, 20 },
 			{ 23, 15, 25 },
@@ -696,8 +693,7 @@ local Library = (function()
 		return loadLucide() ~= false
 	end
 
-	-- Numbers, digit strings and asset URLs are custom images; anything else is
-	-- a lucide name.
+
 	local function assetId(value)
 		if type(value) == "number" then
 			return "rbxassetid://" .. string.format("%.0f", value)
@@ -718,8 +714,7 @@ local Library = (function()
 		return nil
 	end
 
-	-- Returns image, rect offset, rect size, whether it is a custom image, and
-	-- whether that custom image should still take the theme tint.
+
 	local function resolveIcon(icon)
 		if typeof(icon) == "table" then
 			return assetId(icon.Image) or icon.Image, icon.RectOffset, icon.RectSize, true, icon.Tint == true
@@ -764,10 +759,7 @@ local Library = (function()
 	local Theme = Library.Theme
 	local Assets = Library.Assets
 
-	-- The OuroFlow mark, embedded as a 256px grayscale PNG so it needs no upload.
-	-- It is written to the workspace once and loaded with getcustomasset; the
-	-- white-to-grey shading is multiplied by the theme accent like the old logo.
-	-- Without file functions the uploaded asset above stays in use.
+
 	local EMBEDDED_LOGO =
 		"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"
 
@@ -818,8 +810,8 @@ local Library = (function()
 	local Fonts = Library.Fonts
 
 	local TOUCH = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-	-- A phone with a Bluetooth keyboard still has a phone-sized screen: any
-	-- touch device with no room for the desktop layout counts as touch.
+
+
 	if not TOUCH and UserInputService.TouchEnabled then
 		local camera = workspace.CurrentCamera
 		local size = camera and camera.ViewportSize
@@ -830,7 +822,7 @@ local Library = (function()
 	Library.Touch = TOUCH
 
 	local SIDEBAR_WIDTH = 188
-	-- Icons-only rail for phones and narrow windows.
+
 	local COMPACT_WIDTH = 64
 	local HEADER_HEIGHT = 62
 	local TAB_TILE_HEIGHT = 34
@@ -842,8 +834,7 @@ local Library = (function()
 	local SEARCH_WIDTH = 176
 	local STACK_BELOW = 440
 
-	-- Elements read their geometry from one of these. Cards stand alone on a tab,
-	-- rows sit flush inside a groupbox.
+
 	local METRICS = {
 		Card = {
 			Compact = false,
@@ -875,11 +866,7 @@ local Library = (function()
 
 	local tweenInfoCache = {}
 
-	-- Theme bindings: every instance property painted with a theme color is
-	-- remembered by theme key, so SetTheme can repaint the whole UI live.
-	-- Held strongly: an Instance's Lua handle can be collected while the Instance
-	-- still exists, which would silently drop it from a weak table. Destroyed
-	-- objects are pruned instead, once they have been parentless for two sweeps.
+
 	local themeBindings = {}
 	local themeHooks = {}
 	local themeLookup = {}
@@ -950,10 +937,7 @@ local Library = (function()
 		end
 	end
 
-	-- Repaints every bound property from the colours on screen to the new theme.
-	-- One Heartbeat loop lerps each theme key once per frame and assigns the
-	-- result, instead of creating a tween per object, which hitched the frame the
-	-- theme changed on large UIs. A change mid-fade picks up from what is shown.
+
 	local shownTheme = table.clone(Library.Theme)
 	local themeDriver = nil
 
@@ -1016,7 +1000,7 @@ local Library = (function()
 		end)
 	end
 
-	-- Runs fn now and again whenever the theme changes, while owner exists.
+
 	local function onTheme(owner, fn)
 		themeHooks[owner] = fn
 		fn()
@@ -1066,13 +1050,10 @@ local Library = (function()
 		return inst
 	end
 
-	-- Corners in pixels follow the player's corner radius setting: each one
-	-- remembers the radius it was drawn at, and Library:SetCornerRadius rescales
-	-- them all. Scale corners (pills, circles) stay as they are.
+
 	Library.Roundness = 1
-	-- A strong table: weak keys would drop the Lua handles for corners nothing
-	-- else in Lua holds, and those corners would never rescale. Destroyed ones
-	-- are pruned whenever the radius changes.
+
+
 	Library._cornerBases = {}
 
 	local function corner(parent, radius)
@@ -1088,13 +1069,12 @@ local Library = (function()
 		return object
 	end
 
-	-- A corner that ignores the setting, for shapes that animate their own
-	-- radius (the minimized island, the morph panels).
+
 	function Library._fixedCorner(parent, radius)
 		return create("UICorner", { CornerRadius = radius, Parent = parent })
 	end
 
-	-- The radius the window's own corners are drawn at right now.
+
 	function Library._radius(pixels)
 		return math.floor(pixels * Library.Roundness + 0.5)
 	end
@@ -1180,19 +1160,18 @@ local Library = (function()
 		imageLabel.Image = image
 		imageLabel.ImageRectOffset = rectOffset or Vector2.zero
 		imageLabel.ImageRectSize = rectSize or Vector2.zero
-		-- The built-in logo is a white mark meant to be tinted.
+
 		if icon == Assets.Logo then
 			tint = true
 		end
 		local keepColours = custom and not tint
 		imageLabel:SetAttribute("CustomIcon", keepColours or nil)
 		if keepColours then
-			-- Original colours, and out of the theme's reach.
+
 			tween(imageLabel, { ImageColor3 = Color3.new(1, 1, 1) }, 0)
 		end
-		-- Uploaded images usually carry transparent padding and read smaller than
-		-- the lucide set, so they are drawn larger. A table icon can pick its own
-		-- Scale. Brand logos pass fixedSize, their slots are already sized for them.
+
+
 		local scale = custom
 				and not fixedSize
 				and icon ~= Assets.Logo
@@ -1207,8 +1186,7 @@ local Library = (function()
 		end
 	end
 
-	-- Selection state for icons: tinted icons change colour, custom images keep
-	-- their colours and dim instead.
+
 	local function tintIcon(imageLabel, color, active, duration)
 		if imageLabel:GetAttribute("CustomIcon") then
 			tween(imageLabel, { ImageTransparency = active and 0 or 0.4 }, duration)
@@ -1238,8 +1216,8 @@ local Library = (function()
 		if core and coreWorks then
 			return core
 		end
-		-- PlayerGui, read first and only waited for with a deadline: an endless
-		-- WaitForChild here hung the whole script before the window was built.
+
+
 		local player = LocalPlayer
 		local playerGui = player and player:FindFirstChildOfClass("PlayerGui")
 		if playerGui then
@@ -1272,8 +1250,7 @@ local Library = (function()
 		return UserInputService:GetLastInputType() == Enum.UserInputType.Touch
 	end
 
-	-- A press that turned into a scroll is not a tap. Returns a check to call
-	-- from the click handler.
+
 	local function tapGuard(button, getScroller)
 		local startCanvas
 		button.InputBegan:Connect(function(input)
@@ -1378,7 +1355,7 @@ local Library = (function()
 		local mouse = pointerPosition()
 		local diameter = math.max(button.AbsoluteSize.X, button.AbsoluteSize.Y) * 2.2
 		local circle = table.remove(ripplePool)
-		-- A pooled circle can't be reparented if it was destroyed along the way.
+
 		if circle and not pcall(function()
 			circle.Parent = nil
 		end) then
@@ -1400,7 +1377,7 @@ local Library = (function()
 		circle.Parent = button
 		tween(circle, { Size = UDim2.fromOffset(diameter, diameter), BackgroundTransparency = 1 }, 0.55)
 		task.delay(0.55, function()
-			-- A button destroyed mid-ripple takes the circle with it: drop it.
+
 			if circle.Parent ~= button or not button.Parent then
 				pcall(circle.Destroy, circle)
 				return
@@ -1462,10 +1439,7 @@ local Library = (function()
 		end
 	end
 
-	-- Runs a user callback on its own thread and waits for it with task.wait.
-	-- A callback that yields inside an engine call (InvokeServer and the like)
-	-- resumes at game identity, which can no longer touch the GUI in CoreGui;
-	-- keeping that on a separate thread leaves the caller's identity intact.
+
 	local function isolatedCall(callback)
 		local result = nil
 		task.spawn(function()
@@ -1500,8 +1474,7 @@ local Library = (function()
 		return tab._metrics or METRICS.Card
 	end
 
-	-- Width of a value control inside a groupbox row. Every dropdown and input in
-	-- a groupbox uses the same share of the row, so their left edges line up.
+
 	local function rowControlWidth(frame, window)
 		local width = frame.AbsoluteSize.X / window.Scale.Scale
 		return math.clamp(math.floor(width * 0.48), 90, 220)
@@ -1586,17 +1559,7 @@ local Library = (function()
 		end
 	end
 
-	--═══════════════════════════════════════════════════════════════════════
-	--  3D icons
-	--═══════════════════════════════════════════════════════════════════════
-	--[[ An item is shown as the item: a real model standing in a small
-    ViewportFrame. An element asks for it with `Icons3D = true` and a `Models`
-    resolver that hands over a Model for an option; a row without a model for
-    its option simply draws nothing.
 
-    The numbers are the ones the old library used (32 px slot, fov 40, camera
-    at 20/-35 degrees, the model framed by its own bounding box), so the look
-    is the one the menu was built against. ]]
 	local ICON3D = {
 		Size = 24,
 		Padding = 1.15,
@@ -1644,9 +1607,7 @@ local Library = (function()
 		return out
 	end
 
-	-- A model out of the game comes with scripts, sounds, particles and invisible
-	-- shells around it. None of that belongs in a 32 px window, so the clone is
-	-- cleaned once and measured once, and every row after it reuses the result.
+
 	local function icon3DPrepare(model)
 		if typeof(model) ~= "Instance" then
 			return nil
@@ -1699,7 +1660,7 @@ local Library = (function()
 			elseif node:IsA("BasePart") then
 				node.Anchored = true
 				node.CanCollide = false
-				-- shells that only exist to block the camera or hold a decal
+
 				if visible > 0 and node.Transparency >= 0.99 and node.Name ~= "PPart" then
 					pcall(function()
 						node:Destroy()
@@ -1845,8 +1806,7 @@ local Library = (function()
 		return true
 	end
 
-	-- A row asks for its model here: the resolver is whatever the element passed
-	-- in (`Models`), and anything that is not a Model leaves the row text only.
+
 	local function icon3DResolve(cfg, option, text, index)
 		if not cfg or type(cfg.Models) ~= "function" then
 			return nil
@@ -1913,7 +1873,7 @@ local Library = (function()
 	function Tab:Divider(opts)
 		local caption = type(opts) == "table" and (opts.Text or opts.Name) or type(opts) == "string" and opts or nil
 		if caption then
-			-- A centred caption with a rule on each side.
+
 			local inset = metricsOf(self).Compact and 14 or 2
 			local holder = create("Frame", {
 				Size = UDim2.new(1, 0, 0, 18),
@@ -1988,7 +1948,7 @@ local Library = (function()
 
 	function Tab:Label(opts)
 		opts = normalize(opts, { Name = "Text", Title = "Text" })
-		-- Obsidian-style: plain full-strength text sitting on the groupbox, wrapping.
+
 		local text_ = label({
 			Size = UDim2.new(1, 0, 0, 18),
 			AutomaticSize = Enum.AutomaticSize.Y,
@@ -2663,9 +2623,8 @@ local Library = (function()
 		local detailsOf = type(opts.OptionDetails) == "function" and opts.OptionDetails or nil
 		local ROW = detailsOf and 44 or (TOUCH and 34 or 22)
 		local MAX_ROWS = opts.MaxRows or 6
-		-- 3D rows: Icons3D plus a Models resolver turns every option into the
-		-- model standing behind it. The rows grow to fit the icon instead of the
-		-- icon being squeezed into a row.
+
+
 		local icon3DFlag = opts.Icons3D
 		if icon3DFlag == nil then
 			icon3DFlag = opts["3DIcons"]
@@ -2692,17 +2651,16 @@ local Library = (function()
 			iconCfg = icon3DConfig(source, opts)
 			ROW = math.max(ROW, iconCfg.Size + 6)
 		end
-		-- Flat rows: ImageResolver gives an option a picture and the row draws it
-		-- instead of a viewport - sharper, far cheaper, and a list of forty stays
-		-- forty ImageLabels rather than forty models.
+
+
 		local imageOf = type(opts.ImageResolver) == "function" and opts.ImageResolver or nil
 		local flatSize = 0
 		if imageOf then
 			ROW = math.max(ROW, TOUCH and 42 or 32)
 			flatSize = math.min(24, ROW - 8)
 		end
-		-- Stacked (the default in compact rows): the chip spans the whole row,
-		-- with the name (if any) above it.
+
+
 		local stacked = compact and opts.Stacked ~= false
 		local stackTop = 2
 		if stacked then
@@ -2807,8 +2765,8 @@ local Library = (function()
 			end
 		end)
 		if compact then
-			-- The chip follows the row every frame; re-measuring the text waits
-			-- until the width stops changing so resizing stays cheap.
+
+
 			local lastWidth, pending = 0, false
 			frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 				local width = frame.AbsoluteSize.X
@@ -2827,10 +2785,7 @@ local Library = (function()
 			end)
 		end
 
-		-- Popup: floats over the window under the chip, with search, bulk
-		-- actions for multi selection and a scrolling list of checkbox rows.
-		-- The popup is a plain clipped frame that unfolds out of the chip, so text
-		-- stays crisp. The shadow sits outside the clip.
+
 		local popup = create("Frame", {
 			AnchorPoint = Vector2.new(1, 0),
 			Size = UDim2.fromOffset(220, 0),
@@ -2953,8 +2908,8 @@ local Library = (function()
 			ScrollBarImageColor3 = Theme.Accent,
 			ScrollBarImageTransparency = 0,
 			ScrollingDirection = Enum.ScrollingDirection.Y,
-			-- Sized by hand: AutomaticCanvasSize under the window's UIScale
-			-- sometimes leaves the canvas short, so the list would not scroll.
+
+
 			CanvasSize = UDim2.new(),
 			Parent = inner,
 		})
@@ -2973,15 +2928,14 @@ local Library = (function()
 		local self_ = { Open = false }
 		local selected = {}
 		local filter = ""
-		-- The list is virtual: only the rows in view exist, and they are reused
-		-- as it scrolls, so thousands of options cost the same as a handful.
+
+
 		local pool = {}
 		local shown = {}
 		local lowerKeys = {}
 		local STEP = ROW + 2
 
-		-- CanvasPosition is in screen pixels while rows are laid out in unscaled
-		-- units, so under a UIScale the visible slice has to be scaled back.
+
 		local function canvasScale()
 			local logical = list.CanvasSize.Y.Offset
 			return logical > 0 and list.AbsoluteCanvasSize.Y / logical or 1
@@ -3010,7 +2964,7 @@ local Library = (function()
 			return filter == "" or string.find(lowerOf(option), filter, 1, true) ~= nil
 		end
 
-		-- Option labels are rich text, so the part matching the search can light up.
+
 		local function escapeRich(text)
 			return (text:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"))
 		end
@@ -3057,7 +3011,7 @@ local Library = (function()
 			return nil
 		end
 
-		-- Rows are plain text: the pick reads in the accent, hovering lifts any row.
+
 		local function restRow(entry, duration)
 			local on, hover = entry.On == true, entry.Hover == true
 			tween(entry.Frame, { BackgroundTransparency = hover and 0.6 or 1 }, duration)
@@ -3095,7 +3049,7 @@ local Library = (function()
 			if #options == 0 then
 				fullText = opts.EmptyText or "None"
 			elseif multi then
-				-- Two names at most, then a count, so a long pick stays readable.
+
 				if #value > 2 then
 					fullText = tostring(value[1]) .. ", " .. tostring(value[2]) .. "  +" .. (#value - 2)
 				else
@@ -3107,7 +3061,7 @@ local Library = (function()
 					or (value ~= nil and tostring(value) or (opts.NoneText or "None"))
 			end
 			valueLabel.Text = trimmed()
-			-- A picked value reads in full colour; "None" stays muted.
+
 			local picked = #options > 0 and (if multi then #value > 0 else value ~= nil)
 			tween(valueLabel, { TextColor3 = picked and Theme.Text or Theme.Muted }, animate and 0.15 or 0)
 			for _, button in ipairs(pool) do
@@ -3146,8 +3100,8 @@ local Library = (function()
 			local listHeight = rows * ROW + (rows - 1) * 2
 			list.CanvasSize = UDim2.fromOffset(0, math.max(count, 1) * (ROW + 2) - 2)
 			local scale = window.Scale.Scale
-			-- Shrink the list to whichever side of the chip has more room, so the
-			-- popup never runs off a short window (phones in landscape).
+
+
 			local host = window:_popupHost(frame)
 			local bodyHeight = host.AbsoluteSize.Y / scale
 			local chipTop = (chip.AbsolutePosition.Y - host.AbsolutePosition.Y) / scale
@@ -3206,7 +3160,7 @@ local Library = (function()
 			local right =
 				math.clamp(chipPosition.X + chipSize.X, targetSize.X + 8, math.max(bodySize.X - 8, targetSize.X + 8))
 			local below = chipPosition.Y + chipSize.Y + 2
-			-- Opening upward pins the content to the bottom edge so it unfolds from the chip.
+
 			if below + targetSize.Y > bodySize.Y - 8 and chipPosition.Y - 2 - targetSize.Y >= 8 then
 				popup.AnchorPoint = Vector2.new(1, 1)
 				popup.Position = UDim2.fromOffset(right, chipPosition.Y - 2)
@@ -3222,8 +3176,8 @@ local Library = (function()
 
 		local stopFollowing = nil
 		local closeGeneration = 0
-		-- The page behind stops scrolling while the popup is open, so wheel and
-		-- swipe input always reach the list instead of dragging the page away.
+
+
 		local lockedScroller = nil
 		local function unlockScroller()
 			if lockedScroller then
@@ -3264,7 +3218,7 @@ local Library = (function()
 					lockedScroller = scroller
 					scroller.ScrollingEnabled = false
 				end
-				-- Drawn over a floating panel when the dropdown lives in one.
+
 				popup.Parent = window:_popupHost(frame)
 				filter = ""
 				searchBox.Text = ""
@@ -3368,8 +3322,8 @@ local Library = (function()
 			if flatImage then
 				flatImage:SetAttribute("NativeDropdownIcon", true)
 			end
-			-- Multi selection ticks a checkbox on the left. A single pick
-			-- gets an accent bar on the left edge.
+
+
 			local box, boxStroke, bar, check
 			if multi then
 				box = create("Frame", {
@@ -3470,7 +3424,7 @@ local Library = (function()
 				return list
 			end)
 			row.MouseEnter:Connect(function()
-				-- Touch fires enter without a matching leave; skip the hover.
+
 				if usingTouch() then
 					return
 				end
@@ -3518,15 +3472,13 @@ local Library = (function()
 			return entry
 		end
 
-		-- Binds the pool to the rows in view: row i of the filtered list sits at
-		-- (i - 1) * STEP in the canvas.
+
 		renderRows = function()
 			if not self_.Open then
 				return
 			end
-			-- Each index keeps the same pool slot while it stays in view (slot =
-			-- index mod count), so scrolling only rebinds rows entering the edge
-			-- instead of reshuffling every row each step.
+
+
 			local first = math.max(math.floor(list.CanvasPosition.Y / canvasScale() / STEP), 1)
 			local count = math.ceil(list.Size.Y.Offset / STEP) + 3
 			for slot = 1, math.max(count, #pool) do
@@ -3669,8 +3621,7 @@ local Library = (function()
 			return true
 		end
 
-		-- A kept pick only counts once its option exists, so a list filled in after a
-		-- config load changes the value; the callback runs so scripts see it.
+
 		function self_:Refresh(newOptions, keepSelection, silent)
 			local before = currentValue()
 			options = newOptions or {}
@@ -3684,8 +3635,7 @@ local Library = (function()
 			end
 		end
 
-		-- SetOptions(list, { KeepSelection = true, Silent = false }): replace the
-		-- options. Picks are kept by default; a boolean works as KeepSelection.
+
 		function self_:SetOptions(newOptions, settings)
 			local keep, silent = true, false
 			if type(settings) == "boolean" then
@@ -3707,8 +3657,7 @@ local Library = (function()
 			return table.clone(options)
 		end
 
-		-- Every pick, including ones whose option isn't in the list right now, so
-		-- saving never drops them.
+
 		function self_:_saveValue()
 			local picked = currentValue()
 			if multi then
@@ -3741,7 +3690,7 @@ local Library = (function()
 				setOpen(not self_.Open)
 			end
 		end)
-		-- The chip answers the pointer before it is opened.
+
 		header.MouseEnter:Connect(function()
 			if not self_.Open and not usingTouch() then
 				tween(chipStroke, { Color = Theme.StrokeHover }, 0.15)
@@ -3792,8 +3741,8 @@ local Library = (function()
 		task.defer(fitChip, true)
 		local handle = finishElement(self, opts, self_, frame, "Dropdown")
 		handle._valueLabel = valueLabel
-		-- SetTitle(text): rename the row at runtime. The Target ESP shape row
-		-- uses it to follow the chosen effect ("Chains Style" and so on).
+
+
 		function handle:SetTitle(text)
 			if titleLabel then
 				titleLabel.Text = tostring(text)
@@ -3961,7 +3910,7 @@ local Library = (function()
 					end
 				end
 				flashStroke(frameStroke)
-				-- Configs load through here, so the script hears the loaded text.
+
 				if not silent and box.Text ~= before then
 					safeCall(opts.Callback, opts.Numeric and value or box.Text, false)
 				end
@@ -4052,7 +4001,7 @@ local Library = (function()
 			end
 		end
 
-		-- Opt-in clear button: uses the same change callback as rebinding.
+
 		if opts.ShowResetButton then
 			local reset = create("TextButton", {
 				Name = "ResetKeybind",
@@ -4141,7 +4090,7 @@ local Library = (function()
 		})
 		titleDesc(header, opts.Name or "Color", opts.Desc, 140, metrics)
 
-		-- Closed, the row shows the hex code beside a rounded swatch.
+
 		local swatch = create("Frame", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, compact and -38 or -34, 0.5, 0),
@@ -4171,7 +4120,7 @@ local Library = (function()
 			Parent = frame,
 		})
 
-		-- Saturation runs left to right, brightness top to bottom.
+
 		local svBox = create("TextButton", {
 			Size = UDim2.new(1, 0, 0, 118),
 			BackgroundColor3 = Color3.new(1, 1, 1),
@@ -4202,8 +4151,7 @@ local Library = (function()
 			Parent = svDark,
 		})
 
-		-- Both handles are a white ring filled with the colour under them, with a
-		-- faint dark edge so they read on light and dark spots alike.
+
 		local function knob(parent, size)
 			local ring = create("Frame", {
 				AnchorPoint = Vector2.new(0.5, 0.5),
@@ -4228,7 +4176,7 @@ local Library = (function()
 		end
 		local svCursor, svFill = knob(svBox, 14)
 
-		-- Hue is a slim horizontal track under the square.
+
 		local hueBar = create("TextButton", {
 			Position = UDim2.fromOffset(0, 132),
 			Size = UDim2.new(1, 0, 0, 10),
@@ -4254,7 +4202,7 @@ local Library = (function()
 		local hueCursor, hueFill = knob(hueBar, 16)
 		hueCursor.Position = UDim2.fromScale(0, 0.5)
 
-		-- Bottom row: a preview chip and hex field on the left, RGB on the right.
+
 		local hexHolder = create("Frame", {
 			Position = UDim2.fromOffset(0, 154),
 			Size = UDim2.fromOffset(compact and 110 or 124, 28),
@@ -4673,20 +4621,18 @@ local Library = (function()
 		function self_:SetColor(color)
 			tween(fill, { BackgroundColor3 = Library._color(color) or Theme.Accent }, 0.25)
 		end
-		-- The percentage's colour; nil goes back to the accent.
+
 		function self_:SetTextColor(color)
 			tween(valueLabel, { TextColor3 = Library._color(color) or Theme.Accent }, 0.25)
 		end
-		-- Runs render now, and again on a theme change for theme tags in Format.
+
 		onTheme(valueLabel, function()
 			render(0)
 		end)
 		return finishElement(self, opts, self_, frame, "Progress")
 	end
 
-	-- An always-open list the player puts in order: drag a row (by its grip on
-	-- touch, anywhere on PC) or nudge it with the arrows. Past MaxRows the list
-	-- scrolls, and dragging near its top or bottom edge scrolls it along.
+
 	function Tab:OrderList(opts)
 		opts = normalize(opts, { Title = "Name", Description = "Desc", Options = "Items", Values = "Items" })
 		local metrics = metricsOf(self)
@@ -4744,7 +4690,7 @@ local Library = (function()
 			ScrollBarImageColor3 = Theme.Accent,
 			ScrollBarImageTransparency = 0.4,
 			ScrollingDirection = Enum.ScrollingDirection.Y,
-			-- Sized by hand, like the dropdown list, so it scrolls under UIScale.
+
 			CanvasSize = UDim2.new(),
 			ScrollingEnabled = false,
 			LayoutOrder = 3,
@@ -4767,7 +4713,7 @@ local Library = (function()
 			Parent = content,
 		})
 
-		-- A lucide icon, or a text glyph when the icon set didn't load.
+
 		local function iconButton(parent, icon, glyph, rotation, props)
 			props.BackgroundTransparency = 1
 			props.Text = ""
@@ -4806,8 +4752,8 @@ local Library = (function()
 
 		local self_ = {}
 		local entries = {}
-		-- The last order Set asked for, including items not in the list right now,
-		-- so a saved order still applies once Refresh brings those items in.
+
+
 		local remembered = {}
 		local dragging = nil
 		local nudge, beginDrag
@@ -4953,8 +4899,8 @@ local Library = (function()
 					beginDrag(entry)
 				end
 			end)
-			-- On PC the whole row drags; on touch only the grip does, so a swipe
-			-- across the rows still scrolls.
+
+
 			row.InputBegan:Connect(function(input)
 				if input.UserInputType ~= Enum.UserInputType.MouseButton1 then
 					return
@@ -4982,8 +4928,7 @@ local Library = (function()
 			return entry
 		end
 
-		-- Reuses the rows whose item is still in the list, so a reorder slides
-		-- rows instead of rebuilding them.
+
 		local function build(list)
 			local pool = {}
 			for _, entry in ipairs(entries) do
@@ -5008,7 +4953,7 @@ local Library = (function()
 			entries = nextEntries
 		end
 
-		-- items sorted by where they sit in ranking; the rest keep their order after.
+
 		local function arrange(items, ranking)
 			local left = {}
 			for _, value in ipairs(items) do
@@ -5064,7 +5009,7 @@ local Library = (function()
 		local grabOffset, lastPointer = 0, nil
 		local startEntries, stopRender, lockedPage = nil, nil, nil
 
-		-- Moves the held row under the pointer and slides the others out of its way.
+
 		local function follow(pointer)
 			local scale = window.Scale.Scale
 			local y = (pointer.Y - grabOffset - scroller.AbsolutePosition.Y) / scale + scroller.CanvasPosition.Y
@@ -5079,8 +5024,7 @@ local Library = (function()
 			end
 		end
 
-		-- Holding the row near the list's top or bottom edge scrolls it, faster
-		-- the closer the pointer gets.
+
 		local function autoScroll(deltaTime)
 			if not dragging or not lastPointer then
 				return
@@ -5120,7 +5064,7 @@ local Library = (function()
 			tween(entry.Stroke, { Color = Theme.Accent }, 0.12)
 			tween(entry.Scale, { Scale = 1.02 }, 0.18, Enum.EasingStyle.Back)
 			tint(entry.GripIcon, Theme.Accent, 0, 0.12)
-			-- Neither the list nor the page scrolls under the finger while dragging.
+
 			scroller.ScrollingEnabled = false
 			local page = frame:FindFirstAncestorWhichIsA("ScrollingFrame")
 			if page and page.ScrollingEnabled then
@@ -5182,8 +5126,7 @@ local Library = (function()
 			endDrag(false)
 		end
 
-		-- Reorders the items already in the list. Unknown items are remembered for
-		-- a later Refresh; items missing from the list keep their order after.
+
 		function self_:Set(list, silent)
 			if type(list) ~= "table" then
 				return
@@ -5200,8 +5143,7 @@ local Library = (function()
 			return values()
 		end
 
-		-- Replaces the items. Items that were already there keep the player's
-		-- order unless keepOrder is false; new ones go to the end.
+
 		function self_:Refresh(items, keepOrder, silent)
 			endDrag(true)
 			items = type(items) == "table" and table.clone(items) or {}
@@ -5216,7 +5158,7 @@ local Library = (function()
 			changed(silent)
 		end
 
-		-- The shown order, then remembered items that aren't in the list right now.
+
 		function self_:_saveValue()
 			local list = values()
 			local left = {}
@@ -5292,10 +5234,7 @@ local Library = (function()
 		return executor, false, "Missing " .. table.concat(missing, ", ") .. ". Some features may not work."
 	end
 
-	-- "Don't ask again" on the unsupported executor warning: the executor's
-	-- name goes in a file in the script folder, and the warning is skipped while
-	-- the same executor is in use. Resetting the folder brings it back.
-	-- A table, not separate locals: the main chunk is at Luau's 200 local limit.
+
 	local UnsupportedSkip = {}
 
 	function UnsupportedSkip.Path(folder)
@@ -5339,9 +5278,7 @@ local Library = (function()
 		return UnsupportedSkip.Write(folder, UnsupportedSkip.Path(folder), executor)
 	end
 
-	-- Custom disclaimers ticked "Don't show again": one key per line in
-	-- disclaimers.txt. The key is the disclaimer's Id, or a hash of its title
-	-- and text, so rewording a disclaimer shows it again.
+
 	function UnsupportedSkip.DisclaimerKey(entry)
 		if entry.Id ~= nil then
 			return (tostring(entry.Id):gsub("[\r\n]", " "))
@@ -5456,7 +5393,7 @@ local Library = (function()
 	local Window = {}
 	Window.__index = Window
 
-	-- Shared across executions of the script, so a rerun can find the last window.
+
 	function Library._registry()
 		local ok, env = pcall(function()
 			return getgenv and getgenv() or shared
@@ -5477,8 +5414,8 @@ local Library = (function()
 		if type(opts.Keybind) == "string" then
 			opts.Keybind = Enum.KeyCode[opts.Keybind]
 		end
-		-- Phones get a smaller logical window: the same content at a higher
-		-- scale reads far better than a desktop-sized window shrunk to fit.
+
+
 		local cameraSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.zero
         local tablet = TOUCH and cameraSize.X >= 900 and cameraSize.Y >= 720
         local size = opts.Size or (TOUCH and not tablet and UDim2.fromOffset(640, 430) or UDim2.fromOffset(760, 520))
@@ -5508,8 +5445,8 @@ local Library = (function()
 		local saving = type(opts.ConfigurationSaving) == "table" and opts.ConfigurationSaving or {}
 		self.ConfigFolder = saving.FolderName or "MacrOS/UI/config"
 		self.ThemeFolder = opts.ThemeFolder
-		-- Re-executing the script unloads the copy it left behind first, so the
-		-- old toggles stop before the new autoload starts them again.
+
+
 		self._registryKey = "AirFlow:" .. tostring(self.ConfigFolder) .. ":" .. tostring(opts.Title or "Airflow")
 		local registry = Library._registry()
 		if registry then
@@ -5578,9 +5515,8 @@ local Library = (function()
 			Parent = gui,
 		})
 		self.Root = root
-		-- Kept as a tiny marker for compatibility, but never Modal. A Modal
-		-- button hands the mouse to the UI and blocks the camera's right-click
-		-- look, which is exactly the bug this gate used to cause.
+
+
 		self._cursorGate = create("TextButton", {
 			Name = "CursorRelease",
 			Size = UDim2.fromOffset(1, 1),
@@ -5608,8 +5544,7 @@ local Library = (function()
 		self.Shadow = shadow
 		self._shadowRest = 0.6
 
-		-- The body is a plain Frame so resizing never re-renders the window into a
-		-- texture. It only moves into the fader CanvasGroup while fading.
+
 		local fader = create("CanvasGroup", {
 			Name = "Fader",
 			Size = UDim2.fromScale(1, 1),
@@ -5633,7 +5568,7 @@ local Library = (function()
 		corner(body, UDim.new(0, 10))
 		self.BodyStroke = stroke(body, Theme.Stroke)
 		edgeHighlight(body)
-		-- Background image: made first so everything else in the body draws over it.
+
 		self._backgroundImage = create("ImageLabel", {
 			Name = "BackgroundImage",
 			Size = UDim2.fromScale(1, 1),
@@ -5648,8 +5583,7 @@ local Library = (function()
 		self.BackgroundTransparency = math.clamp(tonumber(opts.BackgroundTransparency) or 0.35, 0, 1)
 		self._backgroundGeneration = 0
 
-		-- The sidebar is a flush, solid rail down the left edge, split from the
-		-- content by a single hairline.
+
 		local sidebar = create("Frame", {
 			Name = "Sidebar",
 			Size = UDim2.new(0, SIDEBAR_WIDTH, 1, 0),
@@ -5659,9 +5593,8 @@ local Library = (function()
 			Parent = body,
 		})
 		self.Sidebar = sidebar
-		-- One rounded fill that runs past the rail's right edge, where the rail
-		-- clips it: the left corners round with the window, the right edge is
-		-- square, and nothing overlaps, so it fades evenly when see-through.
+
+
 		local sidebarFill = create("Frame", {
 			Name = "Fill",
 			Size = UDim2.new(1, 24, 1, 0),
@@ -5736,8 +5669,8 @@ local Library = (function()
 			Parent = sidebar,
 		})
 		self.TabList = tabList
-		-- The highlight sits beside the stack of buttons, so it scrolls and clips
-		-- with them and glides between tiles.
+
+
 		local indicator = create("Frame", {
 			Position = UDim2.fromOffset(8, 2),
 			Size = UDim2.new(1, -16, 0, TAB_TILE_HEIGHT),
@@ -5748,8 +5681,8 @@ local Library = (function()
 			Parent = tabList,
 		})
 		corner(indicator, UDim.new(0, 7))
-		-- The active tab is just a quiet neutral fill with white text; the bar
-		-- is kept for callers but stays hidden.
+
+
 		local pill = create("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 0, 0.5, 0),
@@ -5778,7 +5711,7 @@ local Library = (function()
 		})
 		self._tabStack = stack
 
-		-- More tabs than fit: a fade and a small "more" chip at the hidden end.
+
 		self:_overflowHint(sidebar, tabList, stack, true, Theme.Surface)
 
 		if profileEnabled then
@@ -5830,8 +5763,8 @@ local Library = (function()
 			Parent = content,
 		})
 		minimizeButton:SetAttribute("NoDrag", true)
-		-- A bare "minimize" arrows glyph, no box: muted at rest, full text
-		-- colour and a touch smaller on hover, as if pulling in.
+
+
 		local minimizeGlyph = create("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
@@ -5927,7 +5860,7 @@ local Library = (function()
 		self.MaxSize = opts.MaxSize
 		self.KeepOnScreen = opts.KeepOnScreen ~= false
 		self:_enableResize(opts.MinSize or Vector2.new(480, 360))
-		-- The window's exact size rides along in configs as a hidden flag.
+
 		if opts.SaveSize ~= false then
 			local window = self
 			local sizeFlag = { _type = "WindowSize", _listeners = {} }
@@ -5987,8 +5920,8 @@ local Library = (function()
 				self:_clampToScreen()
 			end)
 		)
-		-- Rotating a phone, opening a fold, or a game that resizes the viewport
-		-- mid-session: the camera is the one source that always reports it.
+
+
 		pcall(function()
 			local camera = workspace.CurrentCamera
 			if camera then
@@ -6009,7 +5942,7 @@ local Library = (function()
 		if type(toggleOpts) == "table" then
 			self:_createToggleButton(toggleOpts)
 		end
-		-- The toggle button already brings a hidden window back.
+
 		local toggleShown = self.ToggleButton ~= nil and self:_toggleButtonAllowed()
 		if
 			(opts.OpenButton ~= nil and opts.OpenButton ~= false)
@@ -6037,8 +5970,8 @@ local Library = (function()
 			opts.LoadingTitle = loading.Title or opts.LoadingTitle
 			loading = loading.Enabled ~= false
 		end
-		-- An executor off the supported list (or missing the file / asset API)
-		-- stops at a warning card before the window opens.
+
+
 		local prompts = {}
 		local gate = opts.UnsupportedExecutor
 		if gate ~= false then
@@ -6065,8 +5998,8 @@ local Library = (function()
 				})
 			end
 		end
-		-- Custom disclaimers queue up after the executor warning, in order. Each
-		-- one must be accepted (or skipped by an earlier "Don't show again").
+
+
 		local disclaimers = opts.Disclaimer or opts.Disclaimers
 		if
 			type(disclaimers) == "string"
@@ -6178,8 +6111,8 @@ local Library = (function()
 	function Window:_refreshControls()
 		local controls = {}
 		for _, object in ipairs(self.Body:GetDescendants()) do
-			-- A scrolling list is a control: pressing it and moving a finger is
-			-- the player scrolling, not dragging the window across the screen.
+
+
 			if
 				object:IsA("GuiButton")
 				or object:IsA("TextBox")
@@ -6208,10 +6141,7 @@ local Library = (function()
 		return false
 	end
 
-	-- Tooltips: one shared card per window that follows the pointer over any
-	-- element built with Tooltip = "..." or { Title, Text, Icon }. It appears
-	-- after a short hover (straight away when moving from one tooltip to the
-	-- next), hides on press, and shows on a long press on touch screens.
+
 	function Window:_tooltipCard()
 		if self._tip then
 			return self._tip
@@ -6229,9 +6159,8 @@ local Library = (function()
 		corner(holder, UDim.new(0, 8))
 		stroke(holder, Theme.Stroke, 1)
 		local tipScale = create("UIScale", { Parent = holder })
-		-- An opaque tooltip card stays legible over both game and other windows.
-		-- The holder is sized from the text by hand, since scale sizes inside an
-		-- automatic size would stretch it across the screen.
+
+
 		local PAD = 10
 		local panel = create("Frame", {
 			Position = UDim2.fromOffset(PAD, PAD),
@@ -6318,8 +6247,8 @@ local Library = (function()
 			Fit = fit,
 		}
 		self._tip = tip
-		-- Follow the pointer, and drop the card once its element is gone or off
-		-- screen (tab switched, window hidden or minimized).
+
+
 		self:_listen("Render", function(deltaTime)
 			local owner = self._tipOwner
 			if not owner then
@@ -6360,7 +6289,7 @@ local Library = (function()
 			)
 			local current = tip.Position
 			if not current or tip.Snap then
-				-- Rises a few pixels into place as it fades in.
+
 				current = target + Vector2.new(0, 6)
 				tip.Snap = false
 			else
@@ -6369,7 +6298,7 @@ local Library = (function()
 			tip.Position = current
 			holder.Position = UDim2.fromOffset(math.floor(current.X - pad + 0.5), math.floor(current.Y - pad + 0.5))
 		end)
-		-- A press anywhere (a dropdown chip inside the card, a key) hides it.
+
 		self:_listen("Began", function(input)
 			if
 				self._tipOwner
@@ -6453,7 +6382,7 @@ local Library = (function()
 				if token ~= mine or not hovering or element._destroyed or self._destroyed then
 					return
 				end
-				-- A finger that moved was scrolling, not holding.
+
 				if touch and pressAt and (pointerPosition() - pressAt).Magnitude > 10 then
 					return
 				end
@@ -6501,9 +6430,7 @@ local Library = (function()
 		)
 	end
 
-	-- While dragging, a stand-in follows the pointer while the window stays put,
-	-- and the window glides into its spot on release. The look is the player's
-	-- Drag Style; "Off" drags the window itself.
+
 	Library.DragStyles = { "Outline", "Brackets", "Ghost", "Frame", "Off" }
 
 	local function makeSkeleton(window)
@@ -6520,7 +6447,7 @@ local Library = (function()
 			Parent = window.Gui,
 		})
 		corner(skeleton, UDim.new(0, 10))
-		-- Each part fades from hidden to its shown values, and back on release.
+
 		local parts = {}
 		local function part(object, shown)
 			local hidden = {}
@@ -6548,17 +6475,17 @@ local Library = (function()
 			end
 		end
 		if style == "Brackets" then
-			-- Just the four corners of the window, a little longer.
+
 			brackets(22, 0)
 		elseif style == "Ghost" then
-			-- A see-through copy of the window's panel.
+
 			part(skeleton, { BackgroundTransparency = 0.35 })
 			part(stroke(skeleton, Theme.Stroke, 1, 1), { Transparency = 0 })
 		elseif style == "Frame" then
-			-- A single quiet line, nothing else.
+
 			part(stroke(skeleton, Theme.StrokeHover, 1, 1), { Transparency = 0 })
 		else
-			-- Outline: a faint accent wash, an outline and corner brackets.
+
 			part(skeleton, { BackgroundTransparency = 0.92 })
 			part(stroke(skeleton, Theme.Accent, 1, 1.5), { Transparency = 0.2 })
 			brackets(16, 6)
@@ -6731,7 +6658,7 @@ local Library = (function()
 			if not moved then
 				return
 			end
-			-- Hidden or minimized mid-drag: land it where the outline is.
+
 			if skeleton and (not self.Open or not self.Root.Visible) then
 				dragging = false
 				dropSkeleton()
@@ -6750,8 +6677,7 @@ local Library = (function()
 		end)
 	end
 
-	-- One of Library.DragStyles; anything else falls back to "Outline".
-	-- Returns the style it settled on.
+
 	function Window:SetDragStyle(style)
 		style = table.find(Library.DragStyles, style) and style or "Outline"
 		self.DragStyle = style
@@ -6763,12 +6689,10 @@ local Library = (function()
 		return self.DragStyle
 	end
 
-	-- How the minimized island shows the session card: opening it while
-	-- hovered, or keeping it open the whole time it's minimized.
+
 	Library.IslandStyles = { "Show on Hover", "Always Show" }
 
-	-- One of Library.IslandStyles; anything else falls back to "Show on Hover".
-	-- Returns the style it settled on.
+
 	function Window:SetIslandStyle(style)
 		style = table.find(Library.IslandStyles, style) and style or "Show on Hover"
 		self.IslandStyle = style
@@ -6782,8 +6706,7 @@ local Library = (function()
 		return self.IslandStyle
 	end
 
-	-- The older on/off switch: off is the "Off" style, on brings back the
-	-- default style if it was off.
+
 	function Window:SetDragSkeleton(enabled)
 		if enabled == false then
 			self:SetDragStyle("Off")
@@ -6792,8 +6715,7 @@ local Library = (function()
 		end
 	end
 
-	-- The sidebar's divider is a grab strip: dragging it sets the rail's width,
-	-- kept between a usable minimum and enough room for the content.
+
 	function Window:_sidebarResize(sidebar, width)
 		local divider = sidebar:FindFirstChild("Divider")
 		local want = width
@@ -6801,13 +6723,13 @@ local Library = (function()
             if remember ~= false and not self._compact then
                 want = value
                 if not self._compact then
-					-- the width the player picked, kept apart from the compact rail
+
 					self._sidebarWanted = value
 				end
 			end
 			local room = self.Body.AbsoluteSize.X / math.max(self.Scale.Scale, 0.01) - 300
-			-- The compact rail is narrower than the normal floor, so the clamp
-			-- has to follow the mode instead of pinning 150.
+
+
 			local floorWidth = self._compact and COMPACT_WIDTH or 150
 			value = self._compact and COMPACT_WIDTH
                 or math.floor(math.clamp(value, floorWidth, math.max(math.min(320, room), floorWidth)))
@@ -6878,7 +6800,7 @@ local Library = (function()
 				light(false)
 			end
 		end)
-		-- Shrinking the window pulls an over-wide rail back in.
+
 		self.Body:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 			if not dragging then
 				apply(want, false)
@@ -6886,9 +6808,7 @@ local Library = (function()
 		end)
 	end
 
-	-- A phone has no room for a 188 px rail and a page beside it: the tabs turn
-	-- into an icons-only strip, the header keeps just the mark, the profile keeps
-	-- just the avatar, and the page gets the rest of the window.
+
 	function Window:SetCompact(enabled)
 		enabled = enabled == true
         if self._compact == enabled then
@@ -6912,7 +6832,7 @@ local Library = (function()
 				}, 0.2, Enum.EasingStyle.Quint)
 			end
 			if tab._title and tab._titleX then
-				-- the page header keeps its breathing room, it just starts closer in
+
 				tab._title.Position = UDim2.fromOffset(enabled and 18 or tab._titleX, 20)
 			end
 			self:_fitTitle(tab)
@@ -6948,7 +6868,7 @@ local Library = (function()
 		return self._compact == true
 	end
 
-	-- "Auto" follows the screen, "On"/"Off" pin it.
+
 	function Window:SetCompactMode(mode)
 		mode = tostring(mode or "Auto")
 		if mode ~= "On" and mode ~= "Off" then
@@ -6975,10 +6895,8 @@ local Library = (function()
 		end
 		viewport = viewport or self:_viewport()
 		local width = viewport.X or 0
-		-- Touch screens always, small windows too: a 900 px window with a full
-		-- rail leaves a column too narrow for the cards. A viewport smaller than
-		-- 320 px is not a real screen (it is what a freshly built ScreenGui
-		-- reports before the first frame), and must not flip the mode.
+
+
 		if width > 320 then
 			local logicalWidth = self.Root.Size.X.Offset
             local needsTouchRail = TOUCH and ((viewport.Y or 0) < 720 or logicalWidth < 700)
@@ -6988,15 +6906,14 @@ local Library = (function()
 		end
 	end
 
-	-- See-through window: the body and sidebar let the game show through, and the
-	-- shadow lightens so it doesn't smudge behind them.
+
 	function Window:SetTransparent(enabled)
 		self.Transparent = enabled == true
 		local on = self.Transparent
 		self._shadowRest = on and 0.85 or 0.6
 		tween(self.Body, { BackgroundTransparency = on and 0.35 or 0 }, 0.25)
-		-- See-through, the rail stays a touch more solid than the body so the
-		-- tabs keep their contrast; over a background image it lets more through.
+
+
 		local railAlpha = on and 0.5 or (self.Background and 0.45 or 0)
 		tween(self.SidebarFill, { BackgroundTransparency = railAlpha }, 0.25)
 		if self.Open and not self.Minimized and self.Root.Visible then
@@ -7073,15 +6990,15 @@ local Library = (function()
 		task.delay(0.4, function()
 			self:_refreshToggleButton()
 		end)
-		-- Build the minimized bar ahead of time so the first minimize doesn't
-		-- pay for it mid-click.
+
+
 		task.delay(1.5, function()
 			if not self._destroyed and not self.MiniBar then
 				self:_buildMiniBar()
 			end
 		end)
-		-- "Minimize UI on Start": fold into the island once, right after the
-		-- first intro of this execution.
+
+
 		if self:GetMinimizeOnStart() then
 			task.delay(0.6, function()
 				if not self._destroyed and self.Open and not self.Minimized then
@@ -7125,10 +7042,8 @@ local Library = (function()
 	function Window:_showLoader(opts)
 		local duration = opts.LoadingDuration or 1.6
 		local gui = self.Gui
-		-- A compact card: logo, title and subtitle on top, a checklist of the
-		-- loading steps under a hairline, and a thin progress line along the
-		-- bottom edge. Everything but the prompt cards lives in one canvas group
-		-- so it can fade as a unit.
+
+
 		local steps = opts.LoadingSteps or { "Preparing interface", "Loading icons", "Almost there" }
 		local WIDTH, PAD, STEP = 340, 22, 24
 		local listTop = 80
@@ -7210,8 +7125,7 @@ local Library = (function()
 			Parent = content,
 		})
 
-		-- Each step: a marker and its text. Pending is a dim dot, the running
-		-- step a turning arc, and a finished one a check.
+
 		local rows = {}
 		for index, text in ipairs(steps) do
 			local row = create("Frame", {
@@ -7274,7 +7188,7 @@ local Library = (function()
 				Parent = row,
 			})
 			rows[index] = { Dot = dot, Spinner = spinner, Check = check, Label = stepLabel, State = "pending" }
-			-- The rows fade in one after another once the card is up.
+
 			task.delay(0.15 + index * 0.06, function()
 				if loader.Parent and rows[index].State == "pending" then
 					tween(stepLabel, { TextTransparency = 0.45 }, 0.3)
@@ -7315,7 +7229,7 @@ local Library = (function()
 		tween(loaderScale, { Scale = 1 }, 0.45, Enum.EasingStyle.Quint)
 		tween(loaderShadow, { ImageTransparency = 0.55 }, 0.4)
 		tween(fill, { Size = UDim2.fromScale(0.85, 1) }, duration * 0.8, Enum.EasingStyle.Quart)
-		-- The percentage follows the bar and the running step's arc turns.
+
 		local percentStep
 		percentStep = RunService.RenderStepped:Connect(function(deltaTime)
 			if not loader.Parent then
@@ -7373,9 +7287,7 @@ local Library = (function()
 			end)
 		end
 
-		-- Prompt cards (unsupported executor, custom disclaimers): the checklist
-		-- gives way to one card at a time, each with Exit and Continue, before
-		-- the window opens.
+
 		local function hideBar()
 			completeSteps()
 			tween(content, { GroupTransparency = 1 }, 0.18)
@@ -7384,8 +7296,8 @@ local Library = (function()
 		local function showCard(info, onContinue)
 			local WIDTH, PAD, MAX_BODY = 360, 24, 220
 			local tone = info.Color or Theme.Accent
-			-- Fixed width from the start, so the body wraps at its final width
-			-- while the loader is still resizing.
+
+
 			local warnCard = create("CanvasGroup", {
 				AnchorPoint = Vector2.new(0.5, 0),
 				Position = UDim2.fromScale(0.5, 0),
@@ -7432,7 +7344,7 @@ local Library = (function()
 					Parent = warnCard,
 				})
 			end
-			-- Long text scrolls past MAX_BODY instead of pushing the card off screen.
+
 			local scroller = create("ScrollingFrame", {
 				Position = UDim2.fromOffset(PAD, PAD + 60),
 				Size = UDim2.new(1, -PAD * 2, 0, 16),
@@ -7471,8 +7383,7 @@ local Library = (function()
 				Parent = row,
 			})
 
-			-- Don't ask again: only offered when Continue is, and the executor
-			-- can write the file that remembers it.
+
 			local remember = false
 			local rememberRow = nil
 			if not info.Block and info.RememberText and UnsupportedSkip.Available() then
@@ -7616,13 +7527,10 @@ local Library = (function()
 				end)
 			end
 
-			-- The card grows to fit the message, then it fades in. The wrapped
-			-- height can land a few frames late (font loading, the scroller's
-			-- layout), so the card refits whenever it changes.
+
 			local laidOut = false
-			-- TextBounds of wrapped text stops at the label's current height, so
-			-- the card would fit to its own clipped text; the full wrapped height
-			-- is measured at the body's width instead.
+
+
 			local function measure()
 				local ok, size = pcall(function()
 					local params = Instance.new("GetTextBoundsParams")
@@ -7701,10 +7609,7 @@ local Library = (function()
 		end)
 	end
 
-	-- The screen the window is drawn on. The camera is asked first: on phones
-	-- ScreenGui.AbsoluteSize can sit at zero for a while and it does not fire a
-	-- change signal on every rotation, which left the window at 1x on a phone
-	-- and nothing scaled it. The camera's ViewportSize is always right.
+
 	function Window:_viewport()
 		local camera = workspace.CurrentCamera
 		local size = camera and camera.ViewportSize
@@ -7724,15 +7629,14 @@ local Library = (function()
 			return
 		end
 		local size = self.Root.Size
-		-- Phones have less to spare: a 12 px margin, and the topbar inset is
-		-- taken off the height, so the window never slides under the buttons.
+
+
 		local margin = TOUCH and 10 or 24
 		local inset = 0
 		if TOUCH then
 			pcall(function()
-				-- GetGuiInset gives the top-left and bottom-right corners; the
-				-- topbar lives in the first one. Some executors hand back a single
-				-- vector, so both shapes are read.
+
+
 				local first, second = GuiService:GetGuiInset()
 				local top = first and first.Y or 0
 				local bottom = second and second.Y or 0
@@ -7741,16 +7645,16 @@ local Library = (function()
 		end
 		local roomX = math.max(viewport.X - margin * 2, 120)
 		local roomY = math.max(viewport.Y - margin * 2 - inset, 120)
-		-- The player's UI scale, times the adaptive factor for this screen, shrunk
-		-- further when the window wouldn't fit.
+
+
 		local wanted = (self._uiScale or 1) * (self._adaptive ~= false and Library._adaptiveFactor(viewport) or 1)
 		local scale = math.min(wanted, roomX / math.max(size.X.Offset, 1), roomY / math.max(size.Y.Offset, 1))
-		-- 0.45 was a floor that made a big saved window spill off a small screen;
-		-- a phone has to be allowed to go lower before it is cut off.
+
+
 		self._fitScale = math.clamp(scale, 0.01, 1.75)
 		self._inset = inset
 		if TOUCH and inset > 0 and not self._userMoved and self._introDone then
-			-- centred in the area below the top bar, not the raw screen
+
 			self.Root.Position = UDim2.new(0.5, 0, 0.5, inset / 2)
 		end
 		if self._introDone and self.Open then
@@ -7764,9 +7668,7 @@ local Library = (function()
 		self._fitViewport = viewport
 	end
 
-	-- Watches the screen itself. Boarding a phone in a game that resizes the
-	-- viewport once, or an executor that swallows the change signal, both used
-	-- to leave the window at the wrong scale for the whole session.
+
 	function Window:_watchViewport()
 		if self._viewportWatch then
 			return
@@ -7791,10 +7693,7 @@ local Library = (function()
 		self._viewportWatch = true
 	end
 
-	-- Adaptive size: the window is drawn for a 1080p screen and grows on larger
-	-- ones (up to 1.75x on 4K) or shrinks a little on small laptops, so it covers
-	-- about the same share of any screen. 1080p-class screens, windowed or with
-	-- the topbar inset, stay at exactly 1. Touch screens only use the fit.
+
 	function Library._adaptiveFactor(viewport)
 		if TOUCH then
 			return 1
@@ -7820,7 +7719,7 @@ local Library = (function()
 		return self._adaptive ~= false
 	end
 
-	-- UI scale: 0.6 to 1.5 on top of the automatic fit to small screens.
+
 	function Window:SetUIScale(value)
 		value = math.clamp(tonumber(value) or 1, 0.6, 1.5)
 		self.UIScale = value
@@ -7837,12 +7736,11 @@ local Library = (function()
 		return self._uiScale or 1
 	end
 
-	-- Density: the spacing between cards, groupboxes and rows. Shared by every
-	-- window, like the theme. Anything built with Library._space follows it.
+
 	Library.DensityModes = { Compact = 0.55, Default = 1, Comfortable = 1.45 }
 	Library.Density = "Default"
 
-	-- Small gaps (a groupbox's 2px rows) still move visibly between modes.
+
 	function Library._spaced(base, factor)
 		if base <= 0 then
 			return 0
@@ -7856,7 +7754,7 @@ local Library = (function()
 			object:SetAttribute("Space", base)
 			object.Padding = UDim.new(0, Library._spaced(base, factor))
 		elseif object:IsA("UIPadding") then
-			-- base is { left, right, top, bottom }
+
 			object:SetAttribute("SpaceL", base[1])
 			object:SetAttribute("SpaceR", base[2])
 			object:SetAttribute("SpaceT", base[3])
@@ -7910,9 +7808,7 @@ local Library = (function()
 		return Library.Density
 	end
 
-	-- True while the physical right mouse button is held. Reading the live
-	-- button state (instead of caching Began/Ended events) survives focus loss,
-	-- alt-tab and missed InputEnded events, so the lease never gets stuck.
+
 	function Library:_rmbDown()
 		local ok, down = pcall(function()
 			return UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
@@ -7922,8 +7818,8 @@ local Library = (function()
 
 	function Library:ReleasePointer()
 		self._pointerOwner = nil
-		-- Never fight the camera while the player is holding RMB: it owns the
-		-- mouse during a look-drag and restores Default itself on release.
+
+
 		if self:_rmbDown() then
 			return
 		end
@@ -7935,14 +7831,7 @@ local Library = (function()
 		end
 	end
 
-	-- Cursor management that cooperates with the default camera instead of
-	-- fighting it. The old version forced MouseBehavior.Default every frame
-	-- even during RMB drags (and used a Modal button), which blocked camera
-	-- rotation and made the mouse jitter/freeze whenever the two systems
-	-- overwrote each other. Now:
-	--   * UI visible, RMB up   -> free cursor, icon shown, UI clickable.
-	--   * RMB held             -> hands off: the camera locks and rotates.
-	--   * UI hidden/destroyed  -> release once, then stop touching the mouse.
+
 	function Library:_installCursorLease()
 		if self._cursorLeaseInstalled then
 			return
@@ -7960,8 +7849,8 @@ local Library = (function()
 					and w.Root.Parent
 					and w.Root.Visible
 					and guiActive
-				-- The floating music window lives outside Root, so it keeps the
-				-- cursor free even while the main window is hidden.
+
+
 				local music = w._musicPlayer
 				local musicActive = not w._destroyed
 					and guiActive
@@ -7980,8 +7869,8 @@ local Library = (function()
 			end
 			local rmb = Library:_rmbDown()
 			if visible and not rmb then
-				-- Runs after the camera update, so the final state of the frame
-				-- is a free, visible cursor the player can click the UI with.
+
+
 				if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
 					UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 				end
@@ -8018,8 +7907,8 @@ local Library = (function()
 			return centre
 		end
 		local half = self.Root.AbsoluteSize / 2
-		-- On a phone the top bar eats the first 36 px: the window keeps clear of
-		-- it instead of sliding its header underneath the buttons.
+
+
 		local top = TOUCH and (self._inset or 0) or 0
 		return Vector2.new(
 			math.clamp(centre.X, math.min(half.X, viewport.X / 2), math.max(viewport.X - half.X, viewport.X / 2)),
@@ -8125,8 +8014,7 @@ local Library = (function()
 		)
 	end
 
-	-- Square floating button that minimizes and restores the window. Shown on
-	-- touch devices only, or everywhere with Platform = "Both".
+
 	function Window:_toggleButtonAllowed()
 		return self._toggleEnabled and (TOUCH or self._togglePlatform == "Both")
 	end
@@ -8144,7 +8032,7 @@ local Library = (function()
 		elseif not shown then
 			button.Visible = false
 		end
-		-- Folded (window minimized or hidden): the outline takes the accent.
+
 		local folded = self.Minimized or not self.Open
 		tween(
 			self._toggleStroke,
@@ -8287,9 +8175,8 @@ local Library = (function()
 			Parent = root,
 		})
 		self._grip = grip
-		-- An arc that traces the window's own rounded corner: a rounded square
-		-- laid over the corner whose outline fades out away from it, so only the
-		-- curve and a short run of each edge show. Faint at rest, accent in use.
+
+
 		local gripArc = create("Frame", {
 			AnchorPoint = Vector2.new(1, 1),
 			Position = UDim2.fromOffset(12, 12),
@@ -8322,10 +8209,7 @@ local Library = (function()
 			}, on and 0.15 or 0.3, Enum.EasingStyle.Quint)
 		end
 
-		-- The size follows the pointer through a critically damped spring, so it
-		-- glides after the cursor and eases to rest when released instead of
-		-- snapping. While resizing, the window is anchored at its top-left corner
-		-- so only the right and bottom edges move and nothing jitters on half pixels.
+
 		local STIFFNESS = 20
 		local resizing = false
 		local startSize = Vector2.zero
@@ -8350,7 +8234,7 @@ local Library = (function()
 			if root.AnchorPoint == Vector2.zero then
 				return
 			end
-			-- A clamp tween still writing centre coordinates would fight the new anchor.
+
 			if self._clampTween then
 				self._clampTween:Cancel()
 				self._clampTween = nil
@@ -8446,13 +8330,12 @@ local Library = (function()
 		end)
 	end
 
-	-- The window's own size in pixels, before the UI scale and screen fit.
+
 	function Window:GetSize()
 		return Vector2.new(self.Root.Size.X.Offset, self.Root.Size.Y.Offset)
 	end
 
-	-- Resizes to an exact size, kept within MinSize and MaxSize. Ignored while the
-	-- player is dragging the grip.
+
 	function Window:SetSize(size, instant)
 		if typeof(size) == "UDim2" then
 			size = Vector2.new(size.X.Offset, size.Y.Offset)
@@ -8479,10 +8362,6 @@ local Library = (function()
 		end)
 	end
 
-	-- Configs are plain JSON, one file per config, in the same shape as a share code:
-	--   {"Folder":"MyHub","Name":"farm","Version":1,"Config":"{\"AutoFarm\":{\"Value\":true,\"Type\":\"Toggle\"}}"}
-	-- Config holds the flags as their own JSON string, each one {"Value":...,"Type":...}.
-	-- Colours are {"Hex":"ff5a5a"}, keybinds are key names, an empty dropdown has no Value.
 
 	local CONFIG_VERSION = 1
 	local LEGACY_SHARE_PREFIX = "airflow:"
@@ -8495,7 +8374,7 @@ local Library = (function()
 		return type(writefile) == "function" and type(readfile) == "function" and type(isfile) == "function"
 	end
 
-	-- Makes every missing folder along the path, so FolderName can be "Hub/Game".
+
 	local function ensureFolder(folder)
 		if type(isfolder) ~= "function" or type(makefolder) ~= "function" then
 			return
@@ -8523,7 +8402,7 @@ local Library = (function()
 			if type(value.Hex) == "string" then
 				value = value.Hex
 			elseif type(value[1]) == "number" then
-				-- Older configs stored { r, g, b } in 0-1.
+
 				return Color3.new(value[1], value[2] or 0, value[3] or 0)
 			end
 		end
@@ -8561,7 +8440,7 @@ local Library = (function()
 				element:Set(color, silent)
 			end
 		elseif kind == "Dropdown" then
-			-- A dropdown saved with nothing picked has no Value at all.
+
 			element:Set(value, silent)
 		elseif kind == "Toggle" then
 			if type(value) == "boolean" then
@@ -8581,9 +8460,7 @@ local Library = (function()
 		return type(entry) == "table" and (entry.Type == nil or entry.Type == element._type)
 	end
 
-	-- Flags a config holds but no element has claimed yet are kept here. They are
-	-- applied when an element with that flag is created and written back on save,
-	-- so a config survives elements that only exist some of the time.
+
 	local function collectFlags(self)
 		local data = {}
 		if self and self._pendingFlags then
@@ -8606,12 +8483,10 @@ local Library = (function()
 		return data
 	end
 
-	-- Values first, switches last: a toggle's callback then starts with the
-	-- sliders and dropdowns it reads already in place. Override per window with
-	-- Window:SetLoadingOrder.
+
 	Library.LoadingOrder = { "Dropdown", "Slider", "Stepper", "Input", "ColorPicker", "Keybind", "Toggle" }
 
-	-- Flags a config never saves or loads, like Obsidian's SaveManager:SetIgnoreIndexes.
+
 	function Window:SetIgnoreFlags(flags)
 		self._ignoreFlags = self._ignoreFlags or {}
 		for _, flag in ipairs(flags or {}) do
@@ -8647,9 +8522,8 @@ local Library = (function()
 		table.sort(queue, function(a, b)
 			return a.Rank < b.Rank
 		end)
-		-- Like Obsidian: each flag is deferred onto its own thread, so a callback
-		-- that loops while its toggle is on can't stall the others or the script
-		-- that asked for the load.
+
+
 		for _, item in ipairs(queue) do
 			task.defer(function()
 				if not item.Element._destroyed and not self._destroyed then
@@ -8659,8 +8533,7 @@ local Library = (function()
 		end
 	end
 
-	-- Every flagged element reports here: its starting value becomes its default,
-	-- and a value waiting from an earlier load is applied once the constructor returns.
+
 	function Window:_flagCreated(flag, element)
 		local ok, entry = pcall(serializeFlag, element)
 		if ok then
@@ -8681,7 +8554,7 @@ local Library = (function()
 		end)
 	end
 
-	-- Anything listening for config changes (the config manager's status line).
+
 	function Window:_configChanged()
 		for _, handler in ipairs(self._configListeners) do
 			safeCall(handler)
@@ -8717,7 +8590,7 @@ local Library = (function()
 		B64_INDEX[B64:byte(index)] = index - 1
 	end
 
-	-- Only for reading the old "airflow:<base64>" share codes.
+
 	local function base64Decode(text)
 		if #text % 4 ~= 0 then
 			return nil
@@ -8745,8 +8618,7 @@ local Library = (function()
 		return table.concat(out)
 	end
 
-	-- Reads a config file or a pasted code: the JSON above (Config as a string or
-	-- a table), a bare flag table, or an old "airflow:" code. Returns flags, info.
+
 	local function decodeConfig(text)
 		text = tostring(text or ""):match("^%s*(.-)%s*$")
 		if text:sub(1, #LEGACY_SHARE_PREFIX) == LEGACY_SHARE_PREFIX then
@@ -8762,7 +8634,7 @@ local Library = (function()
 			return nil, "invalid config code"
 		end
 		local info = {}
-		-- A bare flag table could have a flag named Config, but its entry carries a Type.
+
 		if type(data.Config) == "string" or (type(data.Config) == "table" and data.Config.Type == nil) then
 			info.Folder = type(data.Folder) == "string" and data.Folder or nil
 			info.Name = type(data.Name) == "string" and data.Name or nil
@@ -8880,7 +8752,7 @@ local Library = (function()
 		return true
 	end
 
-	-- Moves the file and anything pointing at it: the loaded name and both autoloads.
+
 	function Window:RenameConfig(name, newName)
 		if not validConfigName(newName) then
 			return false, "invalid config name"
@@ -8939,7 +8811,7 @@ local Library = (function()
 		return names
 	end
 
-	-- Puts every flagged element back to the value it was created with.
+
 	function Window:ResetConfig(silent)
 		self._pendingFlags = {}
 		for _, element in pairs(Library.Flags) do
@@ -8951,8 +8823,7 @@ local Library = (function()
 		return true
 	end
 
-	-- Empties a folder and removes it, one file at a time when the executor has
-	-- no delfolder or it refuses a folder that still has files in it.
+
 	local function wipeFolder(path)
 		if type(isfolder) ~= "function" or not isfolder(path) then
 			return true
@@ -8976,8 +8847,7 @@ local Library = (function()
 		return not isfolder(path)
 	end
 
-	-- Deletes the script's whole workspace folder: configs, themes, the default
-	-- theme, autoload, settings and the execution count.
+
 	function Window:ClearWorkspace()
 		local ok = wipeFolder(self.ConfigFolder)
 		self.LoadedConfig = nil
@@ -8988,7 +8858,6 @@ local Library = (function()
 		return ok
 	end
 
-	-- Share codes are the same JSON a config file holds.
 
 	function Window:ExportConfig(name)
 		local data, err
@@ -9008,13 +8877,12 @@ local Library = (function()
 		return code
 	end
 
-	-- Reads a code without applying it. Returns flags and { Folder, Name, Version }.
+
 	function Window:DecodeConfig(code)
 		return decodeConfig(code)
 	end
 
-	-- saveAs: a name to save under, true for the name inside the code, or nil to
-	-- only apply it. Codes made for another folder are refused unless force is set.
+
 	function Window:ImportConfig(code, saveAs, force)
 		local data, info = decodeConfig(code)
 		if not data then
@@ -9061,8 +8929,6 @@ local Library = (function()
 		end
 	end
 
-	-- Manager settings (autoload mode) live beside the configs, apart
-	-- from the flags, so loading a config never changes them.
 
 	local function settingsPath(self)
 		return self.ConfigFolder .. "/configsettings.txt"
@@ -9093,8 +8959,6 @@ local Library = (function()
 		return pcall(writefile, settingsPath(self), HttpService:JSONEncode(data))
 	end
 
-	-- Autoload: one config name kept next to the configs, either for every
-	-- account ("Global") or only the local player ("Account").
 
 	local function autoloadPath(self, scope)
 		if scope == "Account" then
@@ -9136,7 +9000,7 @@ local Library = (function()
 		return ok, err
 	end
 
-	-- Switching the mode moves the current autoload so only one stays active.
+
 	function Window:SetAutoloadMode(mode)
 		mode = mode == "Account" and "Account" or "Global"
 		if mode == self:GetAutoloadMode() then
@@ -9155,8 +9019,7 @@ local Library = (function()
 		return true
 	end
 
-	-- Minimize UI on Start: kept with the config settings so it applies on the
-	-- next execution no matter which config loads.
+
 	function Window:GetMinimizeOnStart()
 		return self:_readConfigSettings().MinimizeOnStart == true
 	end
@@ -9184,7 +9047,6 @@ local Library = (function()
 		return ok, err
 	end
 
-	-- Themes
 
 	Library._themeListeners = {}
 
@@ -9214,19 +9076,13 @@ local Library = (function()
 		)
 	end
 
-	-- Coloured text for statuses, metrics, table cells and labels. A theme key
-	-- used as a tag, <Success>online</Success>, follows theme changes; plain
-	-- rich text such as <font color="#ff5a5a"> works too. Library.Colorize wraps
-	-- text for you. Table fields, not locals: the chunk is at Luau's 200 limit.
+
 	Library._toneTags = {}
 	for _, name in ipairs(THEME_KEYS) do
 		Library._toneTags[string.lower(name)] = name
 	end
 
-	-- DependsOn rules: "Flag" (its value is on: true, a non-empty pick, a
-	-- non-zero number), { Flag, Value, Not } (Value may be a list of accepted
-	-- values; a multi dropdown passes when it holds any of them), a list of rules
-	-- that must all pass, or a function returning true.
+
 	function Library._dependsMet(rule)
 		if type(rule) == "function" then
 			local ok, result = pcall(rule)
@@ -9321,8 +9177,7 @@ local Library = (function()
 		end
 	end
 
-	-- Rules are checked ten times a second, so they follow config loads and
-	-- changes made from code as well as clicks.
+
 	function Library._watchDepends(window, element)
 		if not window._dependents then
 			window._dependents = {}
@@ -9350,8 +9205,7 @@ local Library = (function()
 		Library._applyDepends(element, true)
 	end
 
-	-- SetDisabled(true) or a DependsOn rule in "Disable" mode dims the element
-	-- under a cover that swallows clicks; either one keeps it disabled.
+
 	function Library._setDisabled(element, frame, disabled)
 		element.Disabled = disabled == true
 		if not frame then
@@ -9402,10 +9256,7 @@ local Library = (function()
 		end
 	end
 
-	-- Confirm = true (or the text to show): the first click arms the button and
-	-- a second one within ConfirmTimeout seconds runs it. HoldToConfirm = true
-	-- (one second) or a number of seconds: the button fills while held and runs
-	-- when full.
+
 	function Library._gateButton(tab, opts)
 		local real = opts.Callback
 		local holdTime = opts.HoldToConfirm == true and 1 or tonumber(opts.HoldToConfirm)
@@ -9510,7 +9361,7 @@ local Library = (function()
 		return handle
 	end
 
-	-- A theme key, a Color3, "#rrggbb" or { r, g, b } as a Color3.
+
 	function Library._color(value)
 		if type(value) == "string" then
 			local key = Library._toneTags[string.lower(value)]
@@ -9540,7 +9391,7 @@ local Library = (function()
 		)
 	end
 
-	-- Library.Colorize("12 ms", "Success") or Library:Colorize(text, Color3).
+
 	function Library.Colorize(...)
 		local args = { ... }
 		if args[1] == Library then
@@ -9558,9 +9409,7 @@ local Library = (function()
 		return '<font color="' .. hexOf(resolved) .. '">' .. text .. "</font>"
 	end
 
-	-- The window's corner radius in pixels, 0 (square) to 20; every other
-	-- rounded corner scales with it. The default is 10. Corners ease to the new
-	-- radius instead of jumping. Returns the radius it settled on.
+
 	function Library:SetCornerRadius(pixels, instant)
 		pixels = math.clamp(math.floor((tonumber(pixels) or 10) + 0.5), 0, 20)
 		Library.Roundness = pixels / 10
@@ -9627,8 +9476,7 @@ local Library = (function()
 		return copy
 	end
 
-	-- The script's starting theme: a preset name or a colour table. A default the
-	-- player picked in the theme manager still wins over it.
+
 	function Library:SetDefaultTheme(theme)
 		Library.DefaultTheme = theme
 		if theme == nil then
@@ -9753,9 +9601,7 @@ local Library = (function()
 		end
 	end
 
-	-- Background images
 
-	-- Image assets anyone can use, from Fluent-modded's themes.
 	Library.BackgroundPresets = {
 		["Deep Violet"] = "rbxassetid://136310484943077",
 		["Blood Red"] = "rbxassetid://121343473918667",
@@ -9766,7 +9612,7 @@ local Library = (function()
 	}
 	Library.BackgroundPresetOrder = { "Deep Violet", "Blood Red", "Cyanic", "Amber Glow", "Bloomings", "Lavender Pink" }
 
-	-- Table fields, not locals: the library chunk is at Luau's 200 local limit.
+
 	Library._imageExtensions = { png = true, jpg = true, jpeg = true, webp = true, gif = true, bmp = true }
 
 	function Window:_backgroundFolder()
@@ -9777,9 +9623,7 @@ local Library = (function()
 		return (tostring(source or ""):match("^%s*(.-)%s*$"))
 	end
 
-	-- Turns a background source into something ImageLabel.Image takes. Web images
-	-- are downloaded once into backgrounds/cache and loaded with getcustomasset,
-	-- so this yields the first time a URL is used.
+
 	function Window:_resolveBackground(source)
 		source = self:_trimBackground(source)
 		local preset = Library.BackgroundPresets[source]
@@ -9838,7 +9682,7 @@ local Library = (function()
 			pcall(delfile, path)
 			return nil, "the downloaded file is not an image"
 		end
-		-- A file in the backgrounds folder, or any path in the workspace.
+
 		if canLoad then
 			for _, path in ipairs({ self:_backgroundFolder() .. "/" .. source, source }) do
 				if isfile(path) then
@@ -9853,9 +9697,7 @@ local Library = (function()
 		return nil, "no image called " .. source
 	end
 
-	-- source: a preset name, an image asset id, an rbxassetid:// link, an http(s)
-	-- image URL, or an image file in <ConfigFolder>/backgrounds. nil or "None"
-	-- removes it. May yield while a web image downloads.
+
 	function Window:SetBackground(source)
 		self._backgroundGeneration += 1
 		local generation = self._backgroundGeneration
@@ -9892,7 +9734,7 @@ local Library = (function()
 		return self.Background
 	end
 
-	-- 0 shows the image fully, 1 hides it behind the theme background colour.
+
 	function Window:SetBackgroundTransparency(value)
 		self.BackgroundTransparency = math.clamp(tonumber(value) or 0.35, 0, 1)
 		if self.Background then
@@ -9900,7 +9742,7 @@ local Library = (function()
 		end
 	end
 
-	-- Preset names, then the image files in <ConfigFolder>/backgrounds.
+
 	function Window:ListBackgrounds()
 		local names = table.clone(Library.BackgroundPresetOrder)
 		local folder = self:_backgroundFolder()
@@ -10088,8 +9930,7 @@ local Library = (function()
 		Memory = { "cpu", "Memory" },
 	}
 
-	-- Health colour for a live metric: Success under good, Warning under bad,
-	-- Error past it. lowerIsBetter flips the scale (ping, memory).
+
 	function Library._healthColor(value, good, bad, lowerIsBetter)
 		if type(value) ~= "number" then
 			return Theme.Text
@@ -10117,8 +9958,6 @@ local Library = (function()
 		return count
 	end
 
-	-- Containers: a tab or sub tab owns a scrolling list. Elements added straight
-	-- to it stack full width, groupboxes go into two columns underneath.
 
 	local function buildContainer(owner, parent, top, emptyIcon, emptyText)
 		local list = create("ScrollingFrame", {
@@ -10222,7 +10061,7 @@ local Library = (function()
 		end
 		local set = { Holder = holder, Left = column(1), Right = column(2), Counts = { 0, 0 }, Stacked = false }
 		local window = self.Window
-		-- Narrow windows stack the right column under the left one.
+
 		local function relayout()
 			local width = holder.AbsoluteSize.X / window.Scale.Scale
 			if width <= 0 then
@@ -10283,8 +10122,7 @@ local Library = (function()
 			Parent = box,
 		})
 
-		-- The header is a filled strip: icon and bold title on the left, a
-		-- chevron on the right. Pressing anywhere on it folds the box.
+
 		local header = create("TextButton", {
 			Size = UDim2.new(1, 0, 0, 40),
 			BackgroundColor3 = Theme.Surface3,
@@ -10295,7 +10133,7 @@ local Library = (function()
 			Parent = box,
 		})
 		corner(header, UDim.new(0, 10))
-		-- Squares the strip's lower corners so it meets the body flat.
+
 		local headerFill = create("Frame", {
 			AnchorPoint = Vector2.new(0, 1),
 			Position = UDim2.fromScale(0, 1),
@@ -10330,8 +10168,8 @@ local Library = (function()
 			Parent = header,
 		})
 		applyIcon(collapseButton, "chevron-down")
-		-- Beside the chevron, a button that pops the box out into a floating
-		-- panel (and docks it back once it's out). PopOut = false leaves it off.
+
+
 		local canPop = opts.PopOut ~= false
 		local popButton, popIcon
 		if canPop then
@@ -10415,9 +10253,8 @@ local Library = (function()
 			_items = {},
 		}, Tab)
 		table.insert(self._groupboxes, group)
-		-- A groupbox named "Menu" gets the built-in "Minimize UI on Start" toggle,
-		-- so existing scripts pick it up without calling CreateMinimizeOnStart.
-		-- It lands above the first button (usually Unload), or at the end.
+
+
 		if type(group.Name) == "string" and string.lower(group.Name:match("^%s*(.-)%s*$")) == "menu" then
 			task.defer(function()
 				if window._destroyed or window._minimizeOnStartToggle or not box.Parent then
@@ -10464,8 +10301,8 @@ local Library = (function()
 			generation += 1
 			local current = generation
 			local duration = instant and 0 or 0.32
-			-- Anything open inside the box (a dropdown list, a picker, a focused
-			-- box) closes with it, rather than floating over a folded header.
+
+
 			if value then
 				for _, element in ipairs(group._items) do
 					if element._onHide then
@@ -10502,9 +10339,8 @@ local Library = (function()
 				end
 			end
 			local motion = instant and 0 or 0.3
-			-- Folded, the strip is the whole box: the hairline under it drops out
-			-- of the layout once the body has closed, so the box ends exactly at
-			-- the strip and both share the same rounded corners.
+
+
 			if value then
 				local function fold()
 					if generation == current and collapsed then
@@ -10540,10 +10376,8 @@ local Library = (function()
 		local isTap = tapGuard(header, function()
 			return box:FindFirstAncestorWhichIsA("ScrollingFrame")
 		end)
-		-- Popping out: the box itself is lifted out of its column into a panel
-		-- on the window's pop-out layer, and a slot holds its place in the column
-		-- (pressing the slot docks it back). The header drags the panel; a drop
-		-- is clamped on screen and the spot is remembered for the next pop-out.
+
+
 		local popped, popGeneration = false, 0
 		local panel, panelScale, panelShadow, slot, stopPanel
 		local dragStart, dragOrigin, dragMoved, suppressClick = nil, nil, false, false
@@ -10555,7 +10389,7 @@ local Library = (function()
 		local function toLayer(point)
 			return (point - window._popLayer.AbsolutePosition) / layerScale()
 		end
-		-- Keeps a panel's top-centre spot on screen, header always reachable.
+
 		local function clampSpot(spot, width, height)
 			local view = window._popLayer.AbsoluteSize / layerScale()
 			local margin = 8
@@ -10583,7 +10417,7 @@ local Library = (function()
 			if popped or not canPop or not box.Parent or group._destroyed then
 				return
 			end
-			-- A dock still in flight lands first, so the box is back in its column.
+
 			if group._settleDock then
 				group._settleDock()
 			end
@@ -10600,8 +10434,7 @@ local Library = (function()
 			local width = box.AbsoluteSize.X / scale
 			local height = box.AbsoluteSize.Y / scale
 
-			-- The slot left behind: starts at the box's height so nothing below
-			-- jumps, then eases down to a slim bar.
+
 			slot = create("TextButton", {
 				Size = UDim2.new(1, 0, 0, height),
 				BackgroundColor3 = Theme.Surface2,
@@ -10671,8 +10504,7 @@ local Library = (function()
 			window._controlsDirty = true
 			setPopIcon(true)
 
-			-- Lifts off the column: a spring up and out to its float spot, with
-			-- the shadow deepening under it.
+
 			local spot = clampSpot(group._popSpot or Vector2.new(from.X + width / 2 + 22, from.Y - 14), width, height)
 			animating = true
 			panelScale.Scale = 0.97
@@ -10685,8 +10517,7 @@ local Library = (function()
 				end
 			end)
 
-			-- Each frame: the panel follows the box's height (folding, rows
-			-- coming and going), mirrors its visibility, and stays on screen.
+
 			local thisPanel = panel
 			stopPanel = window:_listen("Render", function()
 				if panel ~= thisPanel or not thisPanel.Parent then
@@ -10740,7 +10571,7 @@ local Library = (function()
 				if index then
 					table.remove(window._popPanels, index)
 				end
-				-- Back into the column, unless it was popped again meanwhile.
+
 				if box.Parent == oldPanel then
 					if oldSlot and oldSlot.Parent and not group._destroyed then
 						box.Parent = oldSlot.Parent
@@ -10757,8 +10588,8 @@ local Library = (function()
 				window._controlsDirty = true
 			end
 			group._settleDock = settle
-			-- Flies home only when its slot is on screen; otherwise (another tab,
-			-- the window hidden) it just drops back into place.
+
+
 			local canFly = not instant
 				and oldSlot
 				and oldSlot.Parent
@@ -10779,7 +10610,7 @@ local Library = (function()
 			if oldLabel then
 				tween(oldLabel, { TextTransparency = 1 }, 0.12)
 			end
-			-- The slot's top stays put as it grows, so its spot is the landing.
+
 			local target = toLayer(oldSlot.AbsolutePosition)
 			tween(oldPanel, {
 				Position = UDim2.fromOffset(target.X + width / 2, target.Y),
@@ -10790,7 +10621,7 @@ local Library = (function()
 			task.delay(0.37, settle)
 		end
 
-		-- Dragging the floating panel by its header.
+
 		header.InputBegan:Connect(function(input)
 			if not popped or not isPress(input) or not panel then
 				return
@@ -10946,7 +10777,7 @@ local Library = (function()
 		end
 	end
 
-	-- Built-in "Minimize UI on Start" toggle; not a config flag, it saves itself.
+
 	function Tab:CreateMinimizeOnStart(opts)
 		opts = opts or {}
 		local window = self.Window
@@ -10968,8 +10799,7 @@ local Library = (function()
 	Tab.AddLeftGroupbox = sideGroupbox("Left")
 	Tab.AddRightGroupbox = sideGroupbox("Right")
 
-	-- Tabboxes: a groupbox whose header is a row of tabs. Each tab is its own
-	-- page of rows and only the selected one shows (Obsidian's AddLeftTabbox).
+
 	function Tab:Tabbox(opts)
 		if self._groupbox then
 			return self.Parent:Tabbox(opts)
@@ -11067,8 +10897,7 @@ local Library = (function()
 			end
 		end
 
-		-- Buttons share the strip evenly; the selected one takes the body's fill
-		-- and an accent underline, so it reads as joined to the page below.
+
 		local function relayoutButtons()
 			local count = math.max(#tabbox.Tabs, 1)
 			for _, page in ipairs(tabbox.Tabs) do
@@ -11220,7 +11049,7 @@ local Library = (function()
 				_icon = tabIcon,
 				_bar = bar,
 			}, Tab)
-			-- Search treats an unselected tab as folded: expanding it selects it.
+
 			function page:IsCollapsed()
 				return tabbox.Current ~= page
 			end
@@ -11347,7 +11176,6 @@ local Library = (function()
 		return self:Tabbox(opts)
 	end
 
-	-- Button rows: equal-width buttons side by side.
 
 	function Tab:ButtonRow(opts)
 		local specs = type(opts) == "table" and (opts.Buttons or opts) or {}
@@ -11400,8 +11228,7 @@ local Library = (function()
 		)
 	end
 
-	-- A text box with an action button beside it, for naming new configs and themes.
-	-- Without buttonText the box spans the row on its own.
+
 	local function actionInput(tab, placeholder, buttonText, callback)
 		local boxHeight = TOUCH and 34 or 30
 		local frame = card(tab, "Frame", boxHeight + 4, {})
@@ -11471,8 +11298,7 @@ local Library = (function()
 		return (tostring(text or ""):match("^%s*(.-)%s*$"))
 	end
 
-	-- An always-open single-pick list, for the config manager's saved configs.
-	-- tagsOf(name) returns short markers drawn at the row's right edge.
+
 	local function pickList(tab, names, default, rows, tagsOf, onPick, onOpen)
 		local ROW = TOUCH and 30 or 24
 		local listHeight = ROW * (rows or 5) + 8
@@ -11576,7 +11402,7 @@ local Library = (function()
 				})
 				local lastClick = 0
 				button.MouseButton1Click:Connect(function()
-					-- A second click on the picked row loads it.
+
 					if selected == name and os.clock() - lastClick < 0.35 then
 						lastClick = 0
 						safeCall(onOpen, name)
@@ -11617,13 +11443,13 @@ local Library = (function()
 		return finishElement(tab, { Name = "Configs" }, handle, frame, "PickList")
 	end
 
-	-- Managers go in their own groupbox when added straight to a tab.
+
 	local function managerHost(tab, opts, name, icon)
 		if tab._groupbox then
 			return tab
 		end
 		local host = tab:Groupbox({ Name = opts.Name or name, Icon = opts.Icon or icon, Side = opts.Side })
-		-- Library chrome, not a script feature: the feature list skips it.
+
 		host._manager = true
 		return host
 	end
@@ -11989,7 +11815,7 @@ local Library = (function()
 				notify(false, "Import failed", "Invalid config code")
 				return
 			end
-			-- The typed name wins; otherwise the code's own name, never overwriting a config.
+
 			local saveAs = trim(nameInput:Get())
 			if saveAs == "" then
 				saveAs = nil
@@ -12036,7 +11862,7 @@ local Library = (function()
 		end
 
 		local disconnect = window:OnConfigChanged(function()
-			-- Configs can arrive from elsewhere (a cloud install), so the list is reread.
+
 			manager:Refresh()
 			if window.LoadedConfig and list:Get() == nil then
 				list:Set(window.LoadedConfig, true)
@@ -12143,7 +11969,7 @@ local Library = (function()
 				end
 			end,
 		})
-		-- Menu look (weather, scale, background...) gets its own groupbox, apart from the colors.
+
 		local menu = host
 		if not self._groupbox and opts.Menu ~= false then
 			menu = self:Groupbox({
@@ -12249,8 +12075,8 @@ local Library = (function()
 				Increment = 5,
 				Default = math.floor(window:GetUIScale() * 100 + 0.5),
 				Suffix = "%",
-				-- Rescaling mid-drag would move the slider out from under the
-				-- pointer, so a drag applies on release.
+
+
 				Callback = function(value)
 					if not (uiScale and uiScale.Dragging) then
 						window:SetUIScale(value / 100)
@@ -12288,7 +12114,7 @@ local Library = (function()
 			})
 		end
 		if opts.Background ~= false then
-			-- The dropdown shows listed images by name, "custom" for ids and links.
+
 			backgroundLabel = function(source)
 				if source == nil or source == "" then
 					return "None"
@@ -12487,8 +12313,8 @@ local Library = (function()
 					Name = title,
 					Default = Theme[key],
 					Callback = function(color)
-						-- Dragging the picker fires every frame; repaint at most
-						-- a dozen times a second.
+
+
 						pending = color
 						if scheduled then
 							return
@@ -12509,9 +12335,7 @@ local Library = (function()
 			end
 		end
 
-		-- One hidden flag carries the palette and the look settings above, so
-		-- configs save and load the theme. Not a flag per toggle: flagged toggles
-		-- would count as running features on the minimized island.
+
 		if opts.Flag ~= false then
 			local flag = type(opts.Flag) == "string" and opts.Flag or "__Theme"
 			local look = { _type = "Theme", _searchName = "Theme", _searchKey = "theme", _listeners = {} }
@@ -12526,7 +12350,7 @@ local Library = (function()
 					Colors = colors,
 					Weather = weather and window.Weather or nil,
 					WeatherMode = weatherMode and window.WeatherMode or nil,
-					-- if-expressions, not and/or: a switched-off value is false, not nil.
+
 					Dim = if dim then window._backdropDim == true else nil,
 					Transparent = if transparent then window.Transparent == true else nil,
 					DragStyle = dragSkeleton and window.DragStyle or nil,
@@ -12535,7 +12359,7 @@ local Library = (function()
 					UIScale = uiScale and window:GetUIScale() or nil,
 					AdaptiveSize = if adaptive then window:GetAdaptiveSize() else nil,
 					Density = density and Library.Density or nil,
-					-- "" is no background; a missing field leaves it alone on load.
+
 					Background = background and (window.Background or "") or nil,
 					BackgroundTransparency = background and window.BackgroundTransparency or nil,
 				}
@@ -12579,7 +12403,7 @@ local Library = (function()
 				if dragSkeleton and type(value.DragStyle) == "string" then
 					dragSkeleton:Set(window:SetDragStyle(value.DragStyle), true)
 				elseif dragSkeleton and type(value.DragSkeleton) == "boolean" then
-					-- Configs saved before drag styles.
+
 					window:SetDragSkeleton(value.DragSkeleton)
 					dragSkeleton:Set(window.DragStyle, true)
 				end
@@ -12611,7 +12435,7 @@ local Library = (function()
 				then
 					local source = value.Background
 					background:Set(backgroundLabel(source), true)
-					-- A web image may download first; don't hold up the rest of the config.
+
 					task.spawn(window.SetBackground, window, source)
 				end
 				refreshStatus()
@@ -12621,7 +12445,7 @@ local Library = (function()
 			window:_flagCreated(flag, look)
 		end
 
-		-- A reset wipes the themes folder, so drop the stale list.
+
 		window._workspaceListeners = window._workspaceListeners or {}
 		table.insert(window._workspaceListeners, function()
 			themes:Set(nil, true)
@@ -12636,11 +12460,10 @@ local Library = (function()
 	Tab.CreateConfigManager = Tab.ConfigManager
 	Tab.CreateThemeManager = Tab.ThemeManager
 
-	-- Status: read-only key/value lines, mostly for groupboxes, in several styles.
 
 	local STATUS_HEIGHT = { Plain = 18, Row = 20, Badge = 24, Dot = 20, Bar = 34, Stat = 44 }
 
-	-- Tone: a theme key, a Color3 or "#rrggbb".
+
 	local function toneColor(tone)
 		return Library._color(tone) or Theme.Accent
 	end
@@ -12675,7 +12498,7 @@ local Library = (function()
 		local compact = metricsOf(self).Compact
 		local window = self.Window
 		local height = STATUS_HEIGHT[style]
-		-- Obsidian-style: no card, the text sits straight on the groupbox.
+
 		local pad = 1
 		local frame, frameStroke = card(self, "Frame", height + pad * 2, opts)
 		frame.BackgroundTransparency = 1
@@ -12874,7 +12697,7 @@ local Library = (function()
 			valueLabel.Text = text
 			local tone = toneColor(handle.Tone)
 			local duration = animate and 0.25 or 0
-			-- Color paints the whole value; inline tags still win over it.
+
 			local valueColor = not tinted and Library._color(handle.Color) or Theme.Text
 			if not tinted and not (changed and animate and opts.Flash ~= false) then
 				tween(valueLabel, { TextColor3 = valueColor }, duration)
@@ -12891,7 +12714,7 @@ local Library = (function()
 			if fill then
 				tween(fill, { BackgroundColor3 = tone }, duration)
 			end
-			-- A brief accent flash marks a changed value.
+
 			if changed and animate and not tinted and opts.Flash ~= false then
 				tween(valueLabel, { TextColor3 = Theme.Accent }, 0.08)
 				task.delay(0.1, function()
@@ -12904,7 +12727,7 @@ local Library = (function()
 
 		keyLabel.RichText = true
 		valueLabel.RichText = true
-		-- Theme tags in the text are baked to colours, so repaint on theme change.
+
 		onTheme(holder, function()
 			if lastText ~= nil then
 				render(false)
@@ -12925,7 +12748,7 @@ local Library = (function()
 			handle.Tone = tone
 			render(true)
 		end
-		-- nil goes back to the normal text colour.
+
 		function handle:SetColor(color)
 			handle.Color = color
 			render(true)
@@ -12937,7 +12760,7 @@ local Library = (function()
 		function handle:Text()
 			return valueLabel.Text
 		end
-		-- The value's resting colour, for the copy pinned on the minimized island.
+
 		function handle._shownColor()
 			if handle.Color ~= nil then
 				return Library._color(handle.Color) or Theme.Text
@@ -13007,8 +12830,7 @@ local Library = (function()
 		return handles
 	end
 
-	-- Status list: a read-only block of rows that grows up to MaxRows, then
-	-- scrolls inside itself. Rows are reused between refreshes so nothing flickers.
+
 	function Tab:StatusList(opts)
 		opts = normalize(opts, { Title = "Name" })
 		local compact = metricsOf(self).Compact
@@ -13079,8 +12901,7 @@ local Library = (function()
 		local rowObjects, rows, signature, raw = {}, {}, nil, {}
 		local handle = { _listeners = {} }
 
-		-- Fits the list to its first MaxRows rows, measured, so wrapped rows count
-		-- at their real height. Past MaxRows the list scrolls.
+
 		local function fit()
 			if handle._destroyed then
 				return
@@ -13183,7 +13004,7 @@ local Library = (function()
 			return entry.Text .. "\0" .. (entry.Value or "\1") .. "\0" .. tostring(entry.Tone or "")
 		end
 
-		-- Tone tints the value, or the text when there is no value.
+
 		local function paint(row, entry)
 			local key = rowKey(entry)
 			if row.Key == key then
@@ -13266,7 +13087,7 @@ local Library = (function()
 			rate = math.max(tonumber(seconds) or rate, 0.05)
 		end
 
-		-- Theme tags are baked into the text, so a theme change repaints the rows.
+
 		onTheme(content, function()
 			for index, row in ipairs(rowObjects) do
 				if rows[index] then
@@ -13287,8 +13108,7 @@ local Library = (function()
 			end
 		end)
 
-		-- Refreshes only while someone can see it: window open and not minimized,
-		-- its tab and sub tab showing, and neither it nor its groupbox hidden.
+
 		local function onScreen()
 			if window._destroyed or not window.Open or window.Minimized or not handle._userVisible then
 				return false
@@ -13343,10 +13163,6 @@ local Library = (function()
 	Tab.CreateStatusList = Tab.StatusList
 	Tab.AddStatusList = Tab.StatusList
 
-	-- Image and Viewport: media cards. Image shows a picture from the same sources
-	-- as window backgrounds, plus "Avatar" for the player's headshot. Viewport
-	-- shows a 3D model or the player's avatar, turning slowly; drag it to spin it
-	-- by hand.
 
 	function Tab:_mediaCard(opts, defaultHeight)
 		opts = normalize(opts, { Title = "Name", Description = "Desc" })
@@ -13402,7 +13218,7 @@ local Library = (function()
 			ScaleType = Enum.ScaleType.Fit,
 			Parent = media,
 		})
-		-- A caption over the bottom of the picture, on a dark fade.
+
 		local captionHolder = create("Frame", {
 			AnchorPoint = Vector2.new(0, 1),
 			Position = UDim2.fromScale(0, 1),
@@ -13451,7 +13267,7 @@ local Library = (function()
 		local window = self.Window
 		local media = parts.Media
 		applyIcon(parts.Placeholder, "image")
-		-- Enum lookups throw on unknown names.
+
 		local function scaleType(name, fallback)
 			local ok, value = pcall(function()
 				return Enum.ScaleType[tostring(name)]
@@ -13474,7 +13290,7 @@ local Library = (function()
 		local handle = { Value = nil }
 		local generation = 0
 
-		-- Yields while a web image downloads. Returns ok, err like SetBackground.
+
 		function handle:SetImage(source)
 			generation += 1
 			local current = generation
@@ -13506,7 +13322,7 @@ local Library = (function()
 			end
 			image.ImageTransparency = 1
 			image.Image = asset
-			-- Fade in once it has loaded, or after a few seconds regardless.
+
 			task.spawn(function()
 				local waited = 0
 				while not image.IsLoaded and waited < 4 and generation == current and image.Parent do
@@ -13614,7 +13430,7 @@ local Library = (function()
 			return true
 		end
 
-		-- A copy with its scripts and sounds stripped and every part anchored.
+
 		local function prepare(instance)
 			local copy = instance
 			if opts.Clone ~= false then
@@ -13664,7 +13480,7 @@ local Library = (function()
 				local character = value.Character
 				if not character then
 					character = value.CharacterAdded:Wait()
-					-- Let the body parts and accessories load in.
+
 					task.wait(0.5)
 				end
 				value = character
@@ -13672,7 +13488,7 @@ local Library = (function()
 			return typeof(value) == "Instance" and value or nil
 		end
 
-		-- Yields while waiting for a character to spawn.
+
 		function handle:SetModel(value)
 			generation += 1
 			local current = generation
@@ -13716,7 +13532,7 @@ local Library = (function()
 			return handle.Model
 		end
 
-		-- Copies the source again, e.g. after the character respawned or changed.
+
 		function handle:Refresh()
 			return handle:SetModel(source)
 		end
@@ -13785,8 +13601,6 @@ local Library = (function()
 		return finishElement(self, opts, handle, parts.Frame, "Viewport")
 	end
 
-	-- Table: rows under a header, sortable by clicking a column. Rank = true adds
-	-- a # column with medals for the top three, for leaderboards.
 
 	function Tab:Table(opts)
 		opts = normalize(opts, { Title = "Name", Description = "Desc", Data = "Rows", OnRowClick = "Callback" })
@@ -13805,8 +13619,8 @@ local Library = (function()
 		local searchTop = hasHead and (titleTop + (opts.Desc and 38 or 22)) or (compact and 4 or inset)
 		local gridTop = searchTop + (searchable and searchHeight + 6 or 0)
 		local bottom = compact and 6 or inset
-		-- Editable: typed columns get editors in their cells, an Add row button
-		-- sits under the grid and a remove column ends each row.
+
+
 		local editable = opts.Editable == true
 		if not editable and type(opts.Columns) == "table" then
 			for _, column in ipairs(opts.Columns) do
@@ -13843,8 +13657,8 @@ local Library = (function()
 				})
 			end
 		end
-		-- Search: filters rows by any cell's text as you type. A count of what
-		-- matches shows on the right while it filters.
+
+
 		local query = ""
 		local searchBox, searchCount
 		if searchable then
@@ -14006,8 +13820,7 @@ local Library = (function()
 			return Enum.TextXAlignment.Left
 		end
 
-		-- Widths: a number above 1 is pixels, up to 1 is a share of what the pixel
-		-- columns leave, and the rest split whatever share is left.
+
 		local function layoutColumns()
 			local pixels, shares, autos = 0, 0, 0
 			for _, column in ipairs(columns) do
@@ -14053,7 +13866,7 @@ local Library = (function()
 			if type(value) == "number" then
 				local whole = value == math.floor(value)
 				local text = whole and string.format("%d", value) or string.format("%.2f", value)
-				-- Thousands separators on the whole part.
+
 				local sign, int, rest = text:match("^(%-?)(%d+)(.*)$")
 				if int then
 					int = int:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
@@ -14105,13 +13918,13 @@ local Library = (function()
 							return sx < sy
 						end
 					elseif x ~= y then
-						-- Empty cells sink to the bottom either way.
+
 						return x ~= nil
 					end
 					return a.Index < b.Index
 				end)
 			end
-			-- Ranks come from the full order, so filtering never renumbers them.
+
 			for position, item in ipairs(list) do
 				item.Rank = position
 			end
@@ -14152,10 +13965,10 @@ local Library = (function()
 			return kind
 		end
 
-		-- One option list per table, opened under a dropdown cell.
+
 		local picker, pickerList, pickerAnchor, pickerSearch, pickerSearchHolder, pickerEmpty
-		-- The option list is virtual like the dropdown's: a small pool of
-		-- buttons is rebound to whichever options are in view.
+
+
 		local pickerPool, pickerShown, pickerFit, pickerPick, pickerRender = {}, {}, nil, nil, nil
 		local function closePicker()
 			if picker then
@@ -14203,7 +14016,7 @@ local Library = (function()
 				picker:SetAttribute("NoDrag", true)
 				corner(picker, UDim.new(0, 6))
 				stroke(picker, Theme.Stroke)
-				-- Search row, shown for Searchable columns.
+
 				pickerSearchHolder = create("Frame", {
 					Position = UDim2.fromOffset(4, 4),
 					Size = UDim2.new(1, -8, 0, TOUCH and 28 or 24),
@@ -14242,7 +14055,7 @@ local Library = (function()
 				pickerSearch.FocusLost:Connect(function(enterPressed)
 					tween(searchStroke, { Color = Theme.Stroke }, 0.2)
 					tween(searchIcon, { ImageColor3 = Theme.Muted }, 0.2)
-					-- Enter picks the first match.
+
 					if enterPressed and picker.Visible and pickerPick and pickerShown[1] ~= nil then
 						pickerPick(pickerShown[1])
 					end
@@ -14309,8 +14122,8 @@ local Library = (function()
 			local itemHeight = TOUCH and 28 or 24
 			local step = itemHeight + 2
 			local keys = {}
-			-- Searchable = true always shows the search row; SearchAfter = n shows
-			-- it once there are more than n options.
+
+
 			local searchable = column.Searchable == true
 				or (
 					column.Searchable ~= false
@@ -14364,11 +14177,11 @@ local Library = (function()
 			end
 
 			pickerRender = function()
-				-- CanvasPosition is in screen pixels; undo any UIScale first.
+
 				local logical = pickerList.CanvasSize.Y.Offset
 				local scale = logical > 0 and pickerList.AbsoluteCanvasSize.Y / logical or 1
-				-- Indices keep a stable slot (index mod count) so scrolling only
-				-- rebinds rows at the edges rather than every row each step.
+
+
 				local first = math.max(math.floor(pickerList.CanvasPosition.Y / scale / step), 1)
 				local count = maxShown + 3
 				for slot = 1, math.max(count, #pickerPool) do
@@ -14646,8 +14459,8 @@ local Library = (function()
 				Text = "",
 				Parent = body,
 			})
-			-- The accent bar on a highlighted row sits beside the cells, outside
-			-- their layout.
+
+
 			local marker = create("Frame", {
 				Position = UDim2.new(0, 3, 0.5, 0),
 				AnchorPoint = Vector2.new(0, 0.5),
@@ -14784,12 +14597,12 @@ local Library = (function()
 						cell.Badge.BackgroundColor3 = medal or Theme.Surface3
 						cell.Badge.BackgroundTransparency = medal and 0.05 or 1
 					elseif column.Remove then
-					-- The remove button needs no per-row state.
+
 					else
 						local value = columnValue(row, column)
 						cell.Label.Text = Library._rich(display(value, column, row))
-						-- Column Color: a colour, a theme key or a function(value, row)
-						-- returning either. A row's Colors[key or index] beats it.
+
+
 						local wanted = column.Color
 						if type(wanted) == "function" then
 							local ok, result = pcall(wanted, value, row)
@@ -14885,8 +14698,8 @@ local Library = (function()
 					Parent = cell,
 				})
 				applyIcon(arrow, "chevron-down")
-				-- The arrow sits just after the header text (before it when the
-				-- column is right aligned).
+
+
 				local function placeArrow()
 					local width = text.TextBounds.X
 					if right then
@@ -14914,8 +14727,8 @@ local Library = (function()
 						end
 					end)
 					cell.MouseButton1Click:Connect(function()
-						-- Numbers sort high to low first, text A to Z; the second
-						-- click flips it and the third goes back to the given order.
+
+
 						if sortKey ~= column then
 							local numeric = false
 							for _, data in ipairs(handle.Rows) do
@@ -15001,7 +14814,7 @@ local Library = (function()
 			end
 		end
 
-		-- An edit made in a cell: redraw, then tell the script.
+
 		function handle:_edited()
 			render()
 			changed()
@@ -15011,7 +14824,7 @@ local Library = (function()
 			render()
 		end
 
-		-- Saved through the config as plain copies of the rows.
+
 		function handle:_saveValue()
 			local list = {}
 			for index, row in ipairs(handle.Rows) do
@@ -15049,7 +14862,7 @@ local Library = (function()
 			return #handle.Rows
 		end
 
-		-- Replaces a row (by its index in the list you gave) and flashes it.
+
 		function handle:UpdateRow(index, row)
 			if not handle.Rows[index] then
 				return false
@@ -15088,7 +14901,7 @@ local Library = (function()
 			handle:SetRows({})
 		end
 
-		-- Sort(nil) goes back to the given order.
+
 		function handle:Sort(key, descending)
 			sortKey = key ~= nil and findColumn(key) or nil
 			sortDescending = descending == true
@@ -15112,8 +14925,8 @@ local Library = (function()
 
 		handle:SetColumns(opts.Columns or {})
 		handle:SetRows(opts.Rows or {}, true)
-		-- A new row: NewRow (a table or a function returning one), or each
-		-- column's Default, falling back to off, Min or 0, the first option or "".
+
+
 		function handle:NewRow()
 			if type(opts.NewRow) == "function" then
 				local ok, row = pcall(opts.NewRow)
@@ -15175,13 +14988,12 @@ local Library = (function()
 				searchBox.Text = tostring(text or "")
 			end
 		end
-		-- Theme tags in cells are baked to colours; repaint them on theme change.
+
 		onTheme(grid, render)
 		return finishElement(self, opts, handle, frame, "Table")
 	end
 
-	-- Log: a capped, scrolling list of timestamped lines, newest at the bottom.
-	-- It follows new lines while scrolled to the end and stays put otherwise.
+
 	function Tab:Log(opts)
 		opts = normalize(opts, { Title = "Name", Description = "Desc", Max = "MaxEntries", Limit = "MaxEntries" })
 		local metrics = metricsOf(self)
@@ -15295,7 +15107,7 @@ local Library = (function()
 			return list.CanvasPosition.Y >= list.AbsoluteCanvasSize.Y - list.AbsoluteWindowSize.Y - 4
 		end
 
-		-- Push(text, color?): color is a Color3, "#rrggbb" or a theme key ("Success").
+
 		function handle:Push(text, color)
 			local follow = atEnd()
 			counter += 1
@@ -15328,7 +15140,7 @@ local Library = (function()
 			trimTo(0)
 		end
 
-		-- Copies of the entries, oldest first: { Text, Color, Time }.
+
 		function handle:Get()
 			local copy = {}
 			for index, entry in ipairs(handle.Entries) do
@@ -15463,7 +15275,7 @@ local Library = (function()
 		self._subTabs = {}
 		self.List.Visible = false
 		self:_refreshEmpty()
-		-- Keep the pill under the selected tab when widths change after layout.
+
 		row:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 			if self.CurrentSubTab and not ui.Moving then
 				self:_placeSubHighlight(self.CurrentSubTab, true)
@@ -15680,9 +15492,6 @@ local Library = (function()
 		end)
 	end
 
-	-- Search: one box over the whole window. Typing lists matching tabs, pages,
-	-- groupboxes and controls from every tab; picking one opens its tab and page,
-	-- scrolls it into view and flashes it.
 
 	Window._searchIcons = {
 		Tab = "app-window",
@@ -15717,7 +15526,7 @@ local Library = (function()
 			end
 			entry.Name = name
 			entry.At = at
-			-- Name starts first, then word starts, then anywhere inside a word.
+
 			entry.Rank = at == 1 and 0 or (string.find(string.sub(name, at - 1, at - 1), "[%s%p]") and 1 or 2)
 			entry.Order = #results + 1
 			table.insert(results, entry)
@@ -15779,9 +15588,7 @@ local Library = (function()
 		return results
 	end
 
-	-- Marks a found control: it pops, a soft accent glow blooms around it, a
-	-- sheen of light sweeps across it and a bright spot runs round its border,
-	-- then everything breathes once more and fades.
+
 	function Window:_flash(frame, radius)
 		for _, name in ipairs({ "SearchFlash", "SearchGlow" }) do
 			local old = frame:FindFirstChild(name)
@@ -15793,7 +15600,7 @@ local Library = (function()
 		local accent = Theme.Accent
 		local bright = accent:Lerp(Color3.new(1, 1, 1), 0.65)
 
-		-- Outer glow: a wide, faint stroke around a second outline.
+
 		local halo = create("Frame", {
 			Name = "SearchGlow",
 			Size = UDim2.fromScale(1, 1),
@@ -15810,7 +15617,7 @@ local Library = (function()
 			Parent = halo,
 		})
 
-		-- Wash with a moving sheen: a brighter diagonal band crosses it once.
+
 		local wash = create("Frame", {
 			Name = "SearchFlash",
 			Size = UDim2.fromScale(1, 1),
@@ -15834,7 +15641,7 @@ local Library = (function()
 			Parent = wash,
 		})
 
-		-- Border light: the ring's gradient turns, so a bright spot runs round it.
+
 		local ring = create("UIStroke", {
 			Color = Color3.new(1, 1, 1),
 			Thickness = 1.6,
@@ -15856,9 +15663,7 @@ local Library = (function()
 			Parent = ring,
 		})
 
-		-- Groupboxes clip their rows, so anything drawn outside a control is cut
-		-- off at its corners. The strokes go on the inside of the control where
-		-- the engine supports it; otherwise everything is inset by its width.
+
 		local inside = pcall(function()
 			haloStroke.BorderStrokePosition = Enum.BorderStrokePosition.Inner
 			ring.BorderStrokePosition = Enum.BorderStrokePosition.Inner
@@ -15871,8 +15676,7 @@ local Library = (function()
 			wash.Size = UDim2.new(1, -4, 1, -4)
 		end
 
-		-- A small pop, unless something else is scaling the control already. It
-		-- never grows past full size, which would be clipped as well.
+
 		local pop
 		if not frame:FindFirstChildOfClass("UIScale") then
 			pop = create("UIScale", { Scale = 0.975, Parent = frame })
@@ -15886,7 +15690,7 @@ local Library = (function()
 		tween(runner, { Rotation = 540 }, 2.2, Enum.EasingStyle.Quad)
 		task.spawn(function()
 			task.wait(0.75)
-			-- One softer breath, then fade out.
+
 			tween(wash, { BackgroundTransparency = 0.9 }, 0.35, Enum.EasingStyle.Sine)
 			tween(haloStroke, { Thickness = glowWidth / 2, Transparency = 0.85 }, 0.35, Enum.EasingStyle.Sine)
 			task.wait(0.35)
@@ -15928,7 +15732,7 @@ local Library = (function()
 		end
 		local list = (sub or tab).List
 		task.spawn(function()
-			-- Let the freshly shown page lay out before measuring it.
+
 			task.wait()
 			task.wait()
 			if expanding then
@@ -15960,7 +15764,7 @@ local Library = (function()
 		end
 	end
 
-	-- Page titles stop short of the search box and close button.
+
 	function Window:_fitTitle(tab)
 		local right = self.SearchBox and (self._searchWidth or SEARCH_WIDTH) + 72 or 56
 		local reserve = tab._titleX + right
@@ -15971,8 +15775,8 @@ local Library = (function()
 	end
 
 	function Window:_buildSearch(content)
-		-- A recessed field: darker than the header, hairline stroke, icon
-		-- inset left and a clear button that only shows while there is text.
+
+
 		local holder = create("Frame", {
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -56, 0, 14),
@@ -16047,7 +15851,7 @@ local Library = (function()
 		end)
 		self.SearchBox = box
 
-		-- Results float over the window under the box, like a dropdown popup.
+
 		local rowHeight = TOUCH and 40 or 34
 		local maxRows = 8
 		local popup = create("Frame", {
@@ -16241,8 +16045,8 @@ local Library = (function()
 					Parent = list,
 				})
 				corner(button, UDim.new(0, 7))
-				-- One line of breadcrumbs: tab, sub tab and groupbox in muted
-				-- text, each split by a chevron, ending on the match in accent.
+
+
 				local crumbs = create("Frame", {
 					Position = UDim2.fromOffset(10, 0),
 					Size = UDim2.new(1, -20, 1, 0),
@@ -16315,7 +16119,7 @@ local Library = (function()
 						chevron()
 					end
 				end
-				-- The match itself: accent, with the typed part in bold.
+
 				local name = result.Name
 				local stop = result.At + #query
 				local marked = escape(string.sub(name, 1, result.At - 1))
@@ -16415,8 +16219,6 @@ local Library = (function()
 		task.defer(fit)
 	end
 
-	-- Identity: the player's name and headshot shown in the sidebar and on the
-	-- home tab. The privacy switches hide them everywhere at once.
 
 	function Window:_trackName(textLabel, kind)
 		table.insert(self._identity.Names, { Label = textLabel, Kind = kind })
@@ -16577,7 +16379,6 @@ local Library = (function()
 		self.Profile = card
 	end
 
-	-- Server actions
 
 	function Window:Rejoin()
 		self:Notify({
@@ -16673,12 +16474,7 @@ local Library = (function()
 		return ok
 	end
 
-	-- Home
 
-	-- Home reads top to bottom: a banner greeting the player, a performance card
-	-- with live graphs, the server and links side by side, and a status line.
-
-	-- A Home card that grows with its stacked contents.
 	function Window:_homeCard(parent, order)
 		local card = panelCard(parent, 0, order)
 		card.AutomaticSize = Enum.AutomaticSize.Y
@@ -16687,7 +16483,7 @@ local Library = (function()
 		return card
 	end
 
-	-- A small caps heading at the top of a Home card.
+
 	function Window:_homeCaption(parent, text, order)
 		return label({
 			Size = UDim2.new(1, 0, 0, 22),
@@ -16700,8 +16496,7 @@ local Library = (function()
 		})
 	end
 
-	-- A rounded chip of an icon and short text. Returns the chip, its label and
-	-- its icon so callers can recolour them.
+
 	function Window:_homeChip(parent, order, icon, text, color)
 		local chip = create("TextButton", {
 			Size = UDim2.fromOffset(0, 24),
@@ -16746,7 +16541,7 @@ local Library = (function()
 		return chip, text_, image, chipStroke
 	end
 
-	-- A chip that flips on press: on, it takes the accent; off, it sits muted.
+
 	function Window:_homeToggleChip(parent, order, icon, text, initial, callback)
 		local chip, text_, image, chipStroke = self:_homeChip(parent, order, icon, text)
 		local on = initial == true
@@ -16772,8 +16567,7 @@ local Library = (function()
 		local banner = panelCard(list, 140, order)
 		banner.ClipsDescendants = true
 
-		-- The avatar bust stands on the banner's right edge and fades in from
-		-- the left, so it reads as part of the card rather than a framed photo.
+
 		local bust = create("ImageLabel", {
 			AnchorPoint = Vector2.new(1, 1),
 			Position = UDim2.new(1, -16, 1, 0),
@@ -16831,7 +16625,7 @@ local Library = (function()
 		})
 		self:_trackName(userLabel, "User")
 
-		-- Chips along the bottom: tier, time left, then the privacy toggles.
+
 		local chips = create("Frame", {
 			Position = UDim2.new(0, 22, 1, -40),
 			Size = UDim2.new(1, -44, 0, 24),
@@ -16883,11 +16677,10 @@ local Library = (function()
 		end
 	end
 
-	-- A large live readout with a short bar history under it. Returns the value
-	-- label and a push(value, color) that adds a sample.
+
 	function Window:_homeGraph(parent, order, icon, title, ceiling, unit)
-		-- Reads like a perf overlay: name and min/avg/max on one line, the
-		-- reading under it, and a dense history strip tinted by health.
+
+
 		local cell = create("Frame", {
 			BackgroundTransparency = 1,
 			LayoutOrder = order,
@@ -16989,7 +16782,7 @@ local Library = (function()
 				tween(bar, {
 					Size = UDim2.new(1 / COUNT, -1, s and math.max(s / top, 0.04) or 0, 0),
 					BackgroundColor3 = color,
-					-- Older samples fade so the strip reads left-to-right as time.
+
 					BackgroundTransparency = s and (age == 0 and 0 or 0.45 + 0.35 * age / COUNT) or 1,
 				}, 0.3, Enum.EasingStyle.Quint)
 			end
@@ -16997,7 +16790,7 @@ local Library = (function()
 		return value, push
 	end
 
-	-- A small figure: value over a quiet caption.
+
 	function Window:_homeFigure(parent, order, title)
 		local cell = create("Frame", {
 			BackgroundTransparency = 1,
@@ -17023,7 +16816,7 @@ local Library = (function()
 		return value
 	end
 
-	-- A square tile button: an icon over a short label.
+
 	function Window:_homeAction(parent, order, icon, text, callback)
 		local button = create("TextButton", {
 			BackgroundColor3 = Theme.Surface3,
@@ -17151,9 +16944,8 @@ local Library = (function()
 				self:SetMinimized(true)
 			end)
 			self:_homeAction(actions, 7, "power", "Unload", function()
-				-- Closing the menu is the whole point, but the script behind it has
-				-- switches of its own: whoever wants to turn them off first puts a
-				-- function in Library._unloadHooks and gets called here.
+
+
 				for _, hook in ipairs(Library._unloadHooks) do
 					pcall(hook)
 				end
@@ -17172,14 +16964,14 @@ local Library = (function()
 			Parent = card,
 		})
 
-		-- The detail line keeps the player count live.
+
 		return function()
 			local count = #Players:GetPlayers() .. "/" .. Players.MaxPlayers .. " players"
 			detail.Text = owner and ("by " .. owner .. "  ·  " .. count) or count
 		end
 	end
 
-	-- One row of the links card: icon, title and text, and a round icon button.
+
 	function Window:_homeLink(card, order, icon, title, text, buttonIcon, callback)
 		local row = create("Frame", {
 			Size = UDim2.new(1, 0, 0, 46),
@@ -17251,8 +17043,7 @@ local Library = (function()
 		return row, titleLabel, textLabel
 	end
 
-	-- Builds the links card into parent, or nothing when there are no links and
-	-- the feature list is off. Returns the card (or nil) and the feature refresh.
+
 	function Window:_homeLinks(parent, opts, order)
 		local links = {}
 		if opts.Discord then
@@ -17319,7 +17110,7 @@ local Library = (function()
 			end
 			task.defer(refresh)
 		end
-		-- The first row needs no rule above it.
+
 		local first = nil
 		for _, child in ipairs(card:GetChildren()) do
 			if
@@ -17336,8 +17127,7 @@ local Library = (function()
 		return card, refresh
 	end
 
-	-- A quiet status line under the cards: executor support on the left, the
-	-- hide key on the right.
+
 	function Window:_homeExecutor(list, opts, order)
 		local line = create("Frame", {
 			Size = UDim2.new(1, 0, 0, 26),
@@ -17438,8 +17228,6 @@ local Library = (function()
 		})
 	end
 
-	-- Feature list: every control the script adds, grouped by tab, or a list the
-	-- script writes itself. Items that match a control jump to it when picked.
 
 	Window._featureKinds = {
 		Toggle = true,
@@ -17512,8 +17300,8 @@ local Library = (function()
 		if type(custom) ~= "table" then
 			return found
 		end
-		-- A written list: groups of items, or bare items, which gather into one
-		-- group where the first one appears.
+
+
 		local function customItem(entry)
 			if type(entry) ~= "table" then
 				entry = { Name = entry }
@@ -17564,8 +17352,7 @@ local Library = (function()
 		return text, groups, count
 	end
 
-	-- Opens the feature list over the window. Search filters it; picking an item
-	-- linked to a control closes the list and jumps to that control.
+
 	function Window:ShowFeatures()
 		if self._dialog then
 			self._dialog.Close()
@@ -17584,7 +17371,7 @@ local Library = (function()
 			ZIndex = 40,
 			Parent = body,
 		})
-		-- A canvas group so the whole list fades as one on open and close.
+
 		local card_ = create("CanvasGroup", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.new(0.5, 0, 0.5, 10),
@@ -17723,7 +17510,7 @@ local Library = (function()
 			Padding = UDim.new(0, 2),
 			Parent = content,
 		})
-		-- Canvas sized by hand, as elsewhere, so it scrolls under UIScale.
+
 		layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 			scroller.CanvasSize = UDim2.fromOffset(0, layout.AbsoluteContentSize.Y / self.Scale.Scale + 4)
 		end)
@@ -17752,7 +17539,7 @@ local Library = (function()
 			end
 			fitConnection:Disconnect()
 			if stopEscape then
-				-- Deferred: Close can run from inside the input dispatch loop.
+
 				task.defer(stopEscape)
 			end
 			if searchBox:IsFocused() then
@@ -17950,8 +17737,8 @@ local Library = (function()
 
 	function Window:_homeStats(list, opts, order, tab)
 		local show = opts.Stats or { "Players", "Execs", "Session", "FPS", "Ping" }
-		-- FPS and ping get large readouts with a bar history; every other stat
-		-- is a small figure in the row under them.
+
+
 		local card = self:_homeCard(list, order)
 		local graphs = create("Frame", {
 			Size = UDim2.new(1, 0, 0, 76),
@@ -18082,8 +17869,8 @@ local Library = (function()
 		self:_listen("Render", function()
 			frames += 1
 		end)
-		-- FPS, ping and memory are tinted by how healthy they are, unless the
-		-- script turns that off with StatColors = false.
+
+
 		local tinted = opts.StatColors ~= false
 		local function tint(valueLabel, color)
 			if tinted and valueLabel.TextColor3 ~= color then
@@ -18218,8 +18005,7 @@ local Library = (function()
 		end
 	end
 
-	-- One card failing must not cost the player the other cards: five of them
-	-- are built here and the last two talk to the game, the avatar and the network.
+
 	function Window:_buildCard(fn, ...)
 		local results = table.pack(pcall(fn, ...))
 		if not results[1] then
@@ -18232,10 +18018,10 @@ local Library = (function()
 	function Window:_buildHome(opts)
 		self._hideName = opts.HideName == true
 		self._hideAvatar = opts.HideAvatar == true
-		-- Hide / Unload live on the game card unless the script turns them off
+
 		self.HomeActions = opts.HomeActions ~= false
-		-- "Open music UI" button on the Home game card. opts.Music can carry
-		-- the same options table you would pass to Window:CreateMusicWindow.
+
+
 		self._musicHomeButton = opts.MusicButton ~= false
 		self._musicButtonText = opts.MusicButtonText or "Music"
 		if type(opts.Music) == "table" then
@@ -18267,7 +18053,7 @@ local Library = (function()
 			return self:_homeStats(list, opts, 2, tab)
 		end)
 
-		-- Server and links side by side, stacked when narrow.
+
 		local split = create("Frame", {
 			Size = UDim2.new(1, 0, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
@@ -18356,14 +18142,6 @@ local Library = (function()
 		return tab
 	end
 
-	-- =====================================================================
-	-- Music window ("Music")
-	-- A separate floating player window: catalog with cover avatars,
-	-- likes, favorites, views, search, genre filters, sorting and a full
-	-- playback bar (play/pause, next/prev, shuffle, repeat, seek, volume).
-	-- Data-driven: pass Tracks / OnFetch and optional callbacks, or open it
-	-- with no arguments to get a built-in public-domain demo catalog.
-	-- =====================================================================
 
 	local MUSIC_DEMO = {
 		{ Id = 9043887091, Name = "Lo-fi Chill A", Artist = "JS aka THE BEST", SoundId = 9043887091, Genre = "Lo-fi", Duration = 137, Likes = 1284, Views = 23810, Added = 1700000006, Uploader = "APMOfficial", UserId = 7462718749 },
@@ -18434,24 +18212,19 @@ local Library = (function()
 		return hash / 360
 	end
 
-	-- Optional remote-cover loader (set by the Spotify client). Roblox cannot
-	-- display https:// images directly, so the loader downloads the bytes and
-	-- returns a local asset id (getcustomasset). Returns nil when unsupported.
+
 	local musicRemoteLoader = nil
 	function Library:SetMusicCoverLoader(fn)
 		musicRemoteLoader = fn
 	end
 
-	-- Optional audio resolver for tracks without a Roblox SoundId.
-	-- fn(track) -> playable SoundId string (e.g. getcustomasset of a cached MP3).
-	-- Used by the free Audius/Render integration; runs async inside playTrack.
+
 	local musicAudioLoader = nil
 	function Library:SetMusicAudioLoader(fn)
 		musicAudioLoader = fn
 	end
 
-	-- Builds a square cover: a real image when the track has one, otherwise a
-	-- per-track gradient with a music note, so the catalog never looks empty.
+
 	local function musicCover(parent, track, size, order)
 		local holder = create("Frame", {
 			Size = UDim2.fromOffset(size, size),
@@ -18503,7 +18276,7 @@ local Library = (function()
 		local function render()
 			local src = musicAsset(track.Cover or track.Image or track.Icon)
 			if src and (src:find("^http://") or src:find("^https://")) and musicRemoteLoader then
-				-- Remote cover: show the gradient until the bytes are cached.
+
 				paintGradient()
 				coverToken += 1
 				local token = coverToken
@@ -18557,16 +18330,12 @@ local Library = (function()
 		}
 		self._musicPlayer = player
 
-		-- External player (e.g. Spotify Connect). When present, playback is
-		-- delegated to it instead of the local Roblox Sound. It must expose:
-		--   Play(track), Pause(), Resume(), Stop(), Next(), Previous(),
-		--   Seek(seconds), SetVolume(0..1), SetShuffle(bool), SetRepeat(mode),
-		--   GetState() -> { Playing, Position, Duration, TrackId }
+
 		local external = opts.ExternalPlayer
 		player._external = external
 		player._extState = { Playing = false, Position = 0, Duration = 0, TrackId = nil }
 
-		-- ---------------- persistence (likes / favorites / prefs) ----------
+
 		local storageFile = opts.StorageFile or "MacrOS/UI/music-state.json"
 		local function loadState()
 			if type(readfile) ~= "function" or type(isfile) ~= "function" then
@@ -18620,9 +18389,7 @@ local Library = (function()
 		end
 		loadState()
 
-		-- ---------------- audio -------------------------------------------
-		-- SoundService guarantees global (2D) playback regardless of where the
-		-- GUI lives. It is destroyed explicitly in player:Destroy / Window:Destroy.
+
 		local sound = create("Sound", {
 			Name = "MacrOSMusic",
 			Volume = player._volume,
@@ -18632,7 +18399,7 @@ local Library = (function()
 		player._sound = sound
 		local playToken = 0
 
-		-- ---------------- floating layer + panel --------------------------
+
 		local layer = window._floatingLayer
 		if not layer then
 			layer = create("Frame", {
@@ -18665,7 +18432,7 @@ local Library = (function()
 		window._floatingPanels = window._floatingPanels or {}
 		table.insert(window._floatingPanels, panel)
 
-		-- shadow behind the panel
+
 		create("ImageLabel", {
 			Position = UDim2.fromOffset(-24, -24),
 			Size = UDim2.new(1, 48, 1, 48),
@@ -18689,7 +18456,7 @@ local Library = (function()
 			panel.Position = UDim2.fromOffset(x, y)
 		end
 
-		-- ---------------- header (drag strip) -----------------------------
+
 		local header = create("Frame", {
 			Size = UDim2.new(1, 0, 0, 40),
 			BackgroundTransparency = 1,
@@ -18746,7 +18513,7 @@ local Library = (function()
 		applyIcon(closeIcon, "x")
 		hoverStroke(closeBtn, stroke(closeBtn))
 
-		-- ---------------- now playing card --------------------------------
+
 		local now = create("Frame", {
 			Position = UDim2.fromOffset(12, 46),
 			Size = UDim2.new(1, -24, 0, 88),
@@ -18800,7 +18567,7 @@ local Library = (function()
 			Visible = false,
 			Parent = now,
 		})
-		-- Likes + views on one line under the artist (likes first, then views).
+
 		local nowStats = label({
 			Position = UDim2.fromOffset(88, 56),
 			Size = UDim2.new(1, -220, 0, 18),
@@ -18839,7 +18606,7 @@ local Library = (function()
 		nowLikeBtn, nowLikeIcon = smallAction(now, "heart", W - 24 - 68, 50)
 		nowFavBtn, nowFavIcon = smallAction(now, "star", W - 24 - 34, 50)
 
-		-- ---------------- playback controls -------------------------------
+
 		local controls = create("Frame", {
 			Position = UDim2.fromOffset(12, 142),
 			Size = UDim2.new(1, -24, 0, 56),
@@ -18892,7 +18659,7 @@ local Library = (function()
 			Parent = repeatBtn,
 		})
 
-		-- volume
+
 		local volIcon = create("ImageLabel", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -128, 0, 15),
@@ -18939,7 +18706,7 @@ local Library = (function()
 			Parent = volTrack,
 		})
 
-		-- progress / seek bar
+
 		local elapsedLabel = label({
 			Position = UDim2.fromOffset(0, 38),
 			Size = UDim2.fromOffset(44, 14),
@@ -18983,7 +18750,7 @@ local Library = (function()
 			Parent = seekTrack,
 		})
 
-		-- ---------------- search + sort row -------------------------------
+
 		local searchRow = create("Frame", {
 			Position = UDim2.fromOffset(12, 206),
 			Size = UDim2.new(1, -24, 0, 32),
@@ -19036,7 +18803,7 @@ local Library = (function()
 			Parent = sortRow,
 		})
 
-		-- ---------------- filter / genre row ------------------------------
+
 		local filterRow = create("Frame", {
 			Position = UDim2.fromOffset(12, 244),
 			Size = UDim2.new(1, -24, 0, 26),
@@ -19052,7 +18819,7 @@ local Library = (function()
 			Parent = filterRow,
 		})
 
-		-- ---------------- track list --------------------------------------
+
 		local list = create("ScrollingFrame", {
 			Position = UDim2.fromOffset(12, 278),
 			Size = UDim2.new(1, -24, 1, -306),
@@ -19098,7 +18865,7 @@ local Library = (function()
 			Parent = panel,
 		})
 
-		-- ---------------- chip helper -------------------------------------
+
 		local function chip(parent, labelText, order, width)
 			local b = create("TextButton", {
 				Size = UDim2.fromOffset(width or 0, 24),
@@ -19132,7 +18899,7 @@ local Library = (function()
 			return object
 		end
 
-		-- sort chips
+
 		local sortModes = {
 			{ Key = "Popular", Label = text("Popular", "Popular") },
 			{ Key = "Likes", Label = text("Likes", "Likes") },
@@ -19148,7 +18915,7 @@ local Library = (function()
 			end)
 		end
 
-		-- filter chips
+
 		local filterModes = {
 			{ Key = "All", Label = text("All", "All") },
 			{ Key = "Favorites", Label = text("Favorites", "Favorites") },
@@ -19163,10 +18930,10 @@ local Library = (function()
 			end)
 		end
 
-		-- ---------------- forward declarations ----------------------------
+
 		local renderList, renderNow, refreshChips, rebuildGenres, playTrack, stopPlayback, updatePlayIcon
 
-		-- ---------------- state helpers -----------------------------------
+
 		local function trackLikes(t)
 			return (tonumber(t.Likes) or 0) + (player._likes[musicKey(t)] and 1 or 0)
 		end
@@ -19181,7 +18948,7 @@ local Library = (function()
 			return player._favorites[musicKey(t)] == true
 		end
 
-		-- ---------------- list rendering ----------------------------------
+
 		local function rowStat(parent, icon, x, order_)
 			local holder, image = glowIcon(parent, icon, Theme.Muted, UDim2.new())
 			holder.Position = UDim2.fromOffset(x, 0)
@@ -19318,7 +19085,7 @@ local Library = (function()
 				entry.Frame:Destroy()
 			end
 			player._rows = {}
-			-- filter + search + genre
+
 			local q = string.lower(player._query or "")
 			local filtered = {}
 			for _, track in ipairs(player._tracks) do
@@ -19404,7 +19171,7 @@ local Library = (function()
 				end
 			end
 			table.sort(genres)
-			-- "All genres" chip first, then one chip per genre.
+
 			local all = chip(filterRow, text("AllGenres", "All genres"), 10)
 			all.Button.MouseButton1Click:Connect(function()
 				player._genre = nil
@@ -19424,7 +19191,7 @@ local Library = (function()
 			refreshChips()
 		end
 
-		-- ---------------- now playing -------------------------------------
+
 		renderNow = function()
 			local track = player._current
 			if not track then
@@ -19465,7 +19232,7 @@ local Library = (function()
 			end
 		end
 
-		-- ---------------- playback ----------------------------------------
+
 		stopPlayback = function()
 			playToken += 1
 			if external then
@@ -19484,7 +19251,7 @@ local Library = (function()
 			if not track or player._destroyed then
 				return
 			end
-			-- External player (Spotify Connect): no local Sound / SoundId needed.
+
 			if external then
 				playToken += 1
 				player._current = track
@@ -19513,14 +19280,14 @@ local Library = (function()
 				return
 			end
 			local src = musicAsset(track._resolvedAudio or track.SoundId or track.Audio)
-			-- Numeric Id fallback is only for Roblox audio assets, never for remote
-			-- tracks (Audius hashids can be all-digit strings).
+
+
 			if not src and not track.StreamId and (type(track.Id) == "number" or (type(track.Id) == "string" and track.Id:match("^%d+$"))) then
 				src = musicAsset(track.Id)
 			end
 			if not src and musicAudioLoader then
-				-- Free streaming (Audius/Render): resolve MP3 -> local asset async,
-				-- then re-enter playTrack with the cached asset. No SoundId needed.
+
+
 				playToken += 1
 				local token = playToken
 				player._current = track
@@ -19579,7 +19346,7 @@ local Library = (function()
 			updatePlayIcon()
 			renderNow()
 			refreshRows()
-			-- Wait for the sound to load so the duration label is correct.
+
 			task.spawn(function()
 				local deadline = os.clock() + 20
 				while token == playToken and not player._destroyed and os.clock() < deadline do
@@ -19595,8 +19362,8 @@ local Library = (function()
 					track.Duration = sound.TimeLength
 					totalLabel.Text = musicTime(sound.TimeLength)
 				else
-					-- Private / removed audio never loads. Tell the player instead
-					-- of leaving a silent "playing" state.
+
+
 					player._playing = false
 					updatePlayIcon()
 					window:Notify({
@@ -19698,7 +19465,7 @@ local Library = (function()
 			playNext()
 		end)
 
-		-- ---------------- seek + volume dragging --------------------------
+
 		local function bindSlider(hit, trackFrame, fill, knob, onChange)
 			local dragging = false
 			local function valueFromPointer()
@@ -19776,7 +19543,7 @@ local Library = (function()
 			end
 		end)
 
-		-- ---------------- render loop (progress) --------------------------
+
 		local progressStep = function()
 			if player._destroyed or not panel.Visible then
 				return
@@ -19800,7 +19567,7 @@ local Library = (function()
 		end
 		table.insert(window._frameSteps, progressStep)
 
-		-- Poll the external player's state in the background (not every frame).
+
 		if external and external.GetState then
 			local pollInterval = tonumber(opts.ExternalPollInterval) or 1
 			task.spawn(function()
@@ -19813,7 +19580,7 @@ local Library = (function()
 								player._playing = st.Playing == true
 								updatePlayIcon()
 							end
-							-- If Spotify moved to a different track, reflect it.
+
 							if st.Track and type(st.Track) == "table" then
 								local curKey = player._current and musicKey(player._current)
 								local newKey = musicKey(st.Track)
@@ -19831,7 +19598,7 @@ local Library = (function()
 			end)
 		end
 
-		-- ---------------- header drag (LMB only) --------------------------
+
 		local dragInput, dragStart, dragOrigin
 		table.insert(window._connections, header.InputBegan:Connect(function(input)
 			if isPress(input) and not player._destroyed then
@@ -19859,7 +19626,7 @@ local Library = (function()
 			dragInput = nil
 		end))
 
-		-- ---------------- public API --------------------------------------
+
 		function player:Open()
 			if self._destroyed then
 				return
@@ -20048,7 +19815,7 @@ local Library = (function()
 			self._repeat = mode
 			if external and external.SetRepeat then
 				task.spawn(function()
-					-- Spotify uses track / context / off.
+
 					local map = { off = "off", all = "context", one = "track" }
 					pcall(external.SetRepeat, map[mode] or mode)
 				end)
@@ -20185,7 +19952,7 @@ local Library = (function()
 			end
 		end
 
-		-- ---------------- control wiring ----------------------------------
+
 		closeBtn.MouseButton1Click:Connect(function()
 			ripple(closeBtn)
 			player:Close()
@@ -20231,7 +19998,7 @@ local Library = (function()
 		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 			player._query = searchBox.Text
 			if type(opts.OnRemoteSearch) == "function" then
-				-- Debounced remote search (Spotify). Empty query clears results.
+
 				remoteSearchToken += 1
 				local token = remoteSearchToken
 				local query = player._query
@@ -20256,7 +20023,7 @@ local Library = (function()
 			safeCall(opts.OnSearch, player._query)
 		end)
 
-		-- ---------------- theme -------------------------------------------
+
 		onTheme(panel, function()
 			panel.BackgroundColor3 = Theme.Background
 			panelStroke.Color = Theme.Stroke
@@ -20272,7 +20039,7 @@ local Library = (function()
 			refreshRows()
 		end)
 
-		-- ---------------- initial data ------------------------------------
+
 		local function useDemo()
 			player:SetTracks(MUSIC_DEMO)
 		end
@@ -20464,10 +20231,7 @@ local Library = (function()
 
 	Window.CreateTab = Window.Tab
 
-	-- Cloud configs: a tab for browsing, previewing, installing and publishing
-	-- configs other players shared. The library draws it; OnFetch, OnPublish and
-	-- the other callbacks are the script's backend. Favorites, installs and the
-	-- sort order are remembered in the script's settings file.
+
 	function Window:CloudConfigs(opts)
 		opts = normalize(opts, { Title = "Name", Description = "Desc" })
 		local window = self
@@ -20522,12 +20286,11 @@ local Library = (function()
 			window:Notify({ Title = title, Content = detail_, Type = ok and "Success" or "Error", Duration = 3 })
 		end
 
-		-- The Home tab's hide-name switch doubles as streamer mode.
+
 		local function streamerOn()
 			return window._hideName == true
 		end
 
-		-- Records
 
 		local function countFlags(code)
 			local data = type(code) == "string" and window:DecodeConfig(code)
@@ -20575,7 +20338,7 @@ local Library = (function()
 			return (text:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"):gsub('"', "&quot;"):gsub("'", "&apos;"))
 		end
 
-		-- Rich text with every match of the search drawn in the accent.
+
 		local function highlight(text)
 			local needle = string.lower(query.Search)
 			if needle == "" then
@@ -20650,7 +20413,7 @@ local Library = (function()
 			}
 		end
 
-		-- What is kept locally for favorites and installs: no code, it is refetched.
+
 		local function summary(record)
 			local kept = publicRecord(record)
 			kept.Code = nil
@@ -20673,7 +20436,6 @@ local Library = (function()
 			return type(record.Folder) == "string" and record.Folder ~= window.ConfigFolder
 		end
 
-		-- Small pieces
 
 		local function iconButton(parent, icon, glyph, size, plain)
 			local button = create("TextButton", {
@@ -20837,7 +20599,7 @@ local Library = (function()
 			return frame
 		end
 
-		-- A text box on the surface colour. Multi-line boxes show a counter.
+
 		local function field(parent, order, placeholder, height, limit)
 			local multi = height > ROW
 			local holder = create("Frame", {
@@ -20917,11 +20679,10 @@ local Library = (function()
 			return name
 		end
 
-		-- Layout: the page holds three views that slide over each other.
 
 		local top = tab._headerBottom
-		-- One pixel wider than the content on every side: root clips the slide,
-		-- and the strokes along its edges would be clipped with it.
+
+
 		local root = create("Frame", {
 			Position = UDim2.fromOffset(23, top - 1),
 			Size = UDim2.new(1, -46, 1, -(top + 14)),
@@ -20954,7 +20715,6 @@ local Library = (function()
 			tween(view, { Position = UDim2.fromOffset(0, 0) }, 0.3, Enum.EasingStyle.Quint)
 		end
 
-		-- Browse: search, publish and refresh, the filter strip, then results.
 
 		local browse = views.Browse
 		local toolbar = create("Frame", {
@@ -21130,7 +20890,7 @@ local Library = (function()
 		publishButton:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitToolbar)
 		task.defer(fitToolbar)
 
-		-- A pixel taller than the chips on each side, so their strokes aren't clipped.
+
 		local filterRow = create("Frame", {
 			Position = UDim2.fromOffset(0, ROW + 7),
 			Size = UDim2.new(1, 0, 0, CHIP + 2),
@@ -21223,7 +20983,7 @@ local Library = (function()
 			return query.Search ~= "" or query.Tag ~= nil or query.Filter ~= "All"
 		end
 
-		-- "12 configs in Favorites, tagged PvP, matching "boss"", or "Searching..."
+
 		local function renderSummary(pending)
 			local parts = {}
 			if query.Filter ~= "All" then
@@ -21306,7 +21066,7 @@ local Library = (function()
 			Parent = results,
 		})
 
-		-- Loading placeholders that pulse where cards will land.
+
 		local skeletons = {}
 		local function addSkeletons(count)
 			for _ = 1, count do
@@ -21343,7 +21103,7 @@ local Library = (function()
 			skeletons = {}
 		end
 
-		-- kind: nil hides it, or "empty" / "error" with a message.
+
 		local function setState(kind, text)
 			clear(stateFrame)
 			stateFrame.Visible = kind ~= nil
@@ -21373,7 +21133,6 @@ local Library = (function()
 			renderSummary()
 		end
 
-		-- Cards
 
 		local openDetail, installRecord, refreshRecord
 
@@ -21574,7 +21333,7 @@ local Library = (function()
 			end
 		end
 
-		-- Favorites and Installed are kept on this device, so they filter locally.
+
 		local function localRecords()
 			local source = query.Filter == "Favorites" and favorites or installed
 			local search = string.lower(query.Search)
@@ -21706,7 +21465,7 @@ local Library = (function()
 			end)
 		end
 
-		-- Near the bottom, the next page loads by itself.
+
 		results:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
 			if not hasMore or loading then
 				return
@@ -21720,7 +21479,6 @@ local Library = (function()
 			end
 		end)
 
-		-- Filters and sorting
 
 		local filterChips, tagChips = {}, {}
 		local function renderFilters(instant)
@@ -21777,7 +21535,7 @@ local Library = (function()
 		end
 		resetButton.MouseButton1Click:Connect(resetFilters)
 
-		-- Typing searches after a short pause; Enter searches now.
+
 		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 			searchClear.Visible = searchBox.Text ~= ""
 			showRecent(searchBox:IsFocused())
@@ -21804,7 +21562,7 @@ local Library = (function()
 			tween(searchStroke, { Color = Theme.Stroke }, 0.2)
 			tween(searchImage, { ImageColor3 = Theme.Muted }, 0.2)
 			rememberSearch(searchBox.Text)
-			-- Late enough for a press on a recent search to land first.
+
 			task.delay(0.15, function()
 				if not searchBox:IsFocused() then
 					showRecent(false)
@@ -21827,7 +21585,7 @@ local Library = (function()
 				fetch(false)
 			end
 		end)
-		-- "/" jumps to the search box while the list is showing.
+
 		window:_listen("Began", function(input, processed)
 			if processed or input.KeyCode ~= Enum.KeyCode.Slash then
 				return
@@ -21848,10 +21606,7 @@ local Library = (function()
 			cloud:Refresh()
 		end)
 
-		-- Actions on a record
 
-		-- Runs callback with the record's code, asking the backend for it first
-		-- when the list came without codes.
 		local function withCode(record, callback, onFail)
 			if record.Code then
 				callback(record.Code)
@@ -21901,7 +21656,7 @@ local Library = (function()
 				local mark = installed[record.Id]
 				local saveAs = nil
 				if fileApiAvailable() then
-					-- An update overwrites the config it installed last time.
+
 					saveAs = type(mark) == "table"
 							and type(mark.Name) == "string"
 							and window:ConfigExists(mark.Name)
@@ -22078,7 +21833,6 @@ local Library = (function()
 			})
 		end
 
-		-- Detail view
 
 		local detailList = scroller(views.Detail)
 		padding(detailList, 1, 8, 1, 16)
@@ -22199,8 +21953,7 @@ local Library = (function()
 			detail.FavoriteLabel.Text = favorites[record.Id] and "Favorited" or "Favorite"
 		end
 
-		-- Every setting in the config next to the player's own: changed ones
-		-- first, then the same ones, then flags this script doesn't have.
+
 		local function fillPreview(record, myToken)
 			local function mismatch(text)
 				if detailToken == myToken then
@@ -22368,7 +22121,6 @@ local Library = (function()
 			end
 		end
 
-		-- Publish view: also the edit form for the player's own configs.
 
 		local form = { Mode = "Publish", Record = nil, Source = false, Tags = {}, Busy = false }
 		local publishList = scroller(views.Publish)
@@ -22455,7 +22207,7 @@ local Library = (function()
 			end)
 		end
 
-		-- The code and setting count for the picked source, or nil and why not.
+
 		local function sourceCode(name)
 			if form.Source == "Keep" then
 				return nil, form.Record and form.Record.Count
@@ -22527,7 +22279,7 @@ local Library = (function()
 				nameBox.Text = editing.Name
 				descBox.Text = editing.Description
 			elseif form.Mode == "Edit" then
-				-- Leaving an edit starts a fresh draft; a publish draft is kept.
+
 				form.Mode, form.Record, form.Source, form.Tags = "Publish", nil, false, {}
 				nameBox.Text = ""
 				descBox.Text = ""
@@ -22646,7 +22398,6 @@ local Library = (function()
 			end)
 		end
 
-		-- Handle
 
 		function cloud:Refresh()
 			fetch(false)
@@ -22658,7 +22409,7 @@ local Library = (function()
 			end
 		end
 
-		-- For backends that push results instead of answering OnFetch.
+
 		function cloud:SetConfigs(list, more)
 			token += 1
 			busy(false)
@@ -22765,7 +22516,7 @@ local Library = (function()
 
 		renderFilters(true)
 		showView(views.Browse)
-		-- The first fetch waits until the tab is opened, so a hidden tab costs nothing.
+
 		local fetched = false
 		local function firstFetch()
 			if not fetched and tab._page.Visible then
@@ -22787,8 +22538,7 @@ local Library = (function()
 	Window.CloudConfig = Window.CloudConfigs
 	Window.CreateCloudConfig = Window.CloudConfigs
 
-	-- Tab badges were removed. These stay as no-ops so older scripts that call
-	-- them keep running.
+
 	function Tab:SetBadge() end
 
 	function Tab:GetBadge()
@@ -23052,9 +22802,7 @@ local Library = (function()
 		tween(indicator, { Position = UDim2.fromOffset(8, targetY) }, 0.45, Enum.EasingStyle.Quint)
 	end
 
-	-- While a tab list or sub tab strip runs past an end, that end gets a fade
-	-- and a small chip with a chevron and how many tabs are out of sight there.
-	-- Pressing the chip scrolls most of a view toward them.
+
 	function Window:_overflowHint(host, scroller, items, vertical, fadeColor)
 		local overlay = create("Frame", {
 			AnchorPoint = scroller.AnchorPoint,
@@ -23294,9 +23042,7 @@ local Library = (function()
 		end
 	end
 
-	-- Popped-out groupboxes float on one screen-wide layer above the window. It
-	-- carries the window's scale, so a panel keeps the size it had in its column,
-	-- and it shows while the window is open (minimized included).
+
 	function Window:_popoutLayer()
 		if self._popLayer then
 			return self._popLayer
@@ -23322,8 +23068,7 @@ local Library = (function()
 		return layer
 	end
 
-	-- Where a control's popup is drawn: the pop-out layer for one inside a
-	-- floating panel, otherwise the window body.
+
 	function Window:_popupHost(object)
 		local layer = self._popLayer
 		if layer and object and object:IsDescendantOf(layer) then
@@ -23332,8 +23077,7 @@ local Library = (function()
 		return self.Body
 	end
 
-	-- A floating panel under the point counts as a control, so pressing it never
-	-- starts a window drag.
+
 	function Window:_overPopout(point)
 		local layer = self._popLayer
 		if not layer or not layer.Visible then
@@ -23347,8 +23091,7 @@ local Library = (function()
 		return false
 	end
 
-	-- Fades the whole body by lending it to the fader CanvasGroup, then hands it
-	-- back to the root once fully shown so it renders directly again.
+
 	function Window:_fade(target, duration)
 		local fader, body = self._fader, self.Body
 		self._fadeGeneration = (self._fadeGeneration or 0) + 1
@@ -23448,20 +23191,15 @@ local Library = (function()
 		self:_settleIn()
 	end
 
-	-- Backdrop: a black tint over the game while the window is up, with an
-	-- optional weather layer (rain, snow or hell fire embers) drifting through it.
-	-- It fades out when the window is minimized or hidden and sweeps back in with
-	-- a gust when it comes back.
 
 	local WEATHER = {
-		-- The rain texture is a wide sheet with one faint streak down the middle
-		-- (about 1/60 of its width, 57% of its height), so it is stretched much
-		-- wider than the drop it draws. See RAIN_STREAK.
+
+
 		Rain = { Image = "rbxassetid://241868005", Count = 90, Stretch = true },
 		Snow = { Image = "rbxassetid://99851851", Count = 60 },
 		Ember = { Image = "rbxassetid://242205518", Count = 55 },
-		-- Drawn with plain frames and text, no images: petals are tinted pills
-		-- that flip as they fall, matrix columns are text strips.
+
+
 		Sakura = { Petal = true, Count = 46, Glow = Color3.fromRGB(255, 150, 190), GlowAmount = 0.1 },
 		Fireflies = { Image = Assets.Glow, Count = 34, Glow = Color3.fromRGB(70, 150, 60), GlowAmount = 0.16 },
 		Matrix = {
@@ -23491,8 +23229,7 @@ local Library = (function()
 	local RAIN_STREAK = Vector2.new(7 / 420, 151 / 263)
 	local weatherRandom = Random.new()
 
-	-- "UI" keeps the weather inside the window, behind its content; anything
-	-- else drifts it across the whole screen.
+
 	local function weatherMode(mode)
 		if type(mode) == "string" and ({ ui = true, window = true, inside = true })[mode:lower()] then
 			return "UI"
@@ -23511,8 +23248,7 @@ local Library = (function()
 		return weatherRandom:NextNumber(min, max)
 	end
 
-	-- Places a particle. `anywhere` scatters it over the whole screen (first
-	-- frame after the backdrop appears), otherwise it enters from its edge.
+
 	local function seedParticle(kind, particle, width, height, anywhere)
 		particle.Time = roll(0, 10)
 		particle.Phase = roll(0, math.pi * 2)
@@ -23553,8 +23289,8 @@ local Library = (function()
 			particle.X = roll(-0.25 * width, width)
 			particle.Y = anywhere and roll(-20, height) or roll(-60, -s)
 		elseif kind == "Fireflies" then
-			-- They wander instead of crossing the screen, and live a few seconds:
-			-- fade in, pulse, fade out, then turn up somewhere else.
+
+
 			local s = roll(14, 28)
 			particle.Size = Vector2.new(s, s)
 			particle.VY = roll(-14, 8)
@@ -23585,7 +23321,7 @@ local Library = (function()
 			particle.Size = Vector2.new(s + 6, s * length)
 			particle.VY = roll(160, 360) * (s / 15)
 			particle.VX, particle.Sway, particle.Spin, particle.Rotation = 0, 0, 0, 0
-			-- Smaller columns read as further away: dimmer.
+
 			particle.Alpha = roll(0, 0.25) + (19 - s) * 0.04
 			particle.X = math.floor(roll(0, width) / 18) * 18 + 9
 			particle.Y = anywhere and roll(-particle.Size.Y / 2, height) or -particle.Size.Y / 2 - roll(0, 240)
@@ -23642,7 +23378,7 @@ local Library = (function()
 			ZIndex = 0,
 			Parent = layer,
 		})
-		-- Darker towards the top and bottom edges.
+
 		create("UIGradient", {
 			Rotation = 90,
 			Transparency = NumberSequence.new({
@@ -23652,7 +23388,7 @@ local Library = (function()
 			}),
 			Parent = tint,
 		})
-		-- Heat rising from the bottom of the screen, hell fire only.
+
 		local heat = create("Frame", {
 			AnchorPoint = Vector2.new(0, 1),
 			Position = UDim2.fromScale(0, 1),
@@ -23668,8 +23404,8 @@ local Library = (function()
 			Transparency = NumberSequence.new(1, 0),
 			Parent = heat,
 		})
-		-- Holds the heat and the particles so both move together between the
-		-- screen and the window.
+
+
 		local field = create("Frame", {
 			Size = UDim2.fromScale(1, 1),
 			BackgroundTransparency = 1,
@@ -23701,7 +23437,7 @@ local Library = (function()
 		end)
 	end
 
-	-- The area the particles cover, in the field's own (unscaled) units.
+
 	function Window:_weatherSize()
 		if self.WeatherMode == "UI" then
 			return Vector2.new(self.Root.Size.X.Offset, self.Root.Size.Y.Offset)
@@ -23718,11 +23454,11 @@ local Library = (function()
 		if not definition then
 			return
 		end
-		-- The glow along the bottom: red heat for hell fire, a soft tint for the
-		-- others that ask for one.
+
+
 		self._backdropHeat.BackgroundColor3 = definition.Glow or Color3.fromRGB(255, 60, 15)
 		local size = self:_weatherSize()
-		-- The window is a fraction of the screen, so it gets fewer particles.
+
 		local count = definition.Count * self._weatherDensity * (self.WeatherMode == "UI" and 0.45 or 1)
 		for _ = 1, math.floor(count + 0.5) do
 			local instance, property
@@ -23741,7 +23477,7 @@ local Library = (function()
 					ZIndex = 2,
 					Parent = self._weatherField,
 				})
-				-- A fading tail and a pale leading glyph.
+
 				create("UIGradient", {
 					Rotation = 90,
 					Color = ColorSequence.new({
@@ -23809,7 +23545,7 @@ local Library = (function()
 		end
 		local eased = 1 - (1 - fade) ^ 3
 		local kind = self.Weather
-		-- The dim eases on its own so turning it off doesn't touch the weather.
+
 		local dim = self._dimLevel
 		if self._backdropDim then
 			dim = math.min(dim + deltaTime / 0.3, 1)
@@ -23824,7 +23560,7 @@ local Library = (function()
 			or definition and definition.GlowAmount and 1 - (definition.GlowAmount + math.sin(os.clock() * 0.8) * definition.GlowAmount * 0.25) * eased
 			or 1
 
-		-- The gust on restore: particles rush in fast and settle back.
+
 		local kick = self._weatherKick
 		self._weatherKick = math.max(kick - deltaTime * 1.3, 0)
 		local speed = self._weatherSpeed * (1 + kick * kick * 2.5)
@@ -23862,11 +23598,11 @@ local Library = (function()
 			local y = particle.Y
 			local label = particle.Label
 			if kind == "Ember" then
-				-- Flicker, and burn out on the way up.
+
 				alpha *= math.clamp(particle.Y / (height * 0.85), 0, 1) ^ 0.6
 				alpha *= 0.75 + math.sin(particle.Time * 9 + particle.Phase) * 0.25
 			elseif kind == "Sakura" then
-				-- Flip: the petal narrows and widens as it turns over.
+
 				local turn = math.abs(math.cos(particle.Time * particle.Flutter + particle.Phase))
 				label.Size = UDim2.fromOffset(particle.Size.X * (0.3 + turn * 0.7), particle.Size.Y)
 			elseif kind == "Fireflies" then
@@ -23931,7 +23667,7 @@ local Library = (function()
 		self._backdropTint = math.clamp(tonumber(amount) or 0.45, 0, 1)
 	end
 
-	-- Turns the black tint on or off, leaving the weather running.
+
 	function Window:SetDim(enabled)
 		if not self._backdrop then
 			return
@@ -23946,7 +23682,7 @@ local Library = (function()
 		mode = weatherMode(mode)
 		local field = self._weatherField
 		if mode == "UI" then
-			-- Under everything else in the body: sidebar, content and glows.
+
 			field.ZIndex = 0
 			field.Parent = self.Body
 		else
@@ -23993,31 +23729,20 @@ local Library = (function()
 		self._weatherSpeed = math.clamp(tonumber(speed) or 1, 0.1, 3)
 	end
 
-	-- Minimize: the window folds into a Dynamic Island style pill hanging from
-	-- the top of the screen. Compact, it shows the logo and a live meter of
-	-- running toggles. Hovering springs it open into a session card: the
-	-- player, the game and session time, frame rate and ping meters, the server
-	-- and running counts, and the key that reopens the window. A
-	-- notification while minimized opens it briefly to show it. Click or tap
-	-- restores.
 
-	-- One table, not separate locals: the main chunk is at Luau's 200 local limit.
 	local Mini = {
-		-- Sized after the iPhone 18 island: a slimmer, shorter pill sitting close
-		-- to the top edge, opening into a wide card with deep rounded corners.
-		Top = 8, -- gap from the top of the screen
-		Width = TOUCH and 176 or 168, -- compact
+
+
+		Top = 8,
+		Width = TOUCH and 176 or 168,
 		Height = TOUCH and 36 or 32,
-		Wide = 340, -- expanded and activity
-		Radius = 34, -- corner of the expanded and activity cards
+		Wide = 340,
+		Radius = 34,
 		Bars = 4,
 		Pinned = 6,
 	}
 
-	-- The morph is carried by a plain "ghost" panel drawn over the window. The
-	-- window body itself never moves or fades, so nothing has to be laid out
-	-- again mid-animation: the ghost covers it, the window is hidden underneath,
-	-- and on the way back the window is shown under the ghost before it clears.
+
 	local function makeGhost(window, position, size, radius)
 		if window._ghost then
 			window._ghost:Destroy()
@@ -24062,8 +23787,7 @@ local Library = (function()
 		end
 		local gui = self.Gui
 
-		-- The island itself: a themed pill hanging from the top of the screen. It
-		-- is a canvas so its rounded shape clips whatever layer is showing.
+
 		local island = create("CanvasGroup", {
 			Name = "Island",
 			AnchorPoint = Vector2.new(0.5, 0),
@@ -24079,14 +23803,13 @@ local Library = (function()
 		local islandCorner = Library._fixedCorner(island, UDim.new(0, Mini.Height / 2))
 		local islandScale = create("UIScale", { Parent = island })
 		self._miniScale = islandScale
-		-- How far the split bubble is out of the pill: drawn back in while the
-		-- island is open, budded off again once it settles to the pill.
+
+
 		local merge = create("NumberValue", { Value = 1 })
 		local mergeTween
 		self._miniOrb = island
 
-		-- The wide layers keep a fixed width, so nothing reflows while the island
-		-- grows around them.
+
 		local function layer(name)
 			return create("CanvasGroup", {
 				Name = name,
@@ -24099,9 +23822,7 @@ local Library = (function()
 			})
 		end
 
-		-- Compact: the logo leading, a live meter of running toggles trailing.
-		-- A raised theme surface, lit from the top, so the pill isn't a flat
-		-- slab; it fades with the layer, leaving the open card on Background.
+
 		local compact = create("CanvasGroup", {
 			Name = "Compact",
 			Size = UDim2.fromScale(1, 1),
@@ -24114,7 +23835,7 @@ local Library = (function()
 			Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(120, 120, 120)),
 			Parent = compact,
 		})
-		-- The logo sits in a soft accent disc, like an app glyph.
+
 		local logoDisc = create("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 5, 0.5, 0),
@@ -24135,7 +23856,7 @@ local Library = (function()
 			Parent = logoDisc,
 		})
 		applyIcon(logo, self._logoIcon, true)
-		-- The script's name beside the logo, so the pill reads at a glance.
+
 		local miniTitle = label({
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, Mini.Height + 2, 0.5, 0),
@@ -24193,8 +23914,8 @@ local Library = (function()
 			LayoutOrder = 2,
 			Parent = meter,
 		})
-		-- Idle (nothing running): a health dot tinted by frame rate and the
-		-- session clock, so the pill never sits empty.
+
+
 		local idleDot = create("Frame", {
 			Size = UDim2.fromOffset(6, 6),
 			BackgroundColor3 = Theme.Accent,
@@ -24215,7 +23936,7 @@ local Library = (function()
 			Parent = meter,
 		})
 
-		-- Expanded, on hover: the player's session.
+
 		local expanded = layer("Expanded")
 		local expandedList = create("Frame", {
 			Position = UDim2.fromOffset(16, 14),
@@ -24229,9 +23950,8 @@ local Library = (function()
 			Padding = UDim.new(0, 8),
 			Parent = expandedList,
 		})
-		-- The open card is the player's session, like a now-playing card: who
-		-- and where on top with the session clock, two wide meters for frame
-		-- rate and ping, then chips for the server and what's running.
+
+
 		local top = create("Frame", {
 			Size = UDim2.new(1, 0, 0, 48),
 			BackgroundTransparency = 1,
@@ -24302,8 +24022,7 @@ local Library = (function()
 			Parent = top,
 		})
 
-		-- Two readouts: a large number with its unit, a caption, and a thin
-		-- line under them that fills and tints with how healthy it is.
+
 		local meters = create("Frame", {
 			Size = UDim2.new(1, 0, 0, 42),
 			BackgroundTransparency = 1,
@@ -24357,7 +24076,7 @@ local Library = (function()
 		local fpsFill, fpsValue = meterPill(UDim2.fromScale(0, 0), "FRAME RATE")
 		local pingFill, pingValue = meterPill(UDim2.new(0.5, 10, 0, 0), "PING")
 
-		-- Chips: a muted name and a bold value, the running count in accent.
+
 		local chips = create("Frame", {
 			Size = UDim2.new(1, 0, 0, 30),
 			BackgroundTransparency = 1,
@@ -24416,8 +24135,7 @@ local Library = (function()
 		local bigCount = chipOf(2, "Running", Theme.Accent)
 		local tabValue = chipOf(3, "Tab")
 
-		-- Pinned statuses are no longer shown here; the holder stays so the
-		-- refresh below has somewhere to keep its rows.
+
 		local rowsHolder = create("Frame", {
 			Size = UDim2.new(1, 0, 0, 0),
 			BackgroundTransparency = 1,
@@ -24430,7 +24148,7 @@ local Library = (function()
 			Padding = UDim.new(0, 2),
 			Parent = rowsHolder,
 		})
-		-- What's running, by name, so the count above has something behind it.
+
 		local runningNames = label({
 			Size = UDim2.new(1, 0, 0, 15),
 			Text = "",
@@ -24451,8 +24169,7 @@ local Library = (function()
 			Parent = expandedList,
 		})
 
-		-- Frame rate is counted every frame; the card's values refresh twice a
-		-- second while it's open.
+
 		local sessionStart = self._sessionStart or os.clock()
 		local frames, frameClock, fps = 0, os.clock(), 60
 		self:_listen("Render", function()
@@ -24478,7 +24195,7 @@ local Library = (function()
 			end)
 			ping = okPing and ping or 0
 			pingValue.Text = ping .. string.format(unit, "ms")
-			-- Lower ping fills more: 40ms or less is full, 400ms and up is low.
+
 			tween(pingFill, {
 				Size = UDim2.fromScale(math.clamp(1 - (ping - 40) / 360, 0.05, 1), 1),
 				BackgroundColor3 = Library._healthColor(ping, 90, 180, true),
@@ -24496,7 +24213,7 @@ local Library = (function()
 			end
 		end)
 
-		-- Activity: a notification that arrives while minimized drops in here.
+
 		local activity = layer("Activity")
 		local activityList = create("Frame", {
 			Position = UDim2.fromOffset(16, 13),
@@ -24564,8 +24281,7 @@ local Library = (function()
 			Parent = island,
 		})
 
-		-- Morphing between shapes: the island springs to its new size while the
-		-- old layer fades out and the new one fades in just behind it.
+
 		local layers = { Compact = compact, Expanded = expanded, Activity = activity }
 		local mode = "Compact"
 		local modeToken = 0
@@ -24586,10 +24302,7 @@ local Library = (function()
 			return Vector2.new(Mini.Width, Mini.Height), Mini.Height / 2
 		end
 
-		-- Where the island hangs: the top centre of its shape, as fractions of
-		-- the screen so it keeps its spot across resolutions. Dragging moves it;
-		-- each shape is clamped on screen, so the wide card slides in from an edge
-		-- and the pill goes back to its spot when it folds.
+
 		local saved = self:_readConfigSettings().IslandPosition
 		if type(saved) == "table" and tonumber(saved.X) and tonumber(saved.Y) then
 			self._islandAnchor = Vector2.new(math.clamp(tonumber(saved.X), 0, 1), math.clamp(tonumber(saved.Y), 0, 1))
@@ -24645,8 +24358,8 @@ local Library = (function()
 			local current = Vector2.new(island.Size.X.Offset, island.Size.Y.Offset)
 			local growing = size.X > current.X + 1 or size.Y > current.Y + 1
 			local duration = instant and 0 or (growing and 0.5 or 0.38)
-			-- A snap must stop a morph still in flight, or it keeps writing the
-			-- old shape over the new one.
+
+
 			if sizeTween then
 				sizeTween:Cancel()
 			end
@@ -24661,8 +24374,8 @@ local Library = (function()
 				growing and Enum.EasingStyle.Back or Enum.EasingStyle.Quint
 			)
 			cornerTween = tween(islandCorner, { CornerRadius = UDim.new(0, radius) }, duration, Enum.EasingStyle.Quint)
-			-- The iOS island gives a soft squeeze as it swells open, then springs
-			-- back, so the morph reads as one elastic body rather than a resize.
+
+
 			if changed and not instant and not pressed and not dragging then
 				islandScale.Scale = growing and 0.96 or 1.03
 				tween(islandScale, { Scale = 1 }, growing and 0.55 or 0.4, Enum.EasingStyle.Back)
@@ -24675,7 +24388,7 @@ local Library = (function()
 				if instant then
 					merge.Value = name == "Compact" and 1 or 0
 				elseif name == "Compact" then
-					-- Wait for the pill to shrink most of the way, then bud off.
+
 					task.delay(duration * 0.55, function()
 						if modeToken == token then
 							mergeTween = tween(merge, { Value = 1 }, 0.6, Enum.EasingStyle.Back)
@@ -24686,9 +24399,8 @@ local Library = (function()
 				end
 			end
 			if not changed and not instant then
-				-- A refit (same shape, new height) bumps the token, which cancels
-				-- a fade-in still waiting from the morph; finish it here or the
-				-- card stays black until the next hover.
+
+
 				local target = layers[name]
 				if target.GroupTransparency > 0 then
 					tween(target, { GroupTransparency = 0 }, 0.22, Enum.EasingStyle.Quad)
@@ -24706,14 +24418,14 @@ local Library = (function()
 			local target = layers[name]
 			if instant then
 				target.GroupTransparency = 0
-				-- Compact fills the island from its corner; only the wide
-				-- layers hang from the centre.
+
+
 				if target ~= compact then
 					target.Position = UDim2.fromScale(0.5, 0)
 				end
 			else
-				-- The new layer rises a few pixels into place as it fades in, so
-				-- the content reads as arriving with the shape, not popping in.
+
+
 				if target ~= compact then
 					target.Position = UDim2.new(0.5, 0, 0, 6)
 				end
@@ -24748,8 +24460,7 @@ local Library = (function()
 			end
 		end
 
-		-- Called by Minimize once the window is out of the way: the island is
-		-- reset to its compact pill and its spot handed back for the ghost.
+
 		function self:_miniLand()
 			hovered, activityLive = false, false
 			activityToken += 1
@@ -24767,9 +24478,8 @@ local Library = (function()
 			hovered = true
 			hoverToken += 1
 			local token = hoverToken
-			-- Already open (the pointer left and came back within the grace):
-			-- just stay. Otherwise lean in a touch, and only open once the
-			-- pointer rests, so sweeping past the island doesn't burst it open.
+
+
 			if mode == "Expanded" then
 				return
 			end
@@ -24791,17 +24501,16 @@ local Library = (function()
 			if not pressed then
 				tween(islandScale, { Scale = 1 }, 0.25, Enum.EasingStyle.Quint)
 			end
-			-- A grace period: the card shifts while it morphs and clamps on
-			-- screen, so a pointer grazing its edge shouldn't snap it shut.
+
+
 			task.delay(mode == "Expanded" and 0.28 or 0.1, function()
 				if hoverToken == token and not hovered and self.Minimized then
 					settleMode()
 				end
 			end)
 		end)
-		-- Press and pull to move the island anywhere on screen. It folds to the
-		-- pill while carried, lifts a little, and a drop near its home at the top
-		-- centre snaps back there. A drag never counts as the click that restores.
+
+
 		hit.InputBegan:Connect(function(input)
 			if not isPress(input) then
 				return
@@ -24867,7 +24576,7 @@ local Library = (function()
 				end
 			end)
 		)
-		-- Keeps the island on screen when the viewport changes size.
+
 		table.insert(
 			self._connections,
 			gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
@@ -24885,14 +24594,14 @@ local Library = (function()
 				self:Restore()
 			end
 		end)
-		-- Restore hides the island under the pointer, so MouseLeave never fires.
+
 		self._miniUnhover = function()
 			hovered, pressed, activityLive = false, false, false
 			dragFrom, dragging = nil, false
 			activityToken += 1
 			islandScale.Scale = 1
-			-- Clicked open while expanded: once the island has faded out, fold it
-			-- back to the pill so the next minimize starts from it.
+
+
 			task.delay(0.15, function()
 				if not self.Minimized then
 					setMode("Compact", true)
@@ -24900,8 +24609,7 @@ local Library = (function()
 			end)
 		end
 
-		-- A notification while minimized: the island opens to show it for a few
-		-- seconds, then folds back.
+
 		self._islandActivity = function(opts)
 			if not self.Minimized or not island.Visible then
 				return
@@ -24941,7 +24649,7 @@ local Library = (function()
 			end)
 		end
 
-		-- The meter dances while anything runs and lies flat when nothing does.
+
 		local running = 0
 		self:_listen("Render", function()
 			if island.Visible and running > 0 and mode == "Compact" then
@@ -24953,10 +24661,7 @@ local Library = (function()
 			end
 		end)
 
-		-- Split, like iOS with two Live Activities: when toggles are running and
-		-- a status is pinned, the pill keeps the status (logo leading, value
-		-- trailing) and the running meter buds off into its own little circle
-		-- beside it. One activity alone stays in the single pill.
+
 		local pinValue = label({
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -14, 0.5, 0),
@@ -24994,7 +24699,7 @@ local Library = (function()
 			barsHolder.Position = on and UDim2.fromScale(0.5, 0.5) or UDim2.new()
 			meter.Visible = not on
 			tween(pinValue, { TextTransparency = on and 0 or 1 }, 0.2, Enum.EasingStyle.Quad)
-			-- Buds off with a spring, and is drawn back in quicker.
+
 			tween(
 				split,
 				{ Value = on and 1 or 0 },
@@ -25017,8 +24722,8 @@ local Library = (function()
 			local pos, size = island.AbsolutePosition - origin, island.AbsoluteSize
 			local d = math.min(size.Y, Mini.Height)
 			local gap = 6
-			-- Buds off the side with room to spare: the right, or the left near
-			-- the right edge of the screen.
+
+
 			local right = pos.X + size.X + gap + d <= gui.AbsoluteSize.X
 			local edge = right and pos.X + size.X or pos.X
 			local dir = right and 1 or -1
@@ -25026,8 +24731,8 @@ local Library = (function()
 			local outer = edge + dir * (gap + d / 2)
 			local x = inner + (outer - inner) * t
 			local scale = math.clamp(0.35 + 0.65 * t, 0, 1.2)
-			-- Liquid: mid-flight the drop stretches along its path and thins,
-			-- then rounds back into a circle as it settles.
+
+
 			local stretch = math.sin(math.clamp(t, 0, 1) * math.pi)
 			bubble.Position = UDim2.fromOffset(x, pos.Y + d / 2)
 			bubble.Size = UDim2.fromOffset(d * scale * (1 + 0.4 * stretch), d * scale * (1 - 0.18 * stretch))
@@ -25057,7 +24762,7 @@ local Library = (function()
 						tween(bar, { Size = UDim2.fromOffset(3, 3) }, 0.25)
 					end
 				end
-				-- A small bump, like a live activity updating.
+
 				if rising and mode == "Compact" and island.Visible then
 					islandScale.Scale = 1.06
 					tween(islandScale, { Scale = 1 }, 0.4, Enum.EasingStyle.Back)
@@ -25089,11 +24794,11 @@ local Library = (function()
 			end
 			if pinnedLead then
 				local text = tostring(pinnedLead:Text() or "")
-				-- A status with nothing to show yet doesn't take the pill.
+
 				if text:gsub("<[^>]*>", ""):match("%S") then
 					pinValue.Text = text
 					local color = pinnedLead._shownColor and pinnedLead._shownColor() or Theme.Text
-					-- Too dark to read on the black pill: fall back to text colour.
+
 					local _, _, value = color:ToHSV()
 					pinValue.TextColor3 = value < 0.35 and Theme.Text or color
 				else
@@ -25101,8 +24806,8 @@ local Library = (function()
 				end
 			end
 			setSplit(running > 0 and pinnedLead ~= nil)
-			-- The pill's own meter: the clock when idle or when the bars budded
-			-- off without a status to keep, the bars and count otherwise.
+
+
 			local barsHere = running > 0 and not splitOn
 			idleDot.Visible = not barsHere
 			idleLabel.Visible = not barsHere
@@ -25156,8 +24861,8 @@ local Library = (function()
 					row.Frame.Visible = true
 					row.Key.Text = Library._rich(handle.Name)
 					row.Value.Text = handle:Text()
-					-- Carries the status's own colour: its Color, or its tone
-					-- for the tinted styles (badge, dot, bar).
+
+
 					local color = handle._shownColor and handle._shownColor() or Theme.Text
 					if row.Value.TextColor3 ~= color then
 						tween(row.Value, { TextColor3 = color }, 0.2)
@@ -25166,7 +24871,7 @@ local Library = (function()
 					row.Frame.Visible = false
 				end
 			end
-			-- Rows coming and going change the expanded height.
+
 			if mode == "Expanded" and (hovered or self.IslandStyle == "Always Show") then
 				task.defer(function()
 					if mode == "Expanded" and (hovered or self.IslandStyle == "Always Show") and self.Minimized then
@@ -25202,8 +24907,7 @@ local Library = (function()
 		self:_refreshMini()
 		local gui = self.Gui
 
-		-- Starts from whatever is on screen: the window, or a ghost still
-		-- mid-flight if a restore was interrupted.
+
 		local fromPosition = self.Root.AbsolutePosition - gui.AbsolutePosition
 		local fromSize = self.Root.AbsoluteSize
 		local fromAlpha = 1
@@ -25213,7 +24917,7 @@ local Library = (function()
 			fromAlpha = self._ghost.BackgroundTransparency
 		end
 
-		-- 1. The ghost fades in over the window while it eases back a touch.
+
 		local ghost, ghostStroke, ghostCorner = makeGhost(self, fromPosition, fromSize, Library._radius(10))
 		ghost.BackgroundTransparency = fromAlpha
 		ghostStroke.Transparency = fromAlpha
@@ -25228,8 +24932,8 @@ local Library = (function()
 			if self._minimizeGeneration ~= generation or self._destroyed then
 				return
 			end
-			-- 2. Covered by the ghost, the window is hidden and the ghost folds
-			-- down into the island.
+
+
 			self.Root.Visible = false
 			self.Scale.Scale = self._fitScale or 1
 			local target, size = self:_miniLand(fromPosition + fromSize / 2)
@@ -25238,12 +24942,12 @@ local Library = (function()
 				if self._minimizeGeneration ~= generation or self._destroyed then
 					return
 				end
-				-- 3. The island fades in on top as the ghost lands.
+
 				self._miniScale.Scale = 0.9
 				tween(self._miniScale, { Scale = 1 }, 0.3, Enum.EasingStyle.Quint)
 				tween(bar, { GroupTransparency = 0 }, 0.18, Enum.EasingStyle.Quad)
 				dissolve(self, ghost, ghostStroke, 0.2)
-				-- Always Show: once landed as the pill, swell open into the card.
+
 				if self.IslandStyle == "Always Show" then
 					task.delay(0.22, function()
 						if self._minimizeGeneration == generation and self._islandSettle then
@@ -25281,8 +24985,7 @@ local Library = (function()
 		local centre = self.Root.AbsolutePosition + self.Root.AbsoluteSize / 2 - gui.AbsolutePosition
 		local target = centre - size / 2
 
-		-- Picks up from whatever is on screen: a ghost still mid-flight if
-		-- minimize was interrupted, otherwise the island.
+
 		local fromPosition, fromSize = target, size
 		local fromAlpha = 1
 		if self._ghost then
@@ -25314,8 +25017,7 @@ local Library = (function()
 		morphGhost(ghost, ghostCorner, target, size, Library._radius(10), 0.4)
 		tween(self.Shadow, { ImageTransparency = self._shadowRest }, 0.45)
 
-		-- Shown under the ghost a little early so its first frames are drawn
-		-- while still covered, then the ghost clears to reveal it.
+
 		task.delay(0.3, function()
 			if self._minimizeGeneration ~= generation or self._destroyed then
 				return
@@ -25331,8 +25033,7 @@ local Library = (function()
 		end)
 	end
 
-	-- The minimized island can be dragged anywhere; its spot is remembered in
-	-- the config folder. These lock it in place or send it back to the top.
+
 	function Window:SetIslandDraggable(enabled)
 		self._islandLocked = enabled == false
 	end
@@ -25378,9 +25079,8 @@ local Library = (function()
 		end
 		self:_refreshToggleButton()
 		self:_refreshBackdrop(open)
-		-- Like minimize, a plain ghost panel carries the scale and fade. The body
-		-- is never reparented into the fader or rescaled, which relaid out the
-		-- whole window and stuttered on the keypress frame.
+
+
 		self._minimizeGeneration = (self._minimizeGeneration or 0) + 1
 		local generation = self._minimizeGeneration
 		local gui = self.Gui
@@ -25403,7 +25103,7 @@ local Library = (function()
 			tween(ghostStroke, { Transparency = 0 }, 0.12, Enum.EasingStyle.Quad)
 			morphGhost(ghost, ghostCorner, centre - size / 2, size, Library._radius(10), 0.3)
 			tween(self.Shadow, { ImageTransparency = self._shadowRest }, 0.3)
-			-- Shown under the ghost once it covers the spot, then revealed.
+
 			task.delay(0.2, function()
 				if self._minimizeGeneration ~= generation or self._destroyed then
 					return
@@ -25651,8 +25351,8 @@ local Library = (function()
 		if self._pendingFlags then
 			self._pendingFlags = {}
 		end
-		-- Switch this window's toggles off so their feature loops stop with it,
-		-- instead of running on beside a re-executed copy.
+
+
 		for _, element in pairs(Library.Flags) do
 			if element._window == self and element._type == "Toggle" and element.Value == true then
 				task.spawn(pcall, element.Set, element, false)
@@ -25676,9 +25376,8 @@ local Library = (function()
 				end)
 			end
 		end
-		-- The fade out is decoration only. Input is already cut at this point, so
-		-- if any of it fails the gui is removed straight away instead of being
-		-- left frozen on screen.
+
+
 		local ok, err = pcall(function()
 			if self._dialog then
 				self._dialog.Close()
@@ -25693,7 +25392,7 @@ local Library = (function()
 				tween(self.MiniBar, { GroupTransparency = 1 }, 0.18)
 			end
 			if self._backdrop then
-				-- Frame steps are already cut, so the weather stops where it is.
+
 				self._weatherField.Visible = false
 				tween(self._backdropTintFrame, { BackgroundTransparency = 1 }, 0.2)
 				tween(self._backdropHeat, { BackgroundTransparency = 1 }, 0.2)
@@ -25714,7 +25413,7 @@ local Library = (function()
 
 	Window.Unload = Window.Destroy
 
-	-- Unloads every window the library created.
+
 	function Library:Destroy()
 		for index = #Library.Windows, 1, -1 do
 			local window = Library.Windows[index]
@@ -25726,11 +25425,7 @@ local Library = (function()
 
 	Library.Unload = Library.Destroy
 
-	-- A script thread that yielded inside an engine call (InvokeServer and the
-	-- like) resumes at game identity and can no longer touch the GUI in CoreGui.
-	-- Every public call checks for that: it raises the thread back to the identity
-	-- the library loaded at, or, when the executor cannot, runs the call on a
-	-- trusted Heartbeat thread and waits for its result.
+
 	do
 		(function()
 			local getIdentity = getthreadidentity
@@ -25804,8 +25499,7 @@ local Library = (function()
 				end
 			end
 
-			-- Elements carry their methods as closures, so each returned object gets its
-			-- public functions wrapped too; windows and tabs share the guarded metatables.
+
 			function guardObject(...)
 				for index = 1, select("#", ...) do
 					local object = select(index, ...)
@@ -25834,14 +25528,10 @@ local Library = (function()
 				end
 			end
 
-			--═══════════════════════════════════════════════════════════════════════
-			--  Aliases and the additions of this build
-			--═══════════════════════════════════════════════════════════════════════
-			-- Run before the window goes away (see the Unload button on the home card).
+
 			Library._unloadHooks = Library._unloadHooks or {}
-			-- The Create<Name> aliases are made once while the table is still half built,
-			-- so a method defined later (Groupbox, Tabbox, the managers) would be missing
-			-- its alias. The pass runs again here, on everything that exists.
+
+
 			for name, method in pairs(table.clone(Tab)) do
 				if type(method) == "function" and name:sub(1, 1) ~= "_" and name:sub(1, 6) ~= "Create" then
 					Tab["Create" .. name] = method
@@ -26145,8 +25835,7 @@ local Library = (function()
 				Defaults = ICON3D,
 			}
 
-			-- Read by the script: a library older than this is missing pieces the menu
-			-- draws with and the player is asked to drop in the new file.
+
 			Library.MacrOSRevision = 55
 
 			Library.Fork = {
@@ -26505,8 +26194,7 @@ local Library = (function()
 							end
 						end
 
-						-- A model that only holds invisible shells renders as nothing at all and
-						-- swallows the flat picture that was already there, so it is refused.
+
 						local visible = 0
 						for _, part in ipairs(clone:GetDescendants()) do
 							if part:IsA("BasePart") and part.Transparency < 0.99 then
@@ -26608,8 +26296,7 @@ local Library = (function()
 
 					Icons.partsModel = partsModel
 
-					-- Reverse of BY_ICON, so a row can get its picture from its block name even
-					-- when the building part folder has nothing to show for it.
+
 					local iconByName = {}
 					for id, name in pairs(BY_ICON) do
 						iconByName[key(name)] = "rbxassetid://" .. tostring(id)
@@ -26622,9 +26309,7 @@ local Library = (function()
 						end
 					end
 
-					-- A row that has no building part still deserves its picture. The flat
-					-- asset is put on three crossed cards so the viewport shows it from every
-					-- angle the icon spins through instead of leaving an empty square.
+
 					local iconModels = {}
 					local function iconModel(icon)
 						local id = tostring(icon or ""):match("(%d+)")
@@ -26662,10 +26347,7 @@ local Library = (function()
 					end
 					Icons.iconModel = iconModel
 
-					-- The asset id of a row is not a reliable key: the shop draws its chests from
-					-- two different art families and the id table drifted by a tier because of
-					-- it, so the same tick showed the chest of the tier below. The row title is
-					-- what the user reads, so it is asked first and the id only afterwards.
+
 					Icons.partAlias = {
 						["Paint Tool"] = "PaintingTool",
 						["Bind Tool"] = "BindingTool",
@@ -26695,9 +26377,7 @@ local Library = (function()
 						return clean
 					end
 
-					-- Row pictures. A dropdown row reads better as the game's own flat art
-					-- than as a spinning viewport: one ImageLabel costs a fraction of a part
-					-- clone, and a forty-row list no longer means forty models.
+
 					Icons.flat = {}
 					local function flatKey(text)
 						return key(cleanName(text) or text or "")
@@ -26713,10 +26393,7 @@ local Library = (function()
 						end
 					end
 
-					-- The tools are the one family with no catalogue row: their art lives on
-					-- the asset the game draws in the hotbar, so it is named here by hand. A
-					-- glyph name would be an empty square in an ImageLabel, which is exactly
-					-- what the list used to show.
+
 					local TOOL_ART = {
 						["Paint Tool"] = 1198996683,
 						["PaintingTool"] = 1198996683,
@@ -27760,10 +27437,7 @@ local Library = (function()
 		end)()
 	end
 
-	-- The startup picker. It lives in the plain library on purpose: the same
-	-- drawing code under an obfuscator froze for seconds before the window
-	-- appeared, because the VM had to chew every instance call first.
-	-- cfg.Version, cfg.Repo and cfg.Compile are optional.
+
 	function Library.Picker(cfg)
 		cfg = type(cfg) == "table" and cfg or {}
 		local compile = cfg.Compile or loadstring
@@ -27882,10 +27556,7 @@ local Library = (function()
 			},
 		}
 
-		-- The palettes of the menu, in the same order of fields: background,
-		-- surface, surface2, surface3, stroke, stroke hover, accent, accent dark,
-		-- text, muted. Copied from the library so the picker and the menu cannot
-		-- drift apart.
+
 		local THEMES = {
 			Lunar = {
 				22,
@@ -28764,16 +28435,13 @@ local Library = (function()
 			return nil
 		end
 
-		-- The house mark, carried in the file itself so the window looks right on
-		-- a fresh install: 128 px, PNG, the orange-to-red folded M. It is written to
-		-- the same cache path the menu reads, so both windows wear one logo. When the
-		-- executor has no filesystem the tile falls back to a drawn M.
+
 		local LOGO =
 			"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"
 
 		local function unbase64(text)
-			-- byte keys, not substrings: the logo is 10 KB and this runs after the
-			-- window is already on screen, so it has no business being slow
+
+
 			local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 			local lookup = {}
 			for index = 1, #alphabet do
@@ -29071,7 +28739,7 @@ local Library = (function()
 		end
 
 		local function glyphCheck(parent, colour)
-			-- Stable build: a clean check, centered inside the existing 44 px tile.
+
 			for _, segment in ipairs({
 				{ Name = "CheckShort", X = 16.5, Y = 24.5, Length = 10, Angle = 45 },
 				{ Name = "CheckLong", X = 25, Y = 22, Length = 17, Angle = -45 },
@@ -29091,7 +28759,7 @@ local Library = (function()
 		end
 
 		local function glyphSpark(parent, colour)
-			-- a diamond: the flat "this one is the test build" mark, no strokes
+
 			local diamond = new("Frame", {
 				Name = "Diamond",
 				AnchorPoint = Vector2.new(0.5, 0.5),
@@ -29127,7 +28795,7 @@ local Library = (function()
 				end)
 			end
 			if not gui.Parent then
-				-- No waiting: a blocking wait for PlayerGui would hang the picker before it is drawn.
+
 				pcall(function()
 					local player = Players.LocalPlayer
 					local playerGui = player and player:FindFirstChildOfClass("PlayerGui")
@@ -29139,9 +28807,7 @@ local Library = (function()
 			return gui
 		end
 
-		-- Everything below runs once, without a single yield. Under an obfuscator a
-		-- yield inside the boot path can be lost and leave a window that is drawn
-		-- but dead, which is exactly what a "frozen" picker looks like.
+
 		local function buildWindow()
 			local gui = gateway()
 			local W, H = 720, 396
@@ -29176,8 +28842,7 @@ local Library = (function()
 				Parent = root,
 			})
 
-			-- window plate is Theme.Surface, cards are Theme.Background: the layering
-			-- of the menu window, so the two windows read as one program
+
 			local body = new("Frame", {
 				Name = "Body",
 				Size = UDim2.fromScale(1, 1),
@@ -29198,9 +28863,7 @@ local Library = (function()
 				Parent = body,
 			})
 
-			------------------------------------------------------------------
-			-- header
-			------------------------------------------------------------------
+
 			local logoTile = new("Frame", {
 				Name = "Logo",
 				Position = UDim2.fromOffset(24, 15),
@@ -29211,8 +28874,8 @@ local Library = (function()
 			})
 			corner(logoTile, 9)
 			stroke(logoTile, C.stroke, 1, 0)
-			-- the drawn mark is there from the first frame; the real PNG replaces it
-			-- a moment later if the executor can hand one out
+
+
 			local mark = label(logoTile, {
 				Name = "Mark",
 				Size = UDim2.fromScale(1, 1),
@@ -29271,9 +28934,7 @@ local Library = (function()
 				Parent = body,
 			})
 
-			------------------------------------------------------------------
-			-- the two plates
-			------------------------------------------------------------------
+
 			local CARD_W, CARD_H, CARD_Y = 328, 230, 96
 
 			local kickerMark = new("Frame", {
@@ -29310,8 +28971,8 @@ local Library = (function()
 					BackgroundTransparency = 1,
 					Parent = body,
 				})
-				-- the plate is centred in its slot, so a UIScale grows it from the
-				-- middle instead of dragging it towards a corner
+
+
 				local lift = new("Frame", {
 					Name = "Lift",
 					AnchorPoint = Vector2.new(0.5, 0.5),
@@ -29505,7 +29166,7 @@ local Library = (function()
 						tween(ctaStroke, 0.18, { Color = C.accent, Transparency = 1 })
 						tween(ctaLabel, 0.18, { TextColor3 = opts.accent and C.accentDark or C.accent })
 					elseif sibling then
-						-- stepped back: smaller, dimmed, the border all but gone
+
 						tween(cardScale, 0.32, { Scale = 0.99 }, Enum.EasingStyle.Quad)
 						tween(card, 0.24, { BackgroundColor3 = C.background })
 						tween(cardStroke, 0.24, { Color = C.stroke, Transparency = 0.7 })
@@ -29580,9 +29241,7 @@ local Library = (function()
 			})
 			refresh()
 
-			------------------------------------------------------------------
-			-- status, footer
-			------------------------------------------------------------------
+
 			local status = label(body, {
 				Name = "Status",
 				AnchorPoint = Vector2.new(0.5, 0),
@@ -29612,8 +29271,8 @@ local Library = (function()
 				Parent = body,
 			})
 			corner(avatar, 7)
-			-- a plain thumbnail url is a string, so nothing here has to yield;
-			-- asking the API for it is what stalled the whole window on a phone
+
+
 			if player and player.UserId and player.UserId > 0 then
 				avatar.Image = ("rbxthumb://type=AvatarHeadShot&id=%d&w=48&h=48"):format(player.UserId)
 			else
@@ -29635,7 +29294,7 @@ local Library = (function()
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, "medium")
 
-			-- outlined chips for the two links, the way the menu draws small buttons
+
 			for index, link in ipairs(LINKS) do
 				local x = -24 - (index - 1) * 96
 				local button = new("TextButton", {
@@ -29678,9 +29337,7 @@ local Library = (function()
 				end)
 			end
 
-			------------------------------------------------------------------
-			-- scaling and the intro
-			------------------------------------------------------------------
+
 			local function viewportSize()
 				local camera = workspace.CurrentCamera
 				local size = camera and camera.ViewportSize
@@ -29710,8 +29367,7 @@ local Library = (function()
 			tween(scale, 0.26, { Scale = math.clamp(scale.Scale / 0.96, 0.42, 1.15) }, Enum.EasingStyle.Quint)
 			tween(backdrop, 0.3, { BackgroundTransparency = 0.42 })
 
-			-- the real mark, once the window is on screen: a file write and an asset
-			-- call, kept off the frame the player is waiting for
+
 			task.spawn(function()
 				local ok, asset = pcall(logoAsset)
 				if ok and type(asset) == "string" then
@@ -29750,8 +29406,8 @@ local Library = (function()
 
 		local ok, ui = pcall(buildWindow)
 		if not ok or type(ui) ~= "table" then
-			-- A window that cannot be built still has to say why, otherwise the
-			-- player just sees a frozen screen and has nothing to report.
+
+
 			pcall(function()
 				local fallback = gateway()
 				local frame = new("Frame", {
@@ -29784,12 +29440,8 @@ local Library = (function()
 		end
 
 		local gui = ui.gui
-		------------------------------------------------------------------
-		-- launching
-		------------------------------------------------------------------
-		-- A small pill holds the screen while a build is on its way, so the player
-		-- never stares at the raw game. It is a guest: it leaves the moment the
-		-- menu window exists, or the build returns, or half a minute passes.
+
+
 		local function holdingPill()
 			local pillGui = new("ScreenGui", {
 				Name = "MacrOSStartupHolding",
@@ -29870,8 +29522,7 @@ local Library = (function()
 			end)
 		end
 
-		-- The surest sign that loading finished is the menu window itself showing
-		-- up in one of the usual hosts.
+
 		local function watchForMenu(handle)
 			task.spawn(function()
 				local deadline = os.clock() + 30
@@ -29912,10 +29563,7 @@ local Library = (function()
 			end)
 		end
 
-		-- Nothing is carried inside this file. A megabyte of source under an
-		-- obfuscator is what froze the game: the VM has to chew every byte before
-		-- the picker is even drawn. The builds live on the repo and are pulled only
-		-- when a card is pressed, so this file stays a window and nothing else.
+
 		local MAIN = REPO .. "main.lua"
 
 		local function fetch(url)
@@ -29928,8 +29576,7 @@ local Library = (function()
 			return nil
 		end
 
-		-- main.lua is the stable plate when it exists; until then the build that
-		-- ships as beta.lua is the same file, so the left card still launches.
+
 		local function fetchMain()
 			return fetch(MAIN) or fetch(BETA)
 		end
@@ -29951,8 +29598,8 @@ local Library = (function()
 					ui.setStatus(isBeta and T.empty or T.failed, true)
 					return
 				end
-				-- one frame so the new status is on screen before the compiler
-				-- takes the thread for a moment
+
+
 				task.wait()
 				local loaded, build, err = pcall(compile, body, isBeta and "@MacrOS_Beta" or "@MacrOS_Main")
 				body = nil
@@ -29985,7 +29632,7 @@ local Library = (function()
 		return ui
 	end
 
-    -- Single native keybind-list implementation shared by LIP and regular windows.
+
     local function createNativeKeybindList(native,opts)
         opts=opts or {}
         local entries={}
@@ -30157,7 +29804,7 @@ local Library = (function()
         return self._nativeKeybindList
     end
 
-    -- Shared MacrOS branding: exactly the same embedded PNG as BABFT/LIP.
+
     function Library:GetMacrOSLogo()
         if self._macrOSLogoAsset then return self._macrOSLogoAsset end
         local getter=type(getcustomasset)=="function"and getcustomasset or getsynasset
@@ -30174,8 +29821,7 @@ local Library = (function()
         return nil
     end
 
-	-- Compatibility surface for the existing Life in Prison runtime.
-	-- It changes UI contracts only; targeting, hooks and visuals remain in the client script.
+
 	function Library:CreateLIPWindow(opts)
 		opts = opts or {}
 		local function keyCode(value)
@@ -30555,7 +30201,7 @@ local Library = (function()
 							)
 							if point.Z <= 0.05 then
 								return nil
-							end -- reject near-plane crossings, not giant screen boxes
+							end
 							if corners then
 								corners[#corners + 1] = Vector2.new(point.X, point.Y)
 							end
@@ -30617,8 +30263,8 @@ local Library = (function()
 
 	return Library
 end)()
--- Optional combat overlay API v21, library rev44 (gear sized in real pixels).
--- Additive: existing BABFT/LIP APIs are unchanged.
+
+
 Library.UpgradeOverlayVersion = 21
 Library.UpgradeOverlayRevision = 44
 function Library.CreateCombatOverlay(_library,opts)
@@ -30730,7 +30376,7 @@ end
 
 local moduleList=text(overlay,"",13);moduleList.Position=UDim2.new(1,-240,0,265);moduleList.Size=UDim2.fromOffset(220,280);moduleList.TextXAlignment=Enum.TextXAlignment.Right;moduleList.TextYAlignment=Enum.TextYAlignment.Top;moduleList.Visible=false
 local crosshair=make("Frame",{BackgroundTransparency=1,Size=UDim2.fromOffset(0,0),Position=UDim2.fromScale(0.5,0.5),Visible=false},overlay)
--- Extended crosshair primitives are constructed below.
+
 drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     local lines={}
     for i=1,8 do
@@ -30828,8 +30474,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         end
         return portraitCache[key]
     end
-    -- Native face/equipment snapshots. Only visual parts are cloned into owned
-    -- ViewportFrames; scripts, joints, emitters and gameplay state are excluded.
+
+
     do
         local icons={}
         local nativeFace=nil
@@ -30872,7 +30518,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             for _,source in ipairs(parts)do
                 local ok,part=pcall(function()return source:Clone()end)
                 if ok and part then
-                    -- Sanitize while unparented: never execute copied scripts.
+
                     for _,child in ipairs(part:GetDescendants())do if not visualChild(child)then child:Destroy()end end
                     part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.LocalTransparencyModifier=0
                     part.Transparency=face and source==sources[1]and 0 or source.Transparency
@@ -30906,9 +30552,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             end
             return row
         end
-        -- Icon size is applied as real pixels. A nested UIScale scaled the row
-        -- about its top-left corner, so the row drifted under the card instead of
-        -- hanging off its right/bottom edge; explicit sizes keep geometry exact.
+
+
         local function setGearSize(row,size)
             size=math.max(6,math.floor(size+0.5))
             if row.size==size then return false end
@@ -30949,9 +30594,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             if not opts.NativeFace then return end
             if not(cfg.targetArmor==true or cfg.targetWeapon==true)then self:HideNativeGear();return end
             if not hudGear then
-                -- Screen-space anchor, pinned to the card's bottom-right corner. The
-                -- row itself is right-anchored at (1,0) with zero local offset, and its
-                -- icons are sized in pixels, so nothing is transformed by UIScale.
+
+
                 local anchor=make("Frame",{Name="TargetEquipmentAnchor",Size=UDim2.fromOffset(0,0),BackgroundTransparency=1,BorderSizePixel=0,ClipsDescendants=false},overlay)
                 hudGear=makeGear(anchor,16,true);hudGear.anchor=anchor
                 hudGear.frame.AnchorPoint=Vector2.new(1,0)
@@ -30963,20 +30607,17 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             local position=targetHud.AbsolutePosition
             local bounds=targetHud.AbsoluteSize
             local origin=overlay.AbsolutePosition
-            -- Right edge exactly on the card's right border line, whole row below the
-            -- card. The gap grows with HUD scale so it never visually touches the edge.
-            -- The card's UIStroke sits half a pixel outside AbsoluteSize, so the line
-            -- itself is at right+0.5; using it as the row's right edge puts the row on
-            -- the line instead of just past it.
+
+
             local gap=math.max(4,math.floor(4*scale+0.5))
             local lineX=position.X+bounds.X-origin.X
             hudGear.anchor.Position=UDim2.fromOffset(lineX,position.Y+bounds.Y-origin.Y+gap)
-            -- Exposed for the revision self-check below: right edges must be equal.
+
             rawset(hudGear,"lineX",lineX)
             hudGear.anchor.Visible=hudGear.frame.Visible
             hudGear.frame.GroupTransparency=1-targetAnim.alpha
         end
-        -- Debug helper: where the Target Info gear row sits relative to the card.
+
         function self:GetTargetGearLayout()
             if not hudGear then return nil end
             local position=targetHud.AbsolutePosition
@@ -31183,7 +30824,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         watermark.Position=UDim2.fromOffset(18,opts.ModernWatermark and safeTop()or 12);moduleList.Position=UDim2.new(1,-240,0,265)
         if bindPanel then bindPanel.Position=UDim2.new(0,18,0.5,40);compass.Position=UDim2.new(0.5,0,0,12);telemetry.Position=UDim2.new(0,18,1,-65)end
     end
-    -- Shared pooled overlay primitives: no runtime Instance creation in the game client.
+
     local readouts={}
     local readoutDefs: {{any}}={{"inventoryHUD","INVENTORY",18,160},{"statusHUD","STATUS",18,390},{"progressHUD","PROGRESSION",-265,350},{"sessionHUD","SESSION",-265,510},{"chargeHUD","ATTACK CHARGE",18,540},{"potionsHUD","POTION TIMERS",280,160},{"nearbyHUD","NEARBY PLAYERS",280,390}}
     if opts.Compact then readoutDefs=opts.NoPotionReadout and {}or {{"potionsHUD","POTION TIMERS",280,160}}end
@@ -31300,12 +30941,10 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             end
         end
     end
-    -- Target-only effects: bounded reusable primitives, no world Instances/assets.
+
     local targetFX={lines={},dots={},alpha=0,phase=0,last=nil,hp=nil,hurt=0}
-    -- Shape of the effect. The old ring is a plain circle; every other name bends
-    -- the same outline into another figure. All styles (ring, halo, chains,
-    -- ghosts, shuriken, reticle) read this one radial function, so one shape
-    -- works with every "thing" and the client only has to pass a name.
+
+
     local function shapeRadius(shape,angle)
         local tau=math.pi*2
         local a=angle%tau
@@ -31331,15 +30970,12 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         end
         return 1
     end
-    -- The second Target ESP dropdown belongs to one effect at a time, so two
-    -- effects need controls a plain outline cannot express: a shuriken asks
-    -- how many blades, a reticle asks how long its arcs are. Names that are
-    -- not in these tables are old profiles; they keep the circle behaviour.
+
+
     local SHURIKEN_BLADES={Classic=4,Tri=3,Hex=6,Octa=8,Star=5}
     local RETICLE_SPAN={Classic=0.32,Long=0.55,Short=0.16,Ring=math.pi*0.5}
-    -- The newer effects count things instead of bending an outline, so each
-    -- keeps its own small table. A name that is not here falls back to the
-    -- default count and the effect still draws.
+
+
     local SWORD_COUNT={["4 Swords"]=4,["6 Swords"]=6,["8 Swords"]=8,["12 Swords"]=12}
     local BOLT_COUNT={["2 Bolts"]=2,["3 Bolts"]=3,["5 Bolts"]=5}
     local ORBIT_COUNT={["2 Orbs"]=2,["3 Orbs"]=3,["5 Orbs"]=5}
@@ -31348,12 +30984,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         for _,entry in ipairs(targetFX.lines)do entry.core.Visible=false;entry.glow.Visible=false end
         for _,entry in ipairs(targetFX.dots)do entry.core.Visible=false;entry.glow.Visible=false end
     end
-    -- ---------------------------------------------------------------------
-    -- Real item textures. Roblox will not load a PNG from outside the game, so
-    -- the pixels of the vanilla 16x16 items are written into an EditableImage at
-    -- runtime and shown on ImageLabels. That is the actual Minecraft asset, not
-    -- a redrawing of it: same 16x16 grid, same colours.
-    --   each line is one row, one letter per pixel, '.' is transparent, A = 1
+
+
     local ITEM_TEXTURES={
         Swords={
             palette={{14,63,54},{164,253,240},{8,37,32},{43,199,172},{51,235,203},{21,99,85},{30,138,119},{73,54,21},{104,78,30},{137,103,39},{40,30,11}},
@@ -31399,8 +31031,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         },
     }
     local itemContents={}
-    -- Turning rows into an EditableImage. Returns nil when the executor does
-    -- not allow it; every caller then draws an outline instead.
+
+
     local function itemTexture(kind)
         if itemContents[kind]~=nil then return itemContents[kind] or nil end
         local spec=ITEM_TEXTURES[kind]
@@ -31428,8 +31060,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         itemContents[kind]=(ok and content)or false
         return ok and content or nil
     end
-    -- One label pair per item: a tinted copy behind for the glow, the real
-    -- texture on top. Labels are pooled and only their transform changes.
+
+
     local itemSprites={Swords={},Crystals={}}
     local function itemSprite(kind,index,texture)
         local pool=itemSprites[kind]
@@ -31488,9 +31120,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         local view=camera.ViewportSize or Vector2.new(1280,720)
         local function line(a,b,fade,width)
             if a.Z<=0.1 or b.Z<=0.1 then return end
-            -- A point just in front of the lens (or off to the side) can project
-            -- to coordinates thousands of pixels away. Drawing that stroke is
-            -- what turned near swords into long slashes across the screen.
+
+
             if math.abs(a.X)>view.X*2 or math.abs(a.Y)>view.Y*2 or math.abs(b.X)>view.X*2 or math.abs(b.Y)>view.Y*2 then return end
             countLine+=1;if countLine>256 then return end
             local item=targetFX.lines[countLine]
@@ -31562,9 +31193,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                 worldLine(base+Vector3.new(math.cos(a)*ra,0,math.sin(a)*ra),base+Vector3.new(math.cos(b)*rb,0,math.sin(b)*rb),1,width*2)
             end
         elseif mode=="Swords"then
-            -- The vanilla diamond sword, drawn as the real texture. The item is
-            -- a diagonal sprite, so it is rotated to stand tip-down like in the
-            -- reference footage: 135 degrees anticlockwise from the sheet.
+
+
             local head=camera:WorldToViewportPoint(center+Vector3.new(0,info.height*0.5,0))
             local feet=camera:WorldToViewportPoint(center-Vector3.new(0,info.height*0.5,0))
             local shown=math.abs(head.Y-feet.Y)
@@ -31587,8 +31217,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                         sprite.core.Visible=true
                         sprite.core.Position=UDim2.fromOffset(sp.X,sp.Y)
                         sprite.core.Size=UDim2.fromOffset(len,len)
-                        -- Roblox Rotation is clockwise: +135 turns the up-right
-                        -- tip (45 degrees) down to 270, tip pointing at the floor.
+
+
                         sprite.core.Rotation=135+lean
                         sprite.core.ImageTransparency=1-math.clamp(opacity,0,1)
                         sprite.glow.Visible=cfg.targetESPGlow
@@ -31600,8 +31230,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                             sprite.glow.ImageTransparency=1-math.clamp(opacity,0,1)*0.5
                         end
                     else
-                        -- Fallback for executors without EditableImage: the same
-                        -- silhouette in strokes, so the style never disappears.
+
+
                         local bw=len*0.03
                         line(Vector3.new(sp.X-len*0.16,sp.Y-len*0.24,sp.Z),Vector3.new(sp.X+len*0.16,sp.Y-len*0.24,sp.Z),1,math.max(2,bw*2))
                         line(Vector3.new(sp.X-bw,sp.Y-len*0.18,sp.Z),Vector3.new(sp.X-bw*0.5,sp.Y+len*0.40,sp.Z),1,math.max(2,bw*2))
@@ -31612,8 +31242,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             end
             if drawn==0 then hideItemSprites("Swords",1)else hideItemSprites("Swords",drawn+1)end
         elseif mode=="Lightning"then
-            -- Bolts strike down onto the target. The jagged path is re-rolled
-            -- eight times a second, so they crackle instead of standing still.
+
+
             local bolts=BOLT_COUNT[shape] or 3
             local seed=math.floor(phase*8)
             local function noise(n)return (math.sin(n*12.9898)*43758.5453)%1-0.5 end
@@ -31634,8 +31264,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                 dot(hit,math.max(2,width*1.8),1)
             end
         elseif mode=="Orbits"then
-            -- Ghost orbits: a glowing head with a fading tail. The tail is
-            -- computed from the phase, so nothing has to be remembered per target.
+
+
             local orbs=ORBIT_COUNT[shape] or 3
             for o=0,orbs-1 do
                 local base=phase*1.5+o*math.pi*2/orbs
@@ -31648,8 +31278,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                 end
             end
         elseif mode=="Crystals"then
-            -- Amethyst shard, the real item texture, scattered on the body at
-            -- golden-ratio heights like the reference effect.
+
+
             local head=camera:WorldToViewportPoint(center+Vector3.new(0,info.height*0.5,0))
             local feet=camera:WorldToViewportPoint(center-Vector3.new(0,info.height*0.5,0))
             local shown=math.abs(head.Y-feet.Y)
@@ -31690,23 +31320,21 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             end
             if drawn==0 then hideItemSprites("Crystals",1)else hideItemSprites("Crystals",drawn+1)end
         elseif mode=="Chevrons"then
-            -- The mark from the screenshot: four thick chevrons above, right,
-            -- below and left of the target, points facing away from it and the
-            -- open ends facing in. They sit on the screen, so they stay around
-            -- the body while the camera turns.
+
+
             local top=camera:WorldToViewportPoint(center+Vector3.new(0,radius,0))
             local size=math.clamp(math.abs(top.Y-p.Y),10,220)
             local soft=shape=="Soft"
             local wide=shape=="Wide"
-            -- Arms stop short of 45 degrees so neighbouring chevrons keep a gap
-            -- instead of melting into one closed diamond.
+
+
             local spread=wide and 0.75 or (soft and 0.52 or 0.62)
             local reach=wide and 1.05 or 0.95
             local inner=wide and 0.55 or (soft and 0.66 or 0.62)
             local thick=width*(soft and 1.8 or 2.8)
             local rings=(shape=="Double")and 2 or 1
             local spin=(shape=="Double")and phase*0.4 or 0
-            -- The screenshot mark is white; the softer looks keep the theme.
+
             local saved=color
             if not soft then color=color:Lerp(Color3.new(1,1,1),0.78)end
             for ring=1,rings do
@@ -31723,7 +31351,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             end
             color=saved
         elseif mode=="Shuriken"then
-            -- Billboard geometry keeps the shuriken readable from any camera angle.
+
             local top=camera:WorldToViewportPoint(center+Vector3.new(0,radius,0))
             local size=math.clamp(math.abs(top.Y-p.Y),8,140)
             local blades=SHURIKEN_BLADES[shape] or 4
@@ -31749,10 +31377,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
                 line(Vector3.new(p.X+math.cos(a)*ra,p.Y+math.sin(a)*ra,p.Z),Vector3.new(p.X+math.cos(b)*rb,p.Y+math.sin(b)*rb,p.Z),1,width)
             end end
         end
-        -- An unknown style draws nothing on purpose: an old library used to fall
-        -- through to the reticle arcs here, which looked like "Swords became a
-        -- circle". Now a stale library shows an empty Target ESP instead, and the
-        -- client prints which revision it found.
+
+
         for i,item in ipairs(targetFX.lines)do if i>countLine then item.core.Visible=false;item.glow.Visible=false end end
         for i,item in ipairs(targetFX.dots)do if i>countDot then item.core.Visible=false;item.glow.Visible=false end end
     end
@@ -31786,7 +31412,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             local d=Vector2.new(bx-ax,by-ay);line.Position=UDim2.fromOffset((ax+bx)/2,(ay+by)/2);line.Size=UDim2.fromOffset(d.Magnitude,2);line.Rotation=math.deg(math.atan2(d.Y,d.X));line.BackgroundColor3=themeColor("Accent");line.Visible=true
         end
     end
-    -- Local 3D cone; all geometry belongs to the library, never the game client.
+
     end
     local hatParts={}
     local hatShown=false
@@ -31913,7 +31539,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         end
         for i=#trajectoryDisplay,count+1,-1 do trajectoryDisplay[i]=nil end
         if options.depthTest then
-            -- World-space Beams are depth-tested by Roblox, unlike ScreenGui lines.
+
             for _,node in pairs(trajectoryLines)do node.Visible=false end
             if not trajectoryHolder then
                 trajectoryHolder=make("Part",{Name="TrajectoryGeometry",Size=Vector3.new(0.1,0.1,0.1),CFrame=CFrame.new(),Anchored=true,Transparency=1,CanCollide=false,CanTouch=false,CanQuery=false,CastShadow=false},highlightFolder)
@@ -31938,7 +31564,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             for i=count,#trajectoryBeams do trajectoryBeams[i].Enabled=false end
         else
             for _,beam in ipairs(trajectoryBeams)do beam.Enabled=false end
-        -- Only hide unused segments; do not toggle the entire pool off/on each frame.
+
         for i,node in pairs(trajectoryLines)do if i>=count then node.Visible=false end end
         for i=2,count do
             local a=camera:WorldToViewportPoint(trajectoryDisplay[i-1]);local b=camera:WorldToViewportPoint(trajectoryDisplay[i])
@@ -31957,7 +31583,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             landingDot.Position=UDim2.fromOffset(p.X,p.Y);landingDot.BackgroundColor3=color
             local seconds=options.seconds
             if options.showTime and type(seconds)=="number"and seconds==seconds and seconds>=0 and seconds<math.huge then
-                -- Arc-length midpoint, not the landing point and not a fixed HUD corner.
+
                 local length=0
                 for i=2,count do length+=(trajectoryDisplay[i]-trajectoryDisplay[i-1]).Magnitude end
                 local remaining=length*0.5
@@ -31975,7 +31601,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         end
     end
     local watermarkRows={}
-    -- Tiny vector icons: independent of external fonts and icon downloads.
+
     local function watermarkIcon(parent,key)
         local icon=make("Frame",{Name="MetricIcon",Size=UDim2.fromOffset(12,12),Position=UDim2.fromOffset(0,6),BackgroundTransparency=1},parent)
         local blue=Color3.fromRGB(135,164,240)
@@ -32021,8 +31647,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         if corner then corner.CornerRadius=UDim.new(0,cfg.radarShape=="Circle"and 80 or cfg.radarShape=="Rounded Square"and 16 or 0)end
         radar.BackgroundColor3=cfg.radarColor
     end
-    -- Bounded projected world-space particles. Nodes belong to this library and
-    -- are pooled across manual/automatic confirmed melee hits.
+
+
     local hitPool={}
     local hitCursor=0
     local symbols={Star="★",Circle="●",Square="■",Diamond="◆",Cross="✚"}
@@ -32063,8 +31689,8 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
             end
         end
     end
-    -- Delta-inspired compact bind feedback, not a copy of another client's UI.
-    -- Lazily allocated, bounded to three rows, no per-message connections/tasks.
+
+
     local bindToasts={}
     local bindToastPool={}
     local notificationSettings=nil
@@ -32128,7 +31754,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
     function self:PushBindNotification(name,enabled,cfg,now)
         if self.destroyed or not cfg.bindNotifications then return end
         local item=nil
-        -- Rapid changes to the same module replace its previous message.
+
         for i,old in ipairs(bindToasts)do if old.name==name then item=old;table.remove(bindToasts,i);break end end
         if not item then
             for _,candidate in ipairs(bindToastPool)do if not table.find(bindToasts,candidate)then item=candidate;break end end
@@ -32155,7 +31781,7 @@ drag(targetHud);drag(radar);drag(moduleList);drag(watermark)
         local color=enabled and Color3.fromRGB(116,224,167)or Color3.fromRGB(246,125,137)
         item.accent.BackgroundColor3=color;item.knob.BackgroundColor3=color;item.knob.Position=UDim2.fromOffset(enabled and 9 or 2,2)
         local english=cfg.bindNotifyLanguage~="Русский"
-        item.message.Text=escapeRich(name)..(english and " is "or " — ")..'<font color="'..(enabled and '#74E0A7'or '#F67D89')..'">'..(english and(enabled and "enabled"or "disabled")or(enabled and "активирован"or "деактивирован"))..'</font>' 
+        item.message.Text=escapeRich(name)..(english and " is "or " — ")..'<font color="'..(enabled and '#74E0A7'or '#F67D89')..'">'..(english and(enabled and "enabled"or "disabled")or(enabled and "активирован"or "деактивирован"))..'</font>'
         item.group.GroupTransparency=1;item.group.Visible=true
         table.insert(bindToasts,1,item)
         if cfg.bindNotifySound then
