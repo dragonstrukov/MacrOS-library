@@ -18518,7 +18518,7 @@ local Library = (function()
 
 		local now = create("Frame", {
 			Position = UDim2.fromOffset(12, 46),
-			Size = UDim2.new(1, -24, 0, 88),
+			Size = UDim2.new(1, -24, 0, 64),
 			BackgroundColor3 = Theme.Surface,
 			BorderSizePixel = 0,
 			Parent = panel,
@@ -18526,55 +18526,34 @@ local Library = (function()
 		corner(now, UDim.new(0, 10))
 		stroke(now, Theme.Stroke)
 		local nowCoverHolder = create("Frame", {
-			Position = UDim2.fromOffset(12, 12),
-			Size = UDim2.fromOffset(64, 64),
+			Position = UDim2.fromOffset(8, 8),
+			Size = UDim2.fromOffset(48, 48),
 			BackgroundTransparency = 1,
 			Parent = now,
 		})
 		local nowCover, renderNowCover = nil, nil
 		local nowTitle = label({
-			Position = UDim2.fromOffset(88, 12),
-			Size = UDim2.new(1, -220, 0, 20),
+			Position = UDim2.fromOffset(64, 8),
+			Size = UDim2.new(1, -196, 0, 18),
 			Text = text("Nothing", "Nothing playing"),
-			TextSize = 15,
+			TextSize = 13,
 			FontFace = Fonts.Bold,
 			Parent = now,
 		})
 		local nowArtist = label({
-			Position = UDim2.fromOffset(88, 33),
-			Size = UDim2.new(1, -220, 0, 16),
+			Position = UDim2.fromOffset(64, 26),
+			Size = UDim2.new(1, -196, 0, 14),
 			Text = text("Pick", "Pick a track from the list"),
-			TextSize = 12,
-			FontFace = Fonts.Regular,
-			TextColor3 = Theme.Muted,
-			Parent = now,
-		})
-		local nowAvatar = create("ImageLabel", {
-			Position = UDim2.fromOffset(88, 56),
-			Size = UDim2.fromOffset(18, 18),
-			BackgroundColor3 = Theme.Surface3,
-			Image = "",
-			ScaleType = Enum.ScaleType.Crop,
-			Visible = false,
-			Parent = now,
-		})
-		corner(nowAvatar, UDim.new(1, 0))
-		local nowUploader = label({
-			Position = UDim2.fromOffset(112, 56),
-			Size = UDim2.new(1, -244, 0, 18),
-			Text = "",
 			TextSize = 11,
 			FontFace = Fonts.Regular,
 			TextColor3 = Theme.Muted,
-			Visible = false,
 			Parent = now,
 		})
-
 		local nowStats = label({
-			Position = UDim2.fromOffset(88, 56),
-			Size = UDim2.new(1, -220, 0, 18),
+			Position = UDim2.fromOffset(64, 42),
+			Size = UDim2.new(1, -196, 0, 14),
 			Text = "",
-			TextSize = 11,
+			TextSize = 10,
 			TextColor3 = Theme.Muted,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = now,
@@ -18605,13 +18584,13 @@ local Library = (function()
 			hoverStroke(b, stroke(b))
 			return b, i
 		end
-		nowLikeBtn, nowLikeIcon = smallAction(now, "heart", W - 24 - 68, 50)
-		nowFavBtn, nowFavIcon = smallAction(now, "star", W - 24 - 34, 50)
+		nowLikeBtn, nowLikeIcon = smallAction(now, "heart", W - 24 - 68, 18)
+		nowFavBtn, nowFavIcon = smallAction(now, "star", W - 24 - 34, 18)
 
 
 		local controls = create("Frame", {
-			Position = UDim2.fromOffset(12, 142),
-			Size = UDim2.new(1, -24, 0, 56),
+			Position = UDim2.fromOffset(12, 118),
+			Size = UDim2.new(1, -24, 0, 40),
 			BackgroundTransparency = 1,
 			Parent = panel,
 		})
@@ -18754,7 +18733,7 @@ local Library = (function()
 
 
 		local searchRow = create("Frame", {
-			Position = UDim2.fromOffset(12, 206),
+			Position = UDim2.fromOffset(12, 166),
 			Size = UDim2.new(1, -24, 0, 32),
 			BackgroundTransparency = 1,
 			Parent = panel,
@@ -18807,7 +18786,7 @@ local Library = (function()
 
 
 		local filterRow = create("Frame", {
-			Position = UDim2.fromOffset(12, 244),
+			Position = UDim2.fromOffset(12, 204),
 			Size = UDim2.new(1, -24, 0, 26),
 			BackgroundTransparency = 1,
 			ClipsDescendants = true,
@@ -18823,7 +18802,7 @@ local Library = (function()
 
 
 		local list = create("ScrollingFrame", {
-			Position = UDim2.fromOffset(12, 278),
+			Position = UDim2.fromOffset(12, 238),
 			Size = UDim2.new(1, -24, 1, -306),
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
