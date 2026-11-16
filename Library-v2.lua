@@ -19196,9 +19196,7 @@ local Library = (function()
 			if not track then
 				nowTitle.Text = text("Nothing", "Nothing playing")
 				nowArtist.Text = text("Pick", "Pick a track from the list")
-				nowUploader.Text = ""
 				nowStats.Text = ""
-				nowAvatar.Image = ""
 				if nowCover then
 					nowCover:Destroy()
 					nowCover = nil
@@ -19209,8 +19207,6 @@ local Library = (function()
 			end
 			nowTitle.Text = track.Name or "Unknown"
 			nowArtist.Text = track.Artist or track.Uploader or "?"
-			nowUploader.Text = ""
-			nowAvatar.Image = ""
 			nowStats.Text = "♥ " .. musicCount(trackLikes(track)) .. "  ·  " .. musicCount(trackViews(track)) .. " views"
 			if nowCover then
 				nowCover:Destroy()
