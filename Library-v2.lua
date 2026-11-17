@@ -3588,11 +3588,12 @@ local Library = (function()
 					end
 					if detailsOf then
 						local detail = detailsOf(option) or {}
-						entry.Label.Position = UDim2.fromOffset(14, 4)
-						entry.Label.Size = UDim2.new(1, -38, 0, 18)
+						entry.Label.Position = UDim2.fromOffset(multi and 36 or 14, 4)
+						entry.Label.Size = UDim2.new(1, multi and -60 or -38, 0, 18)
+						entry.DescLabel.Position = UDim2.fromOffset(multi and 36 or 14, 24)
+						entry.DescLabel.Size = UDim2.new(1, multi and -60 or -38, 0, 15)
 						entry.Label.TextColor3 = Theme.Text
 						entry.DescLabel.Text = tostring(detail.Desc or "")
-							.. (detail.TeamName and (" · " .. detail.TeamName) or "")
 						entry.TeamDot.BackgroundColor3 = detail.TeamColor or Theme.Muted
 					end
 					entry.Frame.Visible = true
@@ -24210,7 +24211,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 56
+			Library.MacrOSRevision = 57
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
