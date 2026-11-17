@@ -24226,7 +24226,7 @@ local Library = (function()
 			Library.MacrOSRevision = 59
 
 			Library.Fork = {
-				Name = "Airflow - SCRIPTFARMSSSS build",
+				Name = "Airflow",
 				Upstream = "PookiePepelsss/Airflow-UI",
 				Changes = {
 					"Create<Name> aliases for every row method, not only the early ones",
