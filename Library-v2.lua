@@ -2705,7 +2705,7 @@ local Library = (function()
 		end
 		-- Stacked (the default in compact rows): the chip spans the whole row,
 		-- with the name (if any) above it.
-		local stacked = compact and opts.Stacked ~= false
+		local stacked = (compact or self._macrosCompactPairs == true) and opts.Stacked ~= false
 		local stackTop = 2
 		if stacked then
 			stackTop = (opts.Name or "") ~= "" and 25 or 2
@@ -3843,12 +3843,25 @@ local Library = (function()
 			Value = "Default",
 		}, "Frame", 160, "Input")
 		local compact = metricsOf(self).Compact
+		local pairStacked = self._macrosCompactPairs == true
 		local boxHeight = compact and metricsOf(self).Chip + 2 or 30
+		if pairStacked then
+			local titleHeight = opts.Desc and 40 or 24
+			frame.Size = UDim2.new(1, 0, 0, titleHeight + boxHeight + 5)
+			if titleLabel then
+				titleLabel.Position = UDim2.fromOffset(14, opts.Desc and 2 or 0)
+				titleLabel.Size = UDim2.new(1, -28, 0, opts.Desc and 18 or 24)
+			end
+			if descLabel then
+				descLabel.Position = UDim2.fromOffset(14, 20)
+				descLabel.Size = UDim2.new(1, -28, 0, 18)
+			end
+		end
 
 		local boxHolder = create("Frame", {
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, compact and -14 or -10, 0.5, 0),
-			Size = UDim2.fromOffset(170, boxHeight),
+			AnchorPoint = pairStacked and Vector2.zero or Vector2.new(1, 0.5),
+			Position = pairStacked and UDim2.fromOffset(14, opts.Desc and 40 or 24) or UDim2.new(1, compact and -14 or -10, 0.5, 0),
+			Size = pairStacked and UDim2.new(1, -28, 0, boxHeight) or UDim2.fromOffset(170, boxHeight),
 			BackgroundColor3 = Theme.Surface,
 			BorderSizePixel = 0,
 			Parent = frame,
@@ -3886,6 +3899,10 @@ local Library = (function()
 		local focused = false
 		local textInset = (boxIcon and 30 or 8) + 8
 		local function fitBox(instant)
+			if pairStacked then
+				boxHolder.Size = UDim2.new(1, -28, 0, boxHeight)
+				return
+			end
 			local width
 			if compact then
 				width = rowControlWidth(frame, self.Window)
@@ -11398,15 +11415,18 @@ local Library = (function()
 		local specs = type(opts) == "table" and (opts.Buttons or opts) or {}
 		local compact = metricsOf(self).Compact
 		local boxHeight = TOUCH and 34 or 30
-		local frame = card(self, "Frame", boxHeight + (compact and 4 or 14), {})
+		local count = math.max(#specs, 1)
+		local columns = type(opts) == "table" and opts.Columns == 2 and math.min(count, 2) or count
+		local rows = math.ceil(count / columns)
+		local contentHeight = rows * boxHeight + (rows - 1) * 6
+		local frame = card(self, "Frame", contentHeight + (compact and 4 or 14), {})
 		local inset = compact and 14 or 7
 		local holder = create("Frame", {
 			Position = UDim2.fromOffset(inset, compact and 2 or 7),
-			Size = UDim2.new(1, -inset * 2, 0, boxHeight),
+			Size = UDim2.new(1, -inset * 2, 0, contentHeight),
 			BackgroundTransparency = 1,
 			Parent = frame,
 		})
-		local count = math.max(#specs, 1)
 		local handle = { Buttons = {} }
 		local names = {}
 		for index, spec in ipairs(specs) do
@@ -11416,8 +11436,8 @@ local Library = (function()
 			local text = spec.Name or spec.Title or "Button"
 			table.insert(names, text)
 			local button, text_ = softButton(holder, text, {
-				Position = UDim2.new((index - 1) / count, (index - 1) * 6 / count, 0, 0),
-				Size = UDim2.new(1 / count, -6 * (count - 1) / count, 1, 0),
+				Position = UDim2.new(((index - 1) % columns) / columns, ((index - 1) % columns) * 6 / columns, 0, math.floor((index - 1) / columns) * (boxHeight + 6)),
+				Size = UDim2.new(1 / columns, -6 * (columns - 1) / columns, 0, boxHeight),
 			}, function()
 				safeCall(spec.Callback)
 			end)
@@ -24223,10 +24243,10 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 59
+			Library.MacrOSRevision = 60
 
 			Library.Fork = {
-				Name = "Airflow",
+				Name = "Airflow - SCRIPTFARMSSSS build",
 				Upstream = "PookiePepelsss/Airflow-UI",
 				Changes = {
 					"Create<Name> aliases for every row method, not only the early ones",
