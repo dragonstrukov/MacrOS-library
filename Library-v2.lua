@@ -5584,6 +5584,7 @@ local Library = (function()
 			AutoButtonColor = false,
 			Modal = false,
 			Active = false,
+			Visible = false,
 			Parent = root,
 		})
 		local scale = create("UIScale", { Parent = root })
@@ -6619,6 +6620,7 @@ local Library = (function()
 
 	function Window:_enableDrag()
 		local dragging, moved = false, false
+		local mouseDrag = false
 		local grabOffset, pressPoint = Vector2.zero, Vector2.zero
 		local target = nil
 		local skeleton, fadeSkeleton = nil, nil
@@ -6690,6 +6692,7 @@ local Library = (function()
 				end
 				self:_focusPointer()
 				dragging, moved = true, false
+				mouseDrag = input.UserInputType == Enum.UserInputType.MouseButton1
 				self._userMoved = true
 				pressPoint = point
 				grabOffset = point - centre()
@@ -6718,6 +6721,16 @@ local Library = (function()
 			if not dragging then
 				return
 			end
+			local lostMouseRelease = false
+			if mouseDrag then
+				pcall(function() lostMouseRelease = not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) end)
+			end
+			if not self.Open or self.Minimized or not self.Root.Visible or lostMouseRelease then
+				dragging = false
+				if skeleton then dropSkeleton() else self:_clampToScreen() end
+				if Library._pointerOwner == self then Library._pointerOwner = nil end
+				return
+			end
 			local point = pointerPosition()
 			if not moved and (point - pressPoint).Magnitude > 3 then
 				moved = true
@@ -6726,12 +6739,6 @@ local Library = (function()
 				end
 			end
 			if not moved then
-				return
-			end
-			-- Hidden or minimized mid-drag: land it where the outline is.
-			if skeleton and (not self.Open or not self.Root.Visible) then
-				dragging = false
-				dropSkeleton()
 				return
 			end
 			target = point - grabOffset
@@ -7907,55 +7914,111 @@ local Library = (function()
 		return Library.Density
 	end
 
-	-- Nearest centre that keeps the whole window inside the viewport.
+	-- Cursor lease: while a full window is open, release Shift Lock / first
+	-- person capture after the game's camera step. Right mouse remains available
+	-- for camera rotation. With no visible window, restore what the game wanted
+	-- instead of leaving the cursor permanently forced on or off.
 	function Library:ReleasePointer()
 		self._pointerOwner = nil
-		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-		UserInputService.MouseIconEnabled = true
+		if self._cursorLeaseTick then self._cursorLeaseTick() end
 	end
 	function Library:_installCursorLease()
-		if self._cursorLeaseInstalled then
-			return
-		end
+		if self._cursorLeaseInstalled then return end
 		self._cursorLeaseInstalled = true
-		local wasUnfocused = false
-		local lost = UserInputService.WindowFocusReleased:Connect(function()
-			wasUnfocused = true
-		end)
-		local gained = UserInputService.WindowFocused:Connect(function()
-			if not wasUnfocused then return end
-			wasUnfocused = false
-			-- A lost RMB release can leave Roblox in a stale camera lock. Reset
-			-- once on return, but never fight a currently held camera button.
-			task.defer(function()
-				local visible = false
-				for _, w in ipairs(Library.Windows) do
-					if not w._destroyed and w.Open and not w.Minimized and w.Root and w.Root.Visible and w.Gui and w.Gui.Parent and w.Gui.Enabled then
-						visible = true
-						break
-					end
+		-- Each independently loaded library gets its own binding. A previous
+		-- instance finishing unload must never unbind the new instance's lease.
+		local bindName = "MacrOSCursorLease_" .. HttpService:GenerateGUID(false)
+		local focused, acquired = true, false
+		local wantedBehavior, wantedIcon
+		local stopped = false
+		local function restore()
+			if not acquired then return end
+			acquired = false
+			pcall(function()
+				if UserInputService.MouseBehavior == Enum.MouseBehavior.Default and wantedBehavior ~= nil then
+					UserInputService.MouseBehavior = wantedBehavior
 				end
-				if visible and not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
-					and not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-					Library:ReleasePointer()
+				if UserInputService.MouseIconEnabled == true and wantedIcon ~= nil then
+					UserInputService.MouseIconEnabled = wantedIcon
 				end
 			end)
-		end)
-		RunService:BindToRenderStep("MacrOSCursorLease", Enum.RenderPriority.Last.Value + 1, function()
+			wantedBehavior, wantedIcon = nil, nil
+		end
+		local function anyWindowOpen()
 			for _, w in ipairs(Library.Windows) do
-				if w._cursorGate then
-					w._cursorGate.Modal = false
-					w._cursorGate.Visible = false
+				if not w._destroyed and w.Open and not w.Minimized and w.Gui and w.Gui.Parent and w.Gui.Enabled then
+					return true
 				end
 			end
+			return false
+		end
+		local function tick()
+			if stopped then return end
 			if #Library.Windows == 0 then
-				RunService:UnbindFromRenderStep("MacrOSCursorLease")
-				lost:Disconnect()
-				gained:Disconnect()
-				Library._cursorLeaseInstalled = false
+				if Library._cursorLeaseStop then Library._cursorLeaseStop() end
+				return
 			end
+			local active = anyWindowOpen()
+			local mouseEnabled = UserInputService.MouseEnabled
+			local menuOpen = false
+			pcall(function() menuOpen = GuiService.MenuIsOpen == true end)
+			if not focused or menuOpen then
+				-- Do not fight the OS or Roblox menu. Keep the saved game state
+				-- across a brief focus change, unless the UI closes meanwhile.
+				if not active or not mouseEnabled then
+					acquired = false
+					wantedBehavior, wantedIcon = nil, nil
+				end
+				return
+			end
+			if not active or not mouseEnabled then
+				restore()
+				return
+			end
+			local cameraHeld = false
+			pcall(function() cameraHeld = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) end)
+			if cameraHeld then
+				restore()
+				return
+			end
+			pcall(function()
+				local behavior, icon = UserInputService.MouseBehavior, UserInputService.MouseIconEnabled
+				if not acquired then
+					wantedBehavior, wantedIcon = behavior, icon
+					acquired = true
+				else
+					-- A camera/game script may have changed either property since
+					-- last frame. Remember its latest non-forced value for release.
+					if behavior ~= Enum.MouseBehavior.Default then wantedBehavior = behavior end
+					if icon ~= true then wantedIcon = icon end
+				end
+				if behavior ~= Enum.MouseBehavior.Default then UserInputService.MouseBehavior = Enum.MouseBehavior.Default end
+				if icon ~= true then UserInputService.MouseIconEnabled = true end
+			end)
+		end
+		local lost = UserInputService.WindowFocusReleased:Connect(function()
+			focused = false
+			Library._pointerOwner = nil
 		end)
+		local gained = UserInputService.WindowFocused:Connect(function()
+			focused = true
+		end)
+		Library._cursorLeaseTick = tick
+		Library._cursorLeaseStop = function()
+			if stopped then return end
+			stopped = true
+			local menuOpen = false
+			pcall(function() menuOpen = GuiService.MenuIsOpen == true end)
+			if focused and not menuOpen then restore() else acquired = false end
+			pcall(function() RunService:UnbindFromRenderStep(bindName) end)
+			lost:Disconnect()
+			gained:Disconnect()
+			Library._cursorLeaseInstalled = false
+			Library._cursorLeaseTick, Library._cursorLeaseStop = nil, nil
+		end
+		RunService:BindToRenderStep(bindName, Enum.RenderPriority.Last.Value + 1, tick)
 	end
+
 	function Window:Center()
 		if self._destroyed then
 			return
@@ -8286,6 +8349,7 @@ local Library = (function()
 		-- so only the right and bottom edges move and nothing jitters on half pixels.
 		local STIFFNESS = 20
 		local resizing = false
+		local mouseResize = false
 		local startSize = Vector2.zero
 		local startPointer = Vector2.zero
 		local current = Vector2.zero
@@ -8345,6 +8409,7 @@ local Library = (function()
 			self:_focusPointer()
 			self._resizeActive = true
 			resizing = true
+			mouseResize = input.UserInputType == Enum.UserInputType.MouseButton1
 			startSize = current
 			startPointer = pointerPosition()
 			target = clampSize(startSize)
@@ -8373,6 +8438,15 @@ local Library = (function()
 		table.insert(self._frameSteps, function(deltaTime)
 			if not self._resizeActive then
 				return
+			end
+			local lostMouseRelease = false
+			if resizing and mouseResize then
+				pcall(function() lostMouseRelease = not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) end)
+			end
+			if resizing and (not self.Open or self.Minimized or not self.Root.Visible or lostMouseRelease) then
+				resizing = false
+				lightGrip(false)
+				if Library._pointerOwner == self then Library._pointerOwner = nil end
 			end
 			if resizing then
 				local delta = (pointerPosition() - startPointer) / self.Scale.Scale
@@ -23257,7 +23331,7 @@ local Library = (function()
 		end
 		self.Minimized = false
 		if self._cursorGate then
-			self._cursorGate.Visible = true
+			self._cursorGate.Visible = false
 		end
 		self._minimizeGeneration = (self._minimizeGeneration or 0) + 1
 		local generation = self._minimizeGeneration
@@ -23363,7 +23437,7 @@ local Library = (function()
 			self:_fade(0, 0)
 		end
 		if self._cursorGate then
-			self._cursorGate.Visible = open
+			self._cursorGate.Visible = false
 		end
 		self:_refreshToggleButton()
 		self:_refreshBackdrop(open)
@@ -23623,6 +23697,11 @@ local Library = (function()
 				table.remove(Library.Windows, index)
 				break
 			end
+		end
+		if #Library.Windows == 0 and Library._cursorLeaseStop then
+			Library._cursorLeaseStop()
+		elseif Library._cursorLeaseTick then
+			Library._cursorLeaseTick()
 		end
 		for _, connection in ipairs(self._connections) do
 			pcall(function()
@@ -24131,7 +24210,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 55
+			Library.MacrOSRevision = 56
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
