@@ -5954,8 +5954,10 @@ local Library = (function()
 						if not consumed and not self._destroyed then
 							if self.Minimized then
 								self:Restore()
+							elseif self.Open then
+								self:Minimize()
 							else
-								self:Toggle(not self.Open)
+								self:Toggle(true)
 							end
 						end
 					end)
@@ -15361,7 +15363,7 @@ local Library = (function()
 		})
 		strip:SetAttribute("NoDrag", true)
 		local highlight = create("Frame", {
-			Size = UDim2.fromOffset(0, 32),
+			Size = UDim2.fromOffset(0, 28),
 			BackgroundColor3 = Theme.Surface3,
 			BackgroundTransparency = 0.35,
 			BorderSizePixel = 0,
@@ -15436,7 +15438,7 @@ local Library = (function()
 			return
 		end
 		local x = (button.AbsolutePosition.X - ui.Row.AbsolutePosition.X) / scale
-		local props = { Position = UDim2.fromOffset(x, 0), Size = UDim2.fromOffset(width, 32) }
+		local props = { Position = UDim2.fromOffset(x + 1, 2), Size = UDim2.fromOffset(math.max(width - 2, 0), 28) }
 		if instant or not ui.Highlight.Visible then
 			ui.Highlight.Visible = true
 			ui.Highlight.Position = props.Position
