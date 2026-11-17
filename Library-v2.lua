@@ -2703,9 +2703,10 @@ local Library = (function()
 			ROW = math.max(ROW, TOUCH and 42 or 32)
 			flatSize = math.min(24, ROW - 8)
 		end
-		-- Stacked (the default in compact rows): the chip spans the whole row,
-		-- with the name (if any) above it.
-		local stacked = (compact or self._macrosCompactPairs == true) and opts.Stacked ~= false
+		-- Auto Build pair cards keep the title and selection on one line.
+		-- Other compact rows retain the library's original stacked layout.
+		local pairInline = self._macrosCompactPairs == true
+		local stacked = compact and not pairInline and opts.Stacked ~= false
 		local stackTop = 2
 		if stacked then
 			stackTop = (opts.Name or "") ~= "" and 25 or 2
@@ -2763,9 +2764,14 @@ local Library = (function()
 			Parent = chip,
 		})
 		local fullText = ""
+		local function pairChipWidth()
+			local width = frame.AbsoluteSize.X / math.max(window.Scale.Scale, 0.01)
+			return math.clamp(math.floor(width * 0.46), 60, 190)
+		end
 		local function trimmed()
 			local maxText = (
 				stacked and frame.AbsoluteSize.X / window.Scale.Scale - 28
+				or pairInline and pairChipWidth()
 				or compact and rowControlWidth(frame, window)
 				or 190
 			)
@@ -2791,12 +2797,22 @@ local Library = (function()
 				return
 			end
 			local width
-			if compact then
+			if pairInline then
+				width = pairChipWidth()
+			elseif compact then
 				width = rowControlWidth(frame, window)
 			else
 				width = math.clamp(valueLabel.TextBounds.X + 10 + 34, 60, 190)
 			end
 			reserveRight(titleLabel, descLabel, width + (compact and 24 or 20))
+			-- The wrapper may add an icon and indent the title after construction.
+			-- Keep that indent out of the available title width on every resize.
+			if pairInline and titleLabel then
+				local inset = tonumber(titleLabel:GetAttribute("MacrOSHelpInset")) or 0
+				if inset > 0 then
+					titleLabel.Size = UDim2.new(1, titleLabel.Size.X.Offset - inset, titleLabel.Size.Y.Scale, titleLabel.Size.Y.Offset)
+				end
+			end
 			if instant then
 				chip.Size = UDim2.fromOffset(width, chipHeight)
 			else
@@ -2804,11 +2820,11 @@ local Library = (function()
 			end
 		end
 		valueLabel:GetPropertyChangedSignal("TextBounds"):Connect(function()
-			if not compact then
+			if not compact and not pairInline then
 				fitChip(false)
 			end
 		end)
-		if compact then
+		if compact or pairInline then
 			-- The chip follows the row every frame; re-measuring the text waits
 			-- until the width stops changing so resizing stays cheap.
 			local lastWidth, pending = 0, false
@@ -3843,25 +3859,13 @@ local Library = (function()
 			Value = "Default",
 		}, "Frame", 160, "Input")
 		local compact = metricsOf(self).Compact
-		local pairStacked = self._macrosCompactPairs == true
+		local pairInline = self._macrosCompactPairs == true
 		local boxHeight = compact and metricsOf(self).Chip + 2 or 30
-		if pairStacked then
-			local titleHeight = opts.Desc and 40 or 24
-			frame.Size = UDim2.new(1, 0, 0, titleHeight + boxHeight + 5)
-			if titleLabel then
-				titleLabel.Position = UDim2.fromOffset(14, opts.Desc and 2 or 0)
-				titleLabel.Size = UDim2.new(1, -28, 0, opts.Desc and 18 or 24)
-			end
-			if descLabel then
-				descLabel.Position = UDim2.fromOffset(14, 20)
-				descLabel.Size = UDim2.new(1, -28, 0, 18)
-			end
-		end
 
 		local boxHolder = create("Frame", {
-			AnchorPoint = pairStacked and Vector2.zero or Vector2.new(1, 0.5),
-			Position = pairStacked and UDim2.fromOffset(14, opts.Desc and 40 or 24) or UDim2.new(1, compact and -14 or -10, 0.5, 0),
-			Size = pairStacked and UDim2.new(1, -28, 0, boxHeight) or UDim2.fromOffset(170, boxHeight),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, compact and -14 or -10, 0.5, 0),
+			Size = UDim2.fromOffset(170, boxHeight),
 			BackgroundColor3 = Theme.Surface,
 			BorderSizePixel = 0,
 			Parent = frame,
@@ -3899,12 +3903,11 @@ local Library = (function()
 		local focused = false
 		local textInset = (boxIcon and 30 or 8) + 8
 		local function fitBox(instant)
-			if pairStacked then
-				boxHolder.Size = UDim2.new(1, -28, 0, boxHeight)
-				return
-			end
 			local width
-			if compact then
+			if pairInline then
+				local cardWidth = frame.AbsoluteSize.X / math.max(self.Window.Scale.Scale, 0.01)
+				width = math.clamp(math.floor(cardWidth * 0.46), 60, 190)
+			elseif compact then
 				width = rowControlWidth(frame, self.Window)
 			else
 				local cardWidth = frame.AbsoluteSize.X / self.Window.Scale.Scale
@@ -3917,6 +3920,12 @@ local Library = (function()
 				width = math.min(width, maxWidth + 8)
 			end
 			reserveRight(titleLabel, descLabel, width + (compact and 24 or 20))
+			if pairInline and titleLabel then
+				local inset = tonumber(titleLabel:GetAttribute("MacrOSHelpInset")) or 0
+				if inset > 0 then
+					titleLabel.Size = UDim2.new(1, titleLabel.Size.X.Offset - inset, titleLabel.Size.Y.Scale, titleLabel.Size.Y.Offset)
+				end
+			end
 			if instant then
 				boxHolder.Size = UDim2.fromOffset(width, boxHeight)
 			else
@@ -24243,7 +24252,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 60
+			Library.MacrOSRevision = 62
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
