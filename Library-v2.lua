@@ -2716,7 +2716,8 @@ local Library = (function()
 		end
 
 		local header = create("TextButton", {
-			Size = UDim2.new(1, 0, 0, height),
+			-- Follow a paired card when its row stretches to match its neighbour.
+			Size = pairInline and UDim2.fromScale(1, 1) or UDim2.new(1, 0, 0, height),
 			BackgroundTransparency = 1,
 			Text = "",
 			AutoButtonColor = false,
@@ -11430,8 +11431,10 @@ local Library = (function()
 		local contentHeight = rows * boxHeight + (rows - 1) * 6
 		local frame = card(self, "Frame", contentHeight + (compact and 4 or 14), {})
 		local inset = compact and 14 or 7
+		local singlePairButton = self._macrosCompactPairs == true and count == 1
 		local holder = create("Frame", {
-			Position = UDim2.fromOffset(inset, compact and 2 or 7),
+			AnchorPoint = singlePairButton and Vector2.new(0, 0.5) or Vector2.zero,
+			Position = singlePairButton and UDim2.new(0, inset, 0.5, 0) or UDim2.fromOffset(inset, compact and 2 or 7),
 			Size = UDim2.new(1, -inset * 2, 0, contentHeight),
 			BackgroundTransparency = 1,
 			Parent = frame,
@@ -24252,7 +24255,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 62
+			Library.MacrOSRevision = 63
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
