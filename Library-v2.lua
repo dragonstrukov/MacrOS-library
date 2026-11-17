@@ -2662,6 +2662,7 @@ local Library = (function()
 		-- Keep multi-select behavior but use the Checker / Copy Base row style.
 		local playerListStyle = multi and detailsOf ~= nil and opts.PlayerListStyle == true
 		local rowMulti = multi and not playerListStyle
+		local showBulkActions = multi and opts.HideBulkActions ~= true
 		local ROW = detailsOf and 44 or (TOUCH and 34 or 22)
 		local MAX_ROWS = opts.MaxRows or 6
 		-- 3D rows: Icons3D plus a Models resolver turns every option into the
@@ -2906,7 +2907,7 @@ local Library = (function()
 		local actions = create("Frame", {
 			Size = UDim2.new(1, 0, 0, 28),
 			BackgroundTransparency = 1,
-			Visible = multi,
+			Visible = showBulkActions,
 			Parent = inner,
 		})
 		local function actionButton(text, position)
@@ -3143,7 +3144,7 @@ local Library = (function()
 				top += 38
 			end
 			actions.Position = UDim2.fromOffset(0, top)
-			if multi and #options > 0 then
+			if showBulkActions and #options > 0 then
 				actions.Visible = true
 				top += 34
 			else
@@ -24222,7 +24223,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 58
+			Library.MacrOSRevision = 59
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
