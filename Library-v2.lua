@@ -2659,6 +2659,9 @@ local Library = (function()
 		local chipHeight = metrics.Chip
 		local window = self.Window
 		local detailsOf = type(opts.OptionDetails) == "function" and opts.OptionDetails or nil
+		-- Keep multi-select behavior but use the Checker / Copy Base row style.
+		local playerListStyle = multi and detailsOf ~= nil and opts.PlayerListStyle == true
+		local rowMulti = multi and not playerListStyle
 		local ROW = detailsOf and 44 or (TOUCH and 34 or 22)
 		local MAX_ROWS = opts.MaxRows or 6
 		-- 3D rows: Icons3D plus a Models resolver turns every option into the
@@ -3070,7 +3073,7 @@ local Library = (function()
 			button.On = on
 			local duration = animate and 0.18 or 0
 			restRow(button, duration)
-			if multi then
+			if rowMulti then
 				tween(button.Box, { BackgroundColor3 = on and Theme.Accent or Theme.Surface2 }, duration)
 				tween(button.BoxStroke, { Color = on and Theme.Accent or Theme.Stroke }, duration)
 			else
@@ -3092,8 +3095,16 @@ local Library = (function()
 			local value = currentValue()
 			if #options == 0 then
 				fullText = opts.EmptyText or "None"
+			elseif playerListStyle then
+				-- Player IDs are unique keys, not user-facing names.
+				local names = {}
+				for i = 1, math.min(#value, 2) do
+					local detail = detailsOf and detailsOf(value[i])
+					names[i] = detail and tostring(detail.Title or value[i]) or tostring(value[i])
+				end
+				fullText = #names > 0 and table.concat(names, ", ") or (opts.NoneText or "None")
+				if #value > 2 then fullText ..= "  +" .. (#value - 2) end
 			elseif multi then
-				-- Two names at most, then a count, so a long pick stays readable.
 				if #value > 2 then
 					fullText = tostring(value[1]) .. ", " .. tostring(value[2]) .. "  +" .. (#value - 2)
 				else
@@ -3335,7 +3346,7 @@ local Library = (function()
 			if iconCfg then
 				local slot = create("Frame", {
 					AnchorPoint = Vector2.new(0, 0.5),
-					Position = UDim2.new(0, multi and 34 or 8, 0.5, 0),
+					Position = UDim2.new(0, rowMulti and 34 or 8, 0.5, 0),
 					Size = UDim2.fromOffset(iconCfg.Size, iconCfg.Size),
 					BackgroundTransparency = 1,
 					BorderSizePixel = 0,
@@ -3348,7 +3359,7 @@ local Library = (function()
 			if imageOf then
 				flatSlot = create("Frame", {
 					AnchorPoint = Vector2.new(0, 0.5),
-					Position = UDim2.new(0, multi and 34 or 8, 0.5, 0),
+					Position = UDim2.new(0, rowMulti and 34 or 8, 0.5, 0),
 					Size = UDim2.fromOffset(flatSize, flatSize),
 					BackgroundTransparency = 1,
 					BorderSizePixel = 0,
@@ -3369,7 +3380,7 @@ local Library = (function()
 			-- Multi selection ticks a checkbox on the left. A single pick
 			-- gets an accent bar on the left edge.
 			local box, boxStroke, bar, check
-			if multi then
+			if rowMulti then
 				box = create("Frame", {
 					AnchorPoint = Vector2.new(0, 0.5),
 					Position = UDim2.new(0, 8, 0.5, 0),
@@ -3417,8 +3428,8 @@ local Library = (function()
 			local checkScale = create("UIScale", { Parent = check })
 			local iconInset = iconViewport and (iconCfg.Size + 4) or (flatSlot and (flatSize + 10) or 0)
 			local text_ = label({
-				Position = UDim2.fromOffset((multi and 36 or 14) + iconInset, 0),
-				Size = UDim2.new(1, (multi and -44 or -46) - iconInset, 1, 0),
+				Position = UDim2.fromOffset((rowMulti and 36 or 14) + iconInset, 0),
+				Size = UDim2.new(1, (rowMulti and -44 or -46) - iconInset, 1, 0),
 				Text = "",
 				TextSize = 13,
 				TextColor3 = Theme.Text,
@@ -3583,15 +3594,15 @@ local Library = (function()
 						end
 						local width = hasModel and iconCfg.Size or (hasPicture and flatSize or 0)
 						local inset = width > 0 and width + 8 or 0
-						entry.Label.Position = UDim2.fromOffset((multi and 36 or 14) + inset, 0)
-						entry.Label.Size = UDim2.new(1, (multi and -44 or -46) - inset, 1, 0)
+						entry.Label.Position = UDim2.fromOffset((rowMulti and 36 or 14) + inset, 0)
+						entry.Label.Size = UDim2.new(1, (rowMulti and -44 or -46) - inset, 1, 0)
 					end
 					if detailsOf then
 						local detail = detailsOf(option) or {}
-						entry.Label.Position = UDim2.fromOffset(multi and 36 or 14, 4)
-						entry.Label.Size = UDim2.new(1, multi and -60 or -38, 0, 18)
-						entry.DescLabel.Position = UDim2.fromOffset(multi and 36 or 14, 24)
-						entry.DescLabel.Size = UDim2.new(1, multi and -60 or -38, 0, 15)
+						entry.Label.Position = UDim2.fromOffset(rowMulti and 36 or 14, 4)
+						entry.Label.Size = UDim2.new(1, rowMulti and -60 or -38, 0, 18)
+						entry.DescLabel.Position = UDim2.fromOffset(rowMulti and 36 or 14, 24)
+						entry.DescLabel.Size = UDim2.new(1, rowMulti and -60 or -38, 0, 15)
 						entry.Label.TextColor3 = Theme.Text
 						entry.DescLabel.Text = tostring(detail.Desc or "")
 						entry.TeamDot.BackgroundColor3 = detail.TeamColor or Theme.Muted
@@ -24211,7 +24222,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 57
+			Library.MacrOSRevision = 58
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
