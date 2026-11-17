@@ -5582,7 +5582,7 @@ local Library = (function()
 			BackgroundTransparency = 1,
 			Text = "",
 			AutoButtonColor = false,
-			Modal = true,
+			Modal = false,
 			Active = false,
 			Parent = root,
 		})
@@ -7916,34 +7916,40 @@ local Library = (function()
 			return
 		end
 		self._cursorLeaseInstalled = true
-		local holding = false
+		local wasUnfocused = false
+		local lost = UserInputService.WindowFocusReleased:Connect(function()
+			wasUnfocused = true
+		end)
+		local gained = UserInputService.WindowFocused:Connect(function()
+			if not wasUnfocused then return end
+			wasUnfocused = false
+			-- A lost RMB release can leave Roblox in a stale camera lock. Reset
+			-- once on return, but never fight a currently held camera button.
+			task.defer(function()
+				local visible = false
+				for _, w in ipairs(Library.Windows) do
+					if not w._destroyed and w.Open and not w.Minimized and w.Root and w.Root.Visible and w.Gui and w.Gui.Parent and w.Gui.Enabled then
+						visible = true
+						break
+					end
+				end
+				if visible and not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+					and not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+					Library:ReleasePointer()
+				end
+			end)
+		end)
 		RunService:BindToRenderStep("MacrOSCursorLease", Enum.RenderPriority.Last.Value + 1, function()
-			local visible = false
 			for _, w in ipairs(Library.Windows) do
-				local active = not w._destroyed and w.Open and not w.Minimized and w.Root and w.Root.Parent and w.Root.Visible and w.Gui and w.Gui.Parent and w.Gui.Enabled
 				if w._cursorGate then
-					w._cursorGate.Modal = active
-					w._cursorGate.Visible = active
-				end
-				if active then
-					visible = true
+					w._cursorGate.Modal = false
+					w._cursorGate.Visible = false
 				end
 			end
-			if visible then
-                -- Open UI owns the cursor, including during RMB presses.
-                -- Run after camera updates so camera lock cannot pin UI input.
-				if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
-					UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-				end
-                if not UserInputService.MouseIconEnabled then
-					UserInputService.MouseIconEnabled = true
-                end
-			elseif holding then
-				Library:ReleasePointer()
-			end
-			holding = visible
 			if #Library.Windows == 0 then
 				RunService:UnbindFromRenderStep("MacrOSCursorLease")
+				lost:Disconnect()
+				gained:Disconnect()
 				Library._cursorLeaseInstalled = false
 			end
 		end)
