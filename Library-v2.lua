@@ -1250,14 +1250,21 @@ local Library = (function()
 		return core
 	end
 
-	-- The window's ScreenGui ignores the GUI inset, and AbsolutePosition is in
-	-- screen pixels as well, so GetMouseLocation() already returns the space every
-	-- pointer check compares against. Subtracting GuiService:GetGuiInset() on top
-	-- of that moved each hit test up by the topbar height: a press on the header
-	-- landed above the window (so the drag never started), the resize grip missed,
-	-- and tooltips and ripples were drawn above the cursor.
+	-- Pointer space. GetMouseLocation() counts from the true top-left corner of
+	-- the screen, topbar included; a GuiObject's AbsolutePosition counts from
+	-- below that inset (IgnoreGuiInset only lets the GUI draw over the topbar, it
+	-- does not move the origin). Every hit test here compares the two, so the
+	-- inset has to come off the pointer: without it a press lands a topbar lower
+	-- than the cursor, the header reports a control from the row beneath it (so
+	-- the window never starts dragging) and every click hits the wrong element.
+	local insetFrame, insetValue = nil, Vector2.zero
 	local function pointerPosition()
-		return UserInputService:GetMouseLocation()
+		local frame = time()
+		if insetFrame ~= frame then
+			insetFrame = frame
+			insetValue = GuiService:GetGuiInset()
+		end
+		return UserInputService:GetMouseLocation() - insetValue
 	end
 
 	local function isPress(input)
@@ -6676,7 +6683,29 @@ local Library = (function()
 	end
 	function Window:_pointerAllowed()
 		local owner = Library._pointerOwner
-		return (owner == nil or owner == self) and Library:_windowAt(pointerPosition()) == self
+		-- A destroyed, hidden or closed window that still owns the pointer would
+		-- refuse every drag for the rest of the session: drop the claim instead of
+		-- trusting it.
+		if
+			owner ~= nil
+			and (
+				owner._destroyed
+				or not owner.Open
+				or not owner.Root
+				or not owner.Root.Visible
+				or not owner.Gui
+				or not owner.Gui.Enabled
+			)
+		then
+			Library._pointerOwner = nil
+			owner = nil
+		end
+		-- A different live window under the cursor keeps the pointer until it lets
+		-- go; otherwise the topmost window that actually sits under the press wins.
+		if owner ~= nil and owner ~= self then
+			return false
+		end
+		return Library:_windowAt(pointerPosition()) == self
 	end
 	function Window:_focusPointer()
 		Library._pointerOwner = self
@@ -24322,7 +24351,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 64
+			Library.MacrOSRevision = 65
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
