@@ -610,7 +610,6 @@ local Library = (function()
 			lucideSet = result
 		else
 			lucideSet = false
-			warn("[AirFlow] lucide icons unavailable: " .. tostring(result))
 		end
 		return lucideSet
 	end
@@ -633,13 +632,11 @@ local Library = (function()
 	function Library:LoadFont(opts)
 		opts = normalize(opts, {})
 		if type(writefile) ~= "function" or type(isfile) ~= "function" or typeof(getcustomasset) ~= "function" then
-			warn("[AirFlow] custom fonts need writefile, isfile and getcustomasset")
 			return false
 		end
 		local name = opts.Name or "CustomFont"
 		local weights = opts.Weights or FONT_PRESETS[name]
 		if type(weights) ~= "table" then
-			warn("[AirFlow] no font weights for " .. name)
 			return false
 		end
 		local folder = opts.Folder or "MacrOS/UI/fonts"
@@ -665,7 +662,6 @@ local Library = (function()
 						{ name = weightName, weight = info[1], style = "normal", assetId = getcustomasset(path) }
 					)
 				else
-					warn("[AirFlow] could not download " .. weightName .. " weight of " .. name)
 				end
 			end
 		end
@@ -749,7 +745,6 @@ local Library = (function()
 		elseif type(entry) == "string" then
 			return entry
 		end
-		warn("[AirFlow] unknown lucide icon: " .. name)
 		return nil
 	end
 
@@ -1459,7 +1454,6 @@ local Library = (function()
 		end
 		local ok, err = pcall(callback, ...)
 		if not ok then
-			warn("[AirFlow] callback error: " .. tostring(err))
 		end
 	end
 
@@ -2032,7 +2026,6 @@ local Library = (function()
 					if ok and value ~= nil then
 						text_.Text = Library._rich(value)
 					elseif not ok then
-						warn("[AirFlow] label update error: " .. tostring(value))
 					end
 					task.wait(rate)
 				end
@@ -13049,7 +13042,6 @@ local Library = (function()
 						end
 						render(true)
 					else
-						warn("[AirFlow] status update error: " .. tostring(value))
 					end
 					task.wait(rate)
 				end
@@ -13405,7 +13397,6 @@ local Library = (function()
 								handle:Set(result)
 							end
 						else
-							warn("[AirFlow] status list update error: " .. tostring(result))
 						end
 					end
 					task.wait(rate)
@@ -13581,7 +13572,6 @@ local Library = (function()
 				return false, "replaced by a newer image"
 			end
 			if not asset then
-				warn("[AirFlow] image: " .. tostring(err))
 				return false, err
 			end
 			image.ImageTransparency = 1
@@ -18297,7 +18287,6 @@ local Library = (function()
 	function Window:_buildCard(fn, ...)
 		local results = table.pack(pcall(fn, ...))
 		if not results[1] then
-			warn("[UI] home card: " .. tostring(results[2]))
 			return nil
 		end
 		return table.unpack(results, 2, results.n)
@@ -19789,7 +19778,6 @@ local Library = (function()
 						page -= 1
 					end
 					if not ok then
-						warn("[AirFlow] cloud OnFetch error: " .. tostring(list))
 					end
 					hasMore = more and hasMore or false
 					moreButton.Visible = false
@@ -20710,7 +20698,6 @@ local Library = (function()
 				submitText.Text = editing and "Save changes" or "Publish"
 				if not ok or result == false then
 					if not ok then
-						warn("[AirFlow] cloud publish error: " .. tostring(result))
 					end
 					showError(ok and reason and tostring(reason) or "Something went wrong, try again")
 					return
@@ -23816,7 +23803,6 @@ local Library = (function()
 			end
 		end)
 		if not ok then
-			warn("[AirFlow] unload animation failed, removing the window directly: " .. tostring(err))
 			remove()
 			return
 		end
@@ -24091,7 +24077,6 @@ local Library = (function()
 					if self.Enabled ~= value then
 						local ok, err = pcall(RunService.Set3dRenderingEnabled, RunService, not value)
 						if not ok then
-							warn("[AirFlow] rendering toggle: " .. tostring(err))
 							return false
 						end
 					end
@@ -28094,7 +28079,6 @@ local Library = (function()
 				local started, runError = pcall(build)
 				releasePill(pill)
 				if not started then
-					warn("[MacrOS] the build stopped: " .. tostring(runError))
 				end
 			end)
 		end
