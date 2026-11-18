@@ -1250,14 +1250,14 @@ local Library = (function()
 		return core
 	end
 
-	local insetFrame, insetValue = nil, Vector2.zero
+	-- The window's ScreenGui ignores the GUI inset, and AbsolutePosition is in
+	-- screen pixels as well, so GetMouseLocation() already returns the space every
+	-- pointer check compares against. Subtracting GuiService:GetGuiInset() on top
+	-- of that moved each hit test up by the topbar height: a press on the header
+	-- landed above the window (so the drag never started), the resize grip missed,
+	-- and tooltips and ripples were drawn above the cursor.
 	local function pointerPosition()
-		local frame = time()
-		if insetFrame ~= frame then
-			insetFrame = frame
-			insetValue = GuiService:GetGuiInset()
-		end
-		return UserInputService:GetMouseLocation() - insetValue
+		return UserInputService:GetMouseLocation()
 	end
 
 	local function isPress(input)
@@ -2625,6 +2625,22 @@ local Library = (function()
 				safeCall(opts.OnRelease, self_.Value)
 			end
 		end, self_)
+		-- A release that lands while another window has focus never reaches
+		-- UserInputService.InputEnded; without this the slider would keep following
+		-- the pointer with no button held.
+		table.insert(
+			self.Window._connections,
+			UserInputService.WindowFocusReleased:Connect(function()
+				if not dragging then
+					return
+				end
+				dragging = false
+				self_.Dragging = false
+				tween(knob, { Size = UDim2.fromOffset(12, 12) }, 0.2)
+				tween(knobGlow, { Size = UDim2.fromOffset(28, 28), ImageTransparency = 0.85 }, 0.2)
+				safeCall(opts.OnRelease, self_.Value)
+			end)
+		)
 
 		self_.Value = snap(self_.Value)
 		render(0)
@@ -4453,6 +4469,17 @@ local Library = (function()
 				tween(hueCursor, { Size = UDim2.fromOffset(16, 16) }, 0.25, Enum.EasingStyle.Quint)
 			end
 		end, self_)
+		table.insert(
+			self.Window._connections,
+			UserInputService.WindowFocusReleased:Connect(function()
+				if not dragTarget then
+					return
+				end
+				dragTarget = nil
+				tween(svCursor, { Size = UDim2.fromOffset(14, 14) }, 0.25, Enum.EasingStyle.Quint)
+				tween(hueCursor, { Size = UDim2.fromOffset(16, 16) }, 0.25, Enum.EasingStyle.Quint)
+			end)
+		)
 
 		hexBox.Focused:Connect(function()
 			tween(hexStroke, { Color = Theme.StrokeHover }, 0.15)
@@ -5209,6 +5236,14 @@ local Library = (function()
 				endDrag(false)
 			end
 		end, self_)
+		table.insert(
+			window._connections,
+			UserInputService.WindowFocusReleased:Connect(function()
+				if dragging then
+					endDrag(true)
+				end
+			end)
+		)
 		table.insert(self_._listeners, function()
 			endDrag(true)
 		end)
@@ -7965,16 +8000,38 @@ local Library = (function()
 		-- instance finishing unload must never unbind the new instance's lease.
 		local bindName = "MacrOSCursorLease_" .. HttpService:GenerateGUID(false)
 		local focused, acquired = true, false
-		local wantedBehavior, wantedIcon
+		local wantedBehavior, wantedIcon, behaviorAsked
 		local stopped = false
+		-- How recent the game's own request has to be before the lease gives it
+		-- back. The camera zooms in and out on its own, so a lock recorded while
+		-- first person was on and applied again after the player zoomed out pinned
+		-- the pointer to the middle of the screen (or hid a cursor that was free
+		-- again) - a mouse that looks frozen until something else moves it.
+		local FRESH = 1
 		local function restore()
 			if not acquired then return end
 			acquired = false
+			local now = os.clock()
 			pcall(function()
-				if UserInputService.MouseBehavior == Enum.MouseBehavior.Default and wantedBehavior ~= nil then
+				local lockedFirstPerson = false
+				pcall(function()
+					lockedFirstPerson = LocalPlayer ~= nil
+						and LocalPlayer.CameraMode == Enum.CameraMode.LockFirstPerson
+				end)
+				-- A lock is given back only while the game is still asking for one:
+				-- either it re-asserted it a moment ago, or the game forces first
+				-- person and the camera is going to lock again anyway.
+				local giveBack = wantedBehavior ~= nil
+					and UserInputService.MouseBehavior == Enum.MouseBehavior.Default
+					and (lockedFirstPerson or now - (behaviorAsked or 0) <= FRESH)
+				if giveBack then
 					UserInputService.MouseBehavior = wantedBehavior
 				end
-				if UserInputService.MouseIconEnabled == true and wantedIcon ~= nil then
+				-- A hidden cursor only makes sense on top of a locked camera, so it
+				-- travels with the lock and is never restored on its own: an
+				-- invisible pointer with a free camera is exactly what a dead mouse
+				-- looks like.
+				if giveBack and wantedIcon ~= nil and UserInputService.MouseIconEnabled == true then
 					UserInputService.MouseIconEnabled = wantedIcon
 				end
 			end)
@@ -8008,7 +8065,14 @@ local Library = (function()
 				return
 			end
 			if not active or not mouseEnabled then
-				restore()
+				if not mouseEnabled then
+					-- A touch device has no cursor to lease: drop the record instead
+					-- of writing a lock on the way out.
+					acquired = false
+					wantedBehavior, wantedIcon = nil, nil
+				else
+					restore()
+				end
 				return
 			end
 			local cameraHeld = false
@@ -8019,14 +8083,16 @@ local Library = (function()
 			end
 			pcall(function()
 				local behavior, icon = UserInputService.MouseBehavior, UserInputService.MouseIconEnabled
-				if not acquired then
-					wantedBehavior, wantedIcon = behavior, icon
-					acquired = true
-				else
-					-- A camera/game script may have changed either property since
-					-- last frame. Remember its latest non-forced value for release.
-					if behavior ~= Enum.MouseBehavior.Default then wantedBehavior = behavior end
-					if icon ~= true then wantedIcon = icon end
+				local now = os.clock()
+				acquired = true
+				-- Only a lock or a hidden cursor is worth remembering, and only with
+				-- the moment it was seen: "Default" is what the lease asks for
+				-- itself, and keeping an old lock alive was what froze the pointer.
+				if behavior ~= Enum.MouseBehavior.Default then
+					wantedBehavior, behaviorAsked = behavior, now
+				end
+				if icon ~= true then
+					wantedIcon = icon
 				end
 				if behavior ~= Enum.MouseBehavior.Default then UserInputService.MouseBehavior = Enum.MouseBehavior.Default end
 				if icon ~= true then UserInputService.MouseIconEnabled = true end
@@ -24256,7 +24322,7 @@ local Library = (function()
 
 			-- Read by the script: a library older than this is missing pieces the menu
 			-- draws with and the player is asked to drop in the new file.
-			Library.MacrOSRevision = 63
+			Library.MacrOSRevision = 64
 
 			Library.Fork = {
 				Name = "Airflow - SCRIPTFARMSSSS build",
