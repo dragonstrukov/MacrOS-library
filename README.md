@@ -7,7 +7,7 @@ with a sidebar, card sections, live search, and 60+ themes.
 
 ```lua
 local Library = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/dragonstrukov/test/main/Library.lua"
+    "https://raw.githubusercontent.com/dragonstrukov/MacrOS-library/main/Library.lua"
 ))()
 ```
 
