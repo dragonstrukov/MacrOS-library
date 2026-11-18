@@ -15,6 +15,9 @@ local Library = (function()
 
 	Library.Flags = {}
 	Library.Windows = {}
+	-- Connections the library itself opens (not a window's). They are closed by
+	-- Library:Destroy so a re-executed script leaves no Heartbeat behind.
+	Library._libraryConnections = {}
 
 	local function normalize(source, map)
 		local opts = {}
@@ -23822,7 +23825,8 @@ local Library = (function()
 
 	Window.Unload = Window.Destroy
 
-	-- Unloads every window the library created.
+	-- Unloads every window the library created, plus the drivers and unload
+	-- hooks that live outside the windows.
 	function Library:Destroy()
 		for index = #Library.Windows, 1, -1 do
 			local window = Library.Windows[index]
@@ -23830,6 +23834,18 @@ local Library = (function()
 				window:Destroy()
 			end
 		end
+		if type(Library._libraryConnections) == "table" then
+			for _, connection in ipairs(Library._libraryConnections) do
+				pcall(function()
+					connection:Disconnect()
+				end)
+			end
+			Library._libraryConnections = {}
+		end
+		-- Replaced, not cleared: the Unload button may still be iterating it.
+		Library._unloadHooks = {}
+		Library.Windows = {}
+		Library.Flags = {}
 	end
 
 	Library.Unload = Library.Destroy
@@ -23869,7 +23885,7 @@ local Library = (function()
 			end
 
 			local trustedQueue = {}
-			RunService.Heartbeat:Connect(function()
+			table.insert(Library._libraryConnections, RunService.Heartbeat:Connect(function()
 				if #trustedQueue == 0 then
 					return
 				end
@@ -23878,7 +23894,7 @@ local Library = (function()
 				for _, job in ipairs(queue) do
 					job()
 				end
-			end)
+			end))
 
 			local function runTrusted(fn, ...)
 				local args = table.pack(...)
